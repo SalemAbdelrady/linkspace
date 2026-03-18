@@ -47,3 +47,13 @@ app.listen(PORT, () => {
   console.log(`🚀 Link Space API running on http://localhost:${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
+
+// Run migrations on startup
+const runMigrations = async () => {
+  try {
+    const { execSync } = require('child_process');
+    require('./utils/migrate');
+  } catch (err) {
+    console.error('Migration error:', err);
+  }
+};

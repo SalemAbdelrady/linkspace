@@ -86,7 +86,7 @@ async function migrate() {
   await db.query(`CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);`);
 
   console.log('✅ Migrations completed!');
-  process.exit(0);
+  // process.exit(0);
 }
 
 migrate().catch(err => {
