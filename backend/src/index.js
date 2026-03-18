@@ -4,8 +4,13 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const migrate = require('./utils/migrate');
+const seed = require('./utils/seed');
 
 const app = express();
+
+// Trust proxy for Railway
+app.set('trust proxy', 1);
 
 // Security
 app.use(helmet());
@@ -43,17 +48,18 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Link Space API running on http://localhost:${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-});
 
-// Run migrations on startup
-const runMigrations = async () => {
+async function startServer() {
   try {
-    const { execSync } = require('child_process');
-    require('./utils/migrate');
+    await migrate();
+    await seed();
   } catch (err) {
-    console.error('Migration error:', err);
+    console.error('Startup warning:', err.message);
   }
-};
+  app.listen(PORT, () => {
+    console.log(`🚀 Link Space API running on http://localhost:${PORT}`);
+    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
+}
+
+startServer();
