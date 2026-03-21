@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { sessionsAPI } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -11,7 +11,20 @@ export default function ScannerPage() {
   const [activeClients, setActiveClients] = useState([]);
   const inputRef = useRef(null);
 
-  useEffect(() => { loadActive(); }, []);
+  // ✅ Focus دايماً على الـ input
+  const focusInput = useCallback(() => {
+    setTimeout(() => inputRef.current?.focus(), 100);
+  }, []);
+
+  useEffect(() => {
+    loadActive();
+    focusInput();
+
+    // ✅ لو المستخدم ضغط في أي مكان، يرجع الـ focus للـ input
+    const handleClick = () => focusInput();
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [focusInput]);
 
   async function loadActive() {
     try {
@@ -21,7 +34,7 @@ export default function ScannerPage() {
   }
 
   async function handleScan(qrCode) {
-    if (!qrCode.trim()) return;
+    if (!qrCode.trim() || scanning) return;
     setScanning(true);
     try {
       const { data } = await sessionsAPI.scan(qrCode.trim());
@@ -34,6 +47,7 @@ export default function ScannerPage() {
       toast.error(err.response?.data?.error || 'خطأ في المسح');
     } finally {
       setScanning(false);
+      focusInput(); // ✅ رجّع الـ focus بعد كل scan
     }
   }
 
@@ -54,7 +68,6 @@ export default function ScannerPage() {
 
       {/* Scanner Frame */}
       <div style={{ position: 'relative', width: 240, height: 240, margin: '0 auto 20px', border: '2px solid var(--accent)', borderRadius: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,212,170,0.04)' }}>
-        {/* Corners */}
         {[['top:0;right:0;border-width:3px 0 0 3px;border-radius:8px 0 0 0', 'tl'],
           ['top:0;left:0;border-width:3px 3px 0 0;border-radius:0 8px 0 0', 'tr'],
           ['bottom:0;right:0;border-width:0 0 3px 3px;border-radius:0 0 0 8px', 'bl'],
@@ -62,27 +75,54 @@ export default function ScannerPage() {
         ].map(([s]) => (
           <div key={s} style={{ position: 'absolute', width: 20, height: 20, borderColor: 'var(--accent)', borderStyle: 'solid', ...(Object.fromEntries(s.split(';').map(p => p.split(':')))) }} />
         ))}
-        <div style={{ fontSize: 13, color: 'var(--accent)', opacity: 0.6, textAlign: 'center' }}>
-          {scanning ? '⏳ جارٍ المسح...' : 'جاهز للمسح'}
+
+        {/* ✅ مؤشر حالة الماسح */}
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>
+            {scanning ? '⏳' : '📡'}
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--accent)', opacity: 0.8 }}>
+            {scanning ? 'جارٍ المسح...' : 'جاهز للمسح'}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+            {scanning ? '' : 'امسح الـ QR الآن'}
+          </div>
         </div>
-        {/* Scan line */}
+
         <div style={{ position: 'absolute', width: '80%', height: 2, background: 'var(--accent)', opacity: 0.7, animation: 'scanLine 2s ease-in-out infinite' }} />
       </div>
       <style>{`@keyframes scanLine { 0%,100%{top:20%} 50%{top:80%} }`}</style>
 
-      {/* Manual Entry */}
+      {/* ✅ Input مخفي للماسح الضوئي */}
       <div className="card" style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>إدخال يدوي أو من كاميرا</div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: scanning ? 'var(--warning)' : 'var(--success)', display: 'inline-block' }} />
+          {scanning ? 'جارٍ المسح...' : 'في انتظار المسح'}
+        </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <input ref={inputRef} className="input-field" style={{ flex: 1 }} value={manualCode} onChange={e => setManualCode(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleScan(manualCode)} placeholder="الصق أو اكتب كود العميل..." />
-          <button className="btn btn-primary" onClick={() => handleScan(manualCode)} disabled={!manualCode || scanning}>مسح</button>
+          <input
+            ref={inputRef}
+            className="input-field"
+            style={{ flex: 1 }}
+            value={manualCode}
+            onChange={e => setManualCode(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleScan(manualCode)}
+            placeholder="امسح الـ QR أو اكتب الكود يدوياً..."
+            autoComplete="off"
+          />
+          <button
+            className="btn btn-primary"
+            onClick={() => handleScan(manualCode)}
+            disabled={!manualCode || scanning}
+          >
+            مسح
+          </button>
         </div>
       </div>
 
       {/* Result */}
       {result && (
-        <div className={`card fade-up`} style={{ textAlign: 'center', marginBottom: 14, borderColor: result.action === 'checkin' ? 'rgba(46,213,115,0.5)' : 'rgba(255,165,2,0.5)', background: result.action === 'checkin' ? 'rgba(46,213,115,0.06)' : 'rgba(255,165,2,0.06)' }}>
+        <div className="card fade-up" style={{ textAlign: 'center', marginBottom: 14, borderColor: result.action === 'checkin' ? 'rgba(46,213,115,0.5)' : 'rgba(255,165,2,0.5)', background: result.action === 'checkin' ? 'rgba(46,213,115,0.06)' : 'rgba(255,165,2,0.06)' }}>
           <div style={{ fontSize: 32, marginBottom: 8 }}>{result.action === 'checkin' ? '✅' : '🏁'}</div>
           <div style={{ fontWeight: 700, fontSize: 16, color: result.action === 'checkin' ? 'var(--success)' : 'var(--warning)', marginBottom: 4 }}>
             {result.action === 'checkin' ? 'تم تسجيل الدخول' : 'انتهاء الجلسة'}
@@ -101,7 +141,7 @@ export default function ScannerPage() {
               <div className="stat-row" style={{ border: 'none' }}><span className="stat-label">نقاط مكتسبة</span><span className="stat-val" style={{ color: 'var(--success)' }}>+{result.session.pointsEarned} نقطة</span></div>
             </>
           )}
-          <button onClick={() => setResult(null)} style={{ marginTop: 12, background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '7px 20px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>إغلاق</button>
+          <button onClick={() => { setResult(null); focusInput(); }} style={{ marginTop: 12, background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '7px 20px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>إغلاق</button>
         </div>
       )}
 
