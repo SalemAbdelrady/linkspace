@@ -46,7 +46,6 @@ async function seed() {
   console.log('👤 Admin:  01000000000 / admin123');
   console.log('👤 Staff:  01100000000 / staff123');
   console.log('👤 Client: 01012345678 / client123');
-  process.exit(0);
 }
 
 module.exports = seed;
