@@ -2,10 +2,14 @@ const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const QRCode = require('qrcode');
-const { v4: uuidv4 } = require('uuid');
 const { body, validationResult } = require('express-validator');
 const db = require('../config/db');
 const { auth } = require('../middleware/auth');
+
+// توليد رقم عشوائي 7 أرقام
+function generateQrCode() {
+  return Math.floor(1000000 + Math.random() * 9000000).toString();
+}
 
 // POST /api/auth/register
 router.post('/register', [
@@ -27,7 +31,7 @@ router.post('/register', [
     }
 
     const hash = await bcrypt.hash(password, 12);
-    const qrToken = uuidv4();
+    const qrToken = generateQrCode();
 
     const { rows } = await db.query(`
       INSERT INTO users (name, phone, password, role, qr_code)

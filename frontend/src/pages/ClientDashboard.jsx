@@ -119,15 +119,24 @@ export default function ClientDashboard() {
       </div>
 
       {/* QR Code */}
-      <div className="section-title">كود الدخول</div>
-      <div className="card" style={{ textAlign: 'center', marginBottom: 12 }}>
-        {user?.qr_image ? (
-          <img src={user.qr_image} alt="QR Code" style={{ width: 160, height: 160, borderRadius: 12, border: '3px solid var(--accent)' }} />
-        ) : (
-          <div style={{ width: 160, height: 160, margin: '0 auto', background: 'rgba(0,212,170,0.1)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>جارٍ التحميل...</div>
-        )}
-        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 10 }}>اعرض هذا الكود عند الدخول والخروج</div>
+<div className="section-title">كود الدخول</div>
+<div className="card" style={{ textAlign: 'center', marginBottom: 12 }}>
+  {user?.qr_image ? (
+    <>
+      <div style={{ display: 'inline-block', padding: 12, background: '#fff', borderRadius: 12, border: '3px solid var(--accent)' }}>
+        <img src={user.qr_image} alt="QR Code" style={{ width: 160, height: 160, display: 'block' }} />
       </div>
+      <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 10, fontFamily: 'var(--mono)', letterSpacing: 2 }}>
+        {user.qr_code}
+      </div>
+    </>
+  ) : (
+    <div style={{ width: 160, height: 160, margin: '0 auto', background: 'rgba(0,212,170,0.1)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>
+      جارٍ التحميل...
+    </div>
+  )}
+  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>اعرض هذا الكود عند الدخول والخروج</div>
+</div>
 
       {/* Active Session */}
       {activeSession && (
