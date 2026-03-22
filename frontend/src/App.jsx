@@ -7,6 +7,7 @@ import ClientDashboard from './pages/ClientDashboard';
 import ScannerPage from './pages/ScannerPage';
 import AdminDashboard from './pages/AdminDashboard';
 import SubscriptionsPage from './pages/SubscriptionsPage';
+import InvoicePage from './pages/InvoicePage';
 import './index.css';
 
 function ProtectedRoute({ children, roles }) {
@@ -49,6 +50,11 @@ function AppRoutes() {
       <Route path="/subscriptions" element={
         <ProtectedRoute roles={['admin']}>
           <SubscriptionsPage />
+        </ProtectedRoute>
+      } />
+      <Route path="/invoice" element={
+        <ProtectedRoute roles={['staff', 'admin']}>
+          <InvoicePage />
         </ProtectedRoute>
       } />
       <Route path="*" element={<Navigate to="/" replace />} />
