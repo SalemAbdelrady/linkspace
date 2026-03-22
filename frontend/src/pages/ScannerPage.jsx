@@ -10,11 +10,12 @@ export default function ScannerPage() {
   const navigate = useNavigate();
   const [result, setResult] = useState(null);
   const [scanning, setScanning] = useState(false);
-  const scanningRef = useRef(false); // ✅
+  const scanningRef = useRef(false);
   const [manualCode, setManualCode] = useState('');
   const [activeClients, setActiveClients] = useState([]);
   const [cameraActive, setCameraActive] = useState(false);
   const [scanMode, setScanMode] = useState('device');
+  const scanModeRef = useRef('device'); // ✅
   const inputRef = useRef(null);
   const html5QrRef = useRef(null);
   const lastScannedRef = useRef('');
@@ -24,13 +25,19 @@ export default function ScannerPage() {
     setTimeout(() => inputRef.current?.focus(), 100);
   }, []);
 
+  // ✅ دالة تغيير الـ mode بتحدث الـ ref برضو
+  function changeScanMode(mode) {
+    scanModeRef.current = mode;
+    setScanMode(mode);
+  }
+
   useEffect(() => {
     loadActive();
     focusInput();
-    const handleClick = () => { if (scanMode === 'device') focusInput(); };
+    const handleClick = () => { if (scanModeRef.current === 'device') focusInput(); };
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
-  }, [focusInput, scanMode]);
+  }, [focusInput]);
 
   useEffect(() => {
     if (scanMode === 'camera') {
@@ -53,20 +60,20 @@ export default function ScannerPage() {
           const now = Date.now();
           if (
             decodedText === lastScannedRef.current &&
-            now - lastScannedTimeRef.current < 3000
+            now - lastScannedTimeRef.current < 5000
           ) return;
 
           lastScannedRef.current = decodedText;
           lastScannedTimeRef.current = now;
 
-          if (!scanningRef.current) await handleScan(decodedText); // ✅
+          if (!scanningRef.current) await handleScan(decodedText);
         },
         () => {}
       );
       setCameraActive(true);
     } catch (err) {
       toast.error('تعذر تشغيل الكاميرا — تحقق من الإذن');
-      setScanMode('device');
+      changeScanMode('device');
     }
   }
 
@@ -86,36 +93,47 @@ export default function ScannerPage() {
   }
 
   async function handleScan(qrCode) {
-    if (!qrCode.trim() || scanningRef.current) return; // ✅
+    if (!qrCode.trim() || scanningRef.current) return;
 
     const now = Date.now();
     if (
       qrCode.trim() === lastScannedRef.current &&
-      now - lastScannedTimeRef.current < 3000
+      now - lastScannedTimeRef.current < 5000
     ) return;
 
     lastScannedRef.current = qrCode.trim();
     lastScannedTimeRef.current = now;
 
-    scanningRef.current = true; // ✅
+    scanningRef.current = true;
     setScanning(true);
+
+    // ✅ وقف الكاميرا فوراً عشان متستدعيش تاني
+    if (scanModeRef.current === 'camera') await stopCamera();
+
     try {
       const { data } = await sessionsAPI.scan(qrCode.trim());
       setResult(data);
       setManualCode('');
       loadActive();
+
       if (data.action === 'checkin') {
         toast.success(`تم تسجيل دخول ${data.client.name}`);
+        // ✅ شغل الكاميرا تاني بعد ثانيتين
+        setTimeout(() => {
+          if (scanModeRef.current === 'camera') startCamera();
+        }, 2000);
       } else {
         toast.success(`تم تسجيل خروج ${data.client.name}`);
         navigate('/invoice', { state: { session: data.session, client: data.client } });
       }
     } catch (err) {
       toast.error(err.response?.data?.error || 'خطأ في المسح');
+      // ✅ لو في error شغل الكاميرا تاني
+      if (scanModeRef.current === 'camera') startCamera();
     } finally {
-      scanningRef.current = false; // ✅
+      scanningRef.current = false;
       setScanning(false);
-      if (scanMode === 'device') focusInput();
+      if (scanModeRef.current === 'device') focusInput();
     }
   }
 
@@ -143,7 +161,7 @@ export default function ScannerPage() {
       {/* Toggle Mode */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         {[['device', '📡 ماسح ضوئي'], ['camera', '📷 كاميرا']].map(([mode, label]) => (
-          <button key={mode} onClick={() => setScanMode(mode)}
+          <button key={mode} onClick={() => changeScanMode(mode)}
             style={{ flex: 1, padding: '10px', borderRadius: 12, border: '1px solid', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', borderColor: scanMode === mode ? 'var(--accent)' : 'var(--border)', background: scanMode === mode ? 'var(--accent)' : 'transparent', color: scanMode === mode ? '#000' : 'var(--muted)' }}>
             {label}
           </button>
