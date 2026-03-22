@@ -5,9 +5,11 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recha
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import { useNavigate } from 'react-router-dom';
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [tab, setTab] = useState('overview');
   const [daily, setDaily] = useState(null);
   const [monthly, setMonthly] = useState(null);
@@ -17,6 +19,17 @@ export default function AdminDashboard() {
   const [search, setSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
   const [amounts, setAmounts] = useState({});
+
+  // أسعار المساحات
+  const [priceTab, setPriceTab] = useState('cowork');
+  const [spaces, setSpaces] = useState({
+    cowork:  { name: 'منطقة العمل المشتركة', price_per_hr: 30 },
+    meeting: { name: 'غرفة الاجتماعات', first_hour: 150, extra_hour: 100 },
+    lessons: { name: 'غرفة الدروس', first_hour: 200, extra_hour: 100 },
+  });
+  const [services, setServices] = useState([]);
+  const [newService, setNewService] = useState({ name: '', price: '' });
+  const [editingService, setEditingService] = useState(null);
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const now = new Date();
@@ -57,10 +70,7 @@ export default function AdminDashboard() {
   }
 
   function setAmount(userId, type, value) {
-    setAmounts(prev => ({
-      ...prev,
-      [userId]: { ...prev[userId], [type]: value }
-    }));
+    setAmounts(prev => ({ ...prev, [userId]: { ...prev[userId], [type]: value } }));
   }
 
   async function chargeWallet(u) {
@@ -85,16 +95,6 @@ export default function AdminDashboard() {
     } catch (err) { toast.error(err.response?.data?.error || 'خطأ'); }
   }
 
-  async function updatePrice(id, val) {
-    try {
-      await adminAPI.updatePrice(id, val);
-      setPrices(prev => prev.map(p => p.id === id ? { ...p, price_per_hr: val } : p));
-      toast.success('تم تحديث السعر');
-    } catch { toast.error('خطأ في التحديث'); }
-  }
-
-  const periodName = { morning: 'الصباحية ٦ص-٢م', evening: 'المسائية ٢م-١٠م', night: 'الليلية ١٠م-٦ص' };
-
   const chartData = monthly?.daily?.slice(-7).map(d => ({
     name: format(new Date(d.day), 'EEE', { locale: ar }),
     revenue: parseFloat(d.revenue),
@@ -109,7 +109,13 @@ export default function AdminDashboard() {
           <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent)' }}>Link Space</div>
           <div style={{ fontSize: 11, color: 'var(--muted)' }}>لوحة التحكم — {user?.name}</div>
         </div>
-        <button onClick={logout} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '6px 12px', borderRadius: 8, fontSize: 12 }}>خروج</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => navigate('/subscriptions')}
+            style={{ background: 'transparent', border: '1px solid var(--accent)', color: 'var(--accent)', padding: '6px 12px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
+            📋 الاشتراكات
+          </button>
+          <button onClick={logout} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '6px 12px', borderRadius: 8, fontSize: 12 }}>خروج</button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -189,7 +195,6 @@ export default function AdminDashboard() {
             <div className="input-wrap">
               <input className="input-field" value={search} onChange={e => setSearch(e.target.value)} placeholder="بحث بالاسم أو الموبايل..." />
             </div>
-
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
               {users.map(u => {
                 const isInSession = activeSessionIds.has(u.id);
@@ -201,7 +206,6 @@ export default function AdminDashboard() {
                         <div style={{ fontWeight: 700 }}>{u.name}</div>
                         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{u.phone}</div>
                       </div>
-                      {/* ✅ دايماً بيظهر نشط أو غير نشط */}
                       <span className={`badge badge-${isInSession ? 'success' : 'danger'}`}>
                         {isInSession ? 'نشط' : 'غير نشط'}
                       </span>
@@ -210,7 +214,6 @@ export default function AdminDashboard() {
                       <span>💰 <strong style={{ color: 'var(--accent)' }}>{parseFloat(u.balance).toFixed(2)} ج</strong></span>
                       <span>⭐ <strong style={{ color: 'var(--warning)' }}>{u.points} نقطة</strong></span>
                     </div>
-
                     {selectedUser?.id === u.id && (
                       <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 14 }} onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
@@ -246,37 +249,169 @@ export default function AdminDashboard() {
         {/* === PRICES === */}
         {tab === 'prices' && (
           <div className="fade-up">
-            <div className="section-title">إعدادات الأسعار</div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16 }}>الحساب بالدقيقة: سعر الساعة ÷ 60 × عدد الدقائق</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {prices.map(p => (
-                <div key={p.id} className="card">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontWeight: 700 }}>{periodName[p.period_name] || p.period_name}</div>
-                      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>آخر تحديث: {format(new Date(p.updated_at), 'dd MMM yyyy', { locale: ar })}</div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <button onClick={() => updatePrice(p.id, Math.max(1, parseFloat(p.price_per_hr) - 1))}
-                        style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 18, cursor: 'pointer' }}>−</button>
-                      <div style={{ textAlign: 'center', minWidth: 60 }}>
-                        <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--accent)' }}>{parseFloat(p.price_per_hr).toFixed(0)}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>ج/ساعة</div>
-                      </div>
-                      <button onClick={() => updatePrice(p.id, parseFloat(p.price_per_hr) + 1)}
-                        style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 18, cursor: 'pointer' }}>+</button>
-                    </div>
-                  </div>
-                  <div style={{ marginTop: 12, padding: '8px 12px', background: 'rgba(0,212,170,0.06)', borderRadius: 8, fontSize: 12, color: 'var(--muted)' }}>
-                    مثال: ساعة = <strong style={{ color: 'var(--accent)' }}>{parseFloat(p.price_per_hr).toFixed(2)} ج</strong> &nbsp;|&nbsp; 90 دقيقة = <strong style={{ color: 'var(--accent)' }}>{(parseFloat(p.price_per_hr) * 1.5).toFixed(2)} ج</strong> &nbsp;|&nbsp; 30 دقيقة = <strong style={{ color: 'var(--accent)' }}>{(parseFloat(p.price_per_hr) * 0.5).toFixed(2)} ج</strong>
-                  </div>
-                </div>
+
+            {/* تبويبات الأسعار */}
+            <div style={{ display: 'flex', gap: 4, marginBottom: 16, overflowX: 'auto' }}>
+              {[
+                ['cowork',   '🖥️ منطقة العمل'],
+                ['meeting',  '🤝 الاجتماعات'],
+                ['lessons',  '📚 الدروس'],
+                ['services', '☕ الخدمات'],
+              ].map(([k, label]) => (
+                <button key={k} onClick={() => setPriceTab(k)} style={{ padding: '7px 14px', borderRadius: 20, border: '1px solid', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer', borderColor: priceTab === k ? 'var(--accent)' : 'var(--border)', background: priceTab === k ? 'var(--accent)' : 'transparent', color: priceTab === k ? '#000' : 'var(--muted)' }}>{label}</button>
               ))}
             </div>
+
+            {/* منطقة العمل */}
+            {priceTab === 'cowork' && (
+              <div className="card">
+                <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>اسم المساحة</div>
+                <input className="input-field" style={{ marginBottom: 14 }}
+                  value={spaces.cowork.name}
+                  onChange={e => setSpaces(prev => ({ ...prev, cowork: { ...prev.cowork, name: e.target.value } }))} />
+                <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>سعر الساعة (ج)</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                  <button onClick={() => setSpaces(prev => ({ ...prev, cowork: { ...prev.cowork, price_per_hr: Math.max(1, prev.cowork.price_per_hr - 5) } }))}
+                    style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 20, cursor: 'pointer' }}>−</button>
+                  <div style={{ textAlign: 'center', minWidth: 80 }}>
+                    <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)' }}>{spaces.cowork.price_per_hr}</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>ج/ساعة</div>
+                  </div>
+                  <button onClick={() => setSpaces(prev => ({ ...prev, cowork: { ...prev.cowork, price_per_hr: prev.cowork.price_per_hr + 5 } }))}
+                    style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 20, cursor: 'pointer' }}>+</button>
+                </div>
+                <div style={{ padding: '8px 12px', background: 'rgba(0,212,170,0.06)', borderRadius: 8, fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
+                  مثال: ساعة = <strong style={{ color: 'var(--accent)' }}>{spaces.cowork.price_per_hr} ج</strong> &nbsp;|&nbsp; 90 دقيقة = <strong style={{ color: 'var(--accent)' }}>{(spaces.cowork.price_per_hr * 1.5).toFixed(0)} ج</strong>
+                </div>
+                <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => toast.success('تم حفظ إعدادات منطقة العمل ✅')}>حفظ التغييرات</button>
+              </div>
+            )}
+
+            {/* غرفة الاجتماعات */}
+            {priceTab === 'meeting' && (
+              <div className="card">
+                <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>اسم الغرفة</div>
+                <input className="input-field" style={{ marginBottom: 14 }}
+                  value={spaces.meeting.name}
+                  onChange={e => setSpaces(prev => ({ ...prev, meeting: { ...prev.meeting, name: e.target.value } }))} />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 14 }}>
+                  {[['first_hour', 'سعر أول ساعة'], ['extra_hour', 'كل ساعة إضافية']].map(([key, label]) => (
+                    <div key={key}>
+                      <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>{label} (ج)</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <button onClick={() => setSpaces(prev => ({ ...prev, meeting: { ...prev.meeting, [key]: Math.max(1, prev.meeting[key] - 10) } }))}
+                          style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 18, cursor: 'pointer' }}>−</button>
+                        <div style={{ textAlign: 'center', minWidth: 50 }}>
+                          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)' }}>{spaces.meeting[key]}</div>
+                          <div style={{ fontSize: 10, color: 'var(--muted)' }}>ج</div>
+                        </div>
+                        <button onClick={() => setSpaces(prev => ({ ...prev, meeting: { ...prev.meeting, [key]: prev.meeting[key] + 10 } }))}
+                          style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 18, cursor: 'pointer' }}>+</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ padding: '8px 12px', background: 'rgba(0,212,170,0.06)', borderRadius: 8, fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
+                  ساعة = <strong style={{ color: 'var(--accent)' }}>{spaces.meeting.first_hour} ج</strong> &nbsp;|&nbsp; ساعتين = <strong style={{ color: 'var(--accent)' }}>{spaces.meeting.first_hour + spaces.meeting.extra_hour} ج</strong> &nbsp;|&nbsp; 3 ساعات = <strong style={{ color: 'var(--accent)' }}>{spaces.meeting.first_hour + spaces.meeting.extra_hour * 2} ج</strong>
+                </div>
+                <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => toast.success('تم حفظ إعدادات غرفة الاجتماعات ✅')}>حفظ التغييرات</button>
+              </div>
+            )}
+
+            {/* غرفة الدروس */}
+            {priceTab === 'lessons' && (
+              <div className="card">
+                <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>اسم الغرفة</div>
+                <input className="input-field" style={{ marginBottom: 14 }}
+                  value={spaces.lessons.name}
+                  onChange={e => setSpaces(prev => ({ ...prev, lessons: { ...prev.lessons, name: e.target.value } }))} />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 14 }}>
+                  {[['first_hour', 'سعر أول ساعة'], ['extra_hour', 'كل ساعة إضافية']].map(([key, label]) => (
+                    <div key={key}>
+                      <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>{label} (ج)</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <button onClick={() => setSpaces(prev => ({ ...prev, lessons: { ...prev.lessons, [key]: Math.max(1, prev.lessons[key] - 10) } }))}
+                          style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 18, cursor: 'pointer' }}>−</button>
+                        <div style={{ textAlign: 'center', minWidth: 50 }}>
+                          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)' }}>{spaces.lessons[key]}</div>
+                          <div style={{ fontSize: 10, color: 'var(--muted)' }}>ج</div>
+                        </div>
+                        <button onClick={() => setSpaces(prev => ({ ...prev, lessons: { ...prev.lessons, [key]: prev.lessons[key] + 10 } }))}
+                          style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 18, cursor: 'pointer' }}>+</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ padding: '8px 12px', background: 'rgba(0,212,170,0.06)', borderRadius: 8, fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
+                  ساعة = <strong style={{ color: 'var(--accent)' }}>{spaces.lessons.first_hour} ج</strong> &nbsp;|&nbsp; ساعتين = <strong style={{ color: 'var(--accent)' }}>{spaces.lessons.first_hour + spaces.lessons.extra_hour} ج</strong> &nbsp;|&nbsp; 3 ساعات = <strong style={{ color: 'var(--accent)' }}>{spaces.lessons.first_hour + spaces.lessons.extra_hour * 2} ج</strong>
+                </div>
+                <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => toast.success('تم حفظ إعدادات غرفة الدروس ✅')}>حفظ التغييرات</button>
+              </div>
+            )}
+
+            {/* الخدمات والمشروبات */}
+            {priceTab === 'services' && (
+              <div>
+                <div className="card" style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>➕ إضافة خدمة أو مشروب</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, marginBottom: 8 }}>
+                    <input className="input-field" placeholder="اسم الخدمة أو المشروب..."
+                      value={newService.name}
+                      onChange={e => setNewService(prev => ({ ...prev, name: e.target.value }))} />
+                    <input className="input-field" placeholder="السعر" type="number" style={{ width: 90 }}
+                      value={newService.price}
+                      onChange={e => setNewService(prev => ({ ...prev, price: e.target.value }))} />
+                  </div>
+                  <button className="btn btn-primary" style={{ width: '100%' }}
+                    onClick={() => {
+                      if (!newService.name || !newService.price) return toast.error('أدخل الاسم والسعر');
+                      setServices(prev => [...prev, { id: Date.now(), ...newService }]);
+                      setNewService({ name: '', price: '' });
+                      toast.success('تمت الإضافة ✅');
+                    }}>إضافة</button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {services.length === 0 && (
+                    <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 20, fontSize: 13 }}>لا توجد خدمات بعد — أضف أول خدمة!</div>
+                  )}
+                  {services.map(s => (
+                    <div key={s.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      {editingService?.id === s.id ? (
+                        <>
+                          <input className="input-field" style={{ flex: 1 }} value={editingService.name}
+                            onChange={e => setEditingService(prev => ({ ...prev, name: e.target.value }))} />
+                          <input className="input-field" type="number" style={{ width: 80 }} value={editingService.price}
+                            onChange={e => setEditingService(prev => ({ ...prev, price: e.target.value }))} />
+                          <button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: 12 }}
+                            onClick={() => {
+                              setServices(prev => prev.map(x => x.id === s.id ? editingService : x));
+                              setEditingService(null);
+                              toast.success('تم التعديل ✅');
+                            }}>حفظ</button>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 600, fontSize: 14 }}>{s.name}</div>
+                            <div style={{ fontSize: 12, color: 'var(--accent)' }}>{s.price} ج</div>
+                          </div>
+                          <button onClick={() => setEditingService(s)}
+                            style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '5px 10px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>✏️</button>
+                          <button onClick={() => { setServices(prev => prev.filter(x => x.id !== s.id)); toast.success('تم الحذف'); }}
+                            style={{ background: 'transparent', border: '1px solid rgba(255,71,87,0.3)', color: '#ff4757', padding: '5px 10px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>🗑️</button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
           </div>
         )}
+
       </div>
     </div>
   );
 }
-
