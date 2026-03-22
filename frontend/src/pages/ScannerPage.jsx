@@ -10,14 +10,13 @@ export default function ScannerPage() {
   const navigate = useNavigate();
   const [result, setResult] = useState(null);
   const [scanning, setScanning] = useState(false);
+  const scanningRef = useRef(false); // ✅
   const [manualCode, setManualCode] = useState('');
   const [activeClients, setActiveClients] = useState([]);
   const [cameraActive, setCameraActive] = useState(false);
   const [scanMode, setScanMode] = useState('device');
   const inputRef = useRef(null);
   const html5QrRef = useRef(null);
-
-  // ✅ منع تكرار المسح
   const lastScannedRef = useRef('');
   const lastScannedTimeRef = useRef(0);
 
@@ -52,7 +51,6 @@ export default function ScannerPage() {
         { fps: 10, qrbox: { width: 220, height: 220 } },
         async (decodedText) => {
           const now = Date.now();
-          // ✅ تجاهل لو نفس الكود اتمسح في آخر 3 ثواني
           if (
             decodedText === lastScannedRef.current &&
             now - lastScannedTimeRef.current < 3000
@@ -61,7 +59,7 @@ export default function ScannerPage() {
           lastScannedRef.current = decodedText;
           lastScannedTimeRef.current = now;
 
-          if (!scanning) await handleScan(decodedText);
+          if (!scanningRef.current) await handleScan(decodedText); // ✅
         },
         () => {}
       );
@@ -88,9 +86,8 @@ export default function ScannerPage() {
   }
 
   async function handleScan(qrCode) {
-    if (!qrCode.trim() || scanning) return;
+    if (!qrCode.trim() || scanningRef.current) return; // ✅
 
-    // ✅ منع التكرار من الـ input برضو
     const now = Date.now();
     if (
       qrCode.trim() === lastScannedRef.current &&
@@ -100,6 +97,7 @@ export default function ScannerPage() {
     lastScannedRef.current = qrCode.trim();
     lastScannedTimeRef.current = now;
 
+    scanningRef.current = true; // ✅
     setScanning(true);
     try {
       const { data } = await sessionsAPI.scan(qrCode.trim());
@@ -110,12 +108,12 @@ export default function ScannerPage() {
         toast.success(`تم تسجيل دخول ${data.client.name}`);
       } else {
         toast.success(`تم تسجيل خروج ${data.client.name}`);
-        // ✅ عند الخروج → روح لصفحة الفاتورة
         navigate('/invoice', { state: { session: data.session, client: data.client } });
       }
     } catch (err) {
       toast.error(err.response?.data?.error || 'خطأ في المسح');
     } finally {
+      scanningRef.current = false; // ✅
       setScanning(false);
       if (scanMode === 'device') focusInput();
     }
