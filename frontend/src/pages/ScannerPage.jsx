@@ -13,9 +13,13 @@ export default function ScannerPage() {
   const [manualCode, setManualCode] = useState('');
   const [activeClients, setActiveClients] = useState([]);
   const [cameraActive, setCameraActive] = useState(false);
-  const [scanMode, setScanMode] = useState('device'); // 'device' | 'camera'
+  const [scanMode, setScanMode] = useState('device');
   const inputRef = useRef(null);
   const html5QrRef = useRef(null);
+
+  // ✅ منع تكرار المسح
+  const lastScannedRef = useRef('');
+  const lastScannedTimeRef = useRef(0);
 
   const focusInput = useCallback(() => {
     setTimeout(() => inputRef.current?.focus(), 100);
@@ -29,7 +33,6 @@ export default function ScannerPage() {
     return () => document.removeEventListener('click', handleClick);
   }, [focusInput, scanMode]);
 
-  // تشغيل/إيقاف الكاميرا
   useEffect(() => {
     if (scanMode === 'camera') {
       startCamera();
@@ -48,6 +51,16 @@ export default function ScannerPage() {
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 220, height: 220 } },
         async (decodedText) => {
+          const now = Date.now();
+          // ✅ تجاهل لو نفس الكود اتمسح في آخر 3 ثواني
+          if (
+            decodedText === lastScannedRef.current &&
+            now - lastScannedTimeRef.current < 3000
+          ) return;
+
+          lastScannedRef.current = decodedText;
+          lastScannedTimeRef.current = now;
+
           if (!scanning) await handleScan(decodedText);
         },
         () => {}
@@ -76,6 +89,17 @@ export default function ScannerPage() {
 
   async function handleScan(qrCode) {
     if (!qrCode.trim() || scanning) return;
+
+    // ✅ منع التكرار من الـ input برضو
+    const now = Date.now();
+    if (
+      qrCode.trim() === lastScannedRef.current &&
+      now - lastScannedTimeRef.current < 3000
+    ) return;
+
+    lastScannedRef.current = qrCode.trim();
+    lastScannedTimeRef.current = now;
+
     setScanning(true);
     try {
       const { data } = await sessionsAPI.scan(qrCode.trim());
@@ -86,7 +110,7 @@ export default function ScannerPage() {
         toast.success(`تم تسجيل دخول ${data.client.name}`);
       } else {
         toast.success(`تم تسجيل خروج ${data.client.name}`);
-        // ✅ لو checkout → روح لصفحة الفاتورة
+        // ✅ عند الخروج → روح لصفحة الفاتورة
         navigate('/invoice', { state: { session: data.session, client: data.client } });
       }
     } catch (err) {
@@ -105,17 +129,18 @@ export default function ScannerPage() {
   return (
     <div style={{ minHeight: '100vh', padding: 16 }}>
       {/* Header */}
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-      <div>
-        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent)' }}>Link Space</div>
-        <div style={{ fontSize: 12, color: 'var(--muted)' }}>واجهة الاستقبال</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent)' }}>Link Space</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)' }}>واجهة الاستقبال</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => navigate('/admin')}
+            style={{ background: 'transparent', border: '1px solid var(--accent)', color: 'var(--accent)', padding: '6px 12px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>← رجوع</button>
+          <button onClick={logout}
+            style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '6px 12px', borderRadius: 8, fontSize: 12 }}>خروج</button>
+        </div>
       </div>
-     <div style={{ display: 'flex', gap: 8 }}>
-       <button onClick={() => navigate('/admin')}
-         style={{ background: 'transparent', border: '1px solid var(--accent)', color: 'var(--accent)', padding: '6px 12px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>← رجوع</button>
-        <button onClick={logout} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '6px 12px', borderRadius: 8, fontSize: 12 }}>خروج</button>
-     </div>
-    </div>
 
       {/* Toggle Mode */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
