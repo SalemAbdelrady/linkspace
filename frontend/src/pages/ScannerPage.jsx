@@ -1,17 +1,22 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { sessionsAPI } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { Html5Qrcode } from 'html5-qrcode';
 
 export default function ScannerPage() {
   const { logout } = useAuth();
+  const navigate = useNavigate();
   const [result, setResult] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [manualCode, setManualCode] = useState('');
   const [activeClients, setActiveClients] = useState([]);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [scanMode, setScanMode] = useState('device'); // 'device' | 'camera'
   const inputRef = useRef(null);
+  const html5QrRef = useRef(null);
 
-  // ✅ Focus دايماً على الـ input
   const focusInput = useCallback(() => {
     setTimeout(() => inputRef.current?.focus(), 100);
   }, []);
@@ -19,18 +24,54 @@ export default function ScannerPage() {
   useEffect(() => {
     loadActive();
     focusInput();
-
-    // ✅ لو المستخدم ضغط في أي مكان، يرجع الـ focus للـ input
-    const handleClick = () => focusInput();
+    const handleClick = () => { if (scanMode === 'device') focusInput(); };
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
-  }, [focusInput]);
+  }, [focusInput, scanMode]);
+
+  // تشغيل/إيقاف الكاميرا
+  useEffect(() => {
+    if (scanMode === 'camera') {
+      startCamera();
+    } else {
+      stopCamera();
+      focusInput();
+    }
+    return () => stopCamera();
+  }, [scanMode]);
+
+  async function startCamera() {
+    try {
+      const qr = new Html5Qrcode('camera-reader');
+      html5QrRef.current = qr;
+      await qr.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 220, height: 220 } },
+        async (decodedText) => {
+          if (!scanning) await handleScan(decodedText);
+        },
+        () => {}
+      );
+      setCameraActive(true);
+    } catch (err) {
+      toast.error('تعذر تشغيل الكاميرا — تحقق من الإذن');
+      setScanMode('device');
+    }
+  }
+
+  async function stopCamera() {
+    if (html5QrRef.current) {
+      try { await html5QrRef.current.stop(); } catch {}
+      html5QrRef.current = null;
+    }
+    setCameraActive(false);
+  }
 
   async function loadActive() {
     try {
       const { data } = await sessionsAPI.active();
       setActiveClients(data.sessions);
-    } catch { /* ignore */ }
+    } catch { }
   }
 
   async function handleScan(qrCode) {
@@ -41,13 +82,18 @@ export default function ScannerPage() {
       setResult(data);
       setManualCode('');
       loadActive();
-      if (data.action === 'checkin') toast.success(`تم تسجيل دخول ${data.client.name}`);
-      else toast.success(`تم تسجيل خروج ${data.client.name}`);
+      if (data.action === 'checkin') {
+        toast.success(`تم تسجيل دخول ${data.client.name}`);
+      } else {
+        toast.success(`تم تسجيل خروج ${data.client.name}`);
+        // ✅ لو checkout → روح لصفحة الفاتورة
+        navigate('/invoice', { state: { session: data.session, client: data.client } });
+      }
     } catch (err) {
       toast.error(err.response?.data?.error || 'خطأ في المسح');
     } finally {
       setScanning(false);
-      focusInput(); // ✅ رجّع الـ focus بعد كل scan
+      if (scanMode === 'device') focusInput();
     }
   }
 
@@ -58,6 +104,7 @@ export default function ScannerPage() {
 
   return (
     <div style={{ minHeight: '100vh', padding: 16 }}>
+      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
           <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent)' }}>Link Space</div>
@@ -66,57 +113,61 @@ export default function ScannerPage() {
         <button onClick={logout} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '6px 12px', borderRadius: 8, fontSize: 12 }}>خروج</button>
       </div>
 
-      {/* Scanner Frame */}
-      <div style={{ position: 'relative', width: 240, height: 240, margin: '0 auto 20px', border: '2px solid var(--accent)', borderRadius: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,212,170,0.04)' }}>
-        {[['top:0;right:0;border-width:3px 0 0 3px;border-radius:8px 0 0 0', 'tl'],
-          ['top:0;left:0;border-width:3px 3px 0 0;border-radius:0 8px 0 0', 'tr'],
-          ['bottom:0;right:0;border-width:0 0 3px 3px;border-radius:0 0 0 8px', 'bl'],
-          ['bottom:0;left:0;border-width:0 3px 3px 0;border-radius:0 0 8px 0', 'br']
-        ].map(([s]) => (
-          <div key={s} style={{ position: 'absolute', width: 20, height: 20, borderColor: 'var(--accent)', borderStyle: 'solid', ...(Object.fromEntries(s.split(';').map(p => p.split(':')))) }} />
+      {/* Toggle Mode */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        {[['device', '📡 ماسح ضوئي'], ['camera', '📷 كاميرا']].map(([mode, label]) => (
+          <button key={mode} onClick={() => setScanMode(mode)}
+            style={{ flex: 1, padding: '10px', borderRadius: 12, border: '1px solid', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', borderColor: scanMode === mode ? 'var(--accent)' : 'var(--border)', background: scanMode === mode ? 'var(--accent)' : 'transparent', color: scanMode === mode ? '#000' : 'var(--muted)' }}>
+            {label}
+          </button>
         ))}
-
-        {/* ✅ مؤشر حالة الماسح */}
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>
-            {scanning ? '⏳' : '📡'}
-          </div>
-          <div style={{ fontSize: 13, color: 'var(--accent)', opacity: 0.8 }}>
-            {scanning ? 'جارٍ المسح...' : 'جاهز للمسح'}
-          </div>
-          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
-            {scanning ? '' : 'امسح الـ QR الآن'}
-          </div>
-        </div>
-
-        <div style={{ position: 'absolute', width: '80%', height: 2, background: 'var(--accent)', opacity: 0.7, animation: 'scanLine 2s ease-in-out infinite' }} />
       </div>
-      <style>{`@keyframes scanLine { 0%,100%{top:20%} 50%{top:80%} }`}</style>
 
-      {/* ✅ Input مخفي للماسح الضوئي */}
+      {/* Camera Mode */}
+      {scanMode === 'camera' && (
+        <div style={{ marginBottom: 16 }}>
+          <div id="camera-reader" style={{ width: '100%', borderRadius: 16, overflow: 'hidden', border: '2px solid var(--accent)' }} />
+          {!cameraActive && (
+            <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 20, fontSize: 13 }}>جارٍ تشغيل الكاميرا...</div>
+          )}
+        </div>
+      )}
+
+      {/* Device Scanner Mode */}
+      {scanMode === 'device' && (
+        <>
+          <div style={{ position: 'relative', width: 240, height: 240, margin: '0 auto 20px', border: '2px solid var(--accent)', borderRadius: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,212,170,0.04)' }}>
+            {[['top:0;right:0;border-width:3px 0 0 3px;border-radius:8px 0 0 0'],
+              ['top:0;left:0;border-width:3px 3px 0 0;border-radius:0 8px 0 0'],
+              ['bottom:0;right:0;border-width:0 0 3px 3px;border-radius:0 0 0 8px'],
+              ['bottom:0;left:0;border-width:0 3px 3px 0;border-radius:0 0 8px 0']
+            ].map(([s], i) => (
+              <div key={i} style={{ position: 'absolute', width: 20, height: 20, borderColor: 'var(--accent)', borderStyle: 'solid', ...(Object.fromEntries(s.split(';').map(p => p.split(':')))) }} />
+            ))}
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>{scanning ? '⏳' : '📡'}</div>
+              <div style={{ fontSize: 13, color: 'var(--accent)', opacity: 0.8 }}>{scanning ? 'جارٍ المسح...' : 'جاهز للمسح'}</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{scanning ? '' : 'امسح الـ QR الآن'}</div>
+            </div>
+            <div style={{ position: 'absolute', width: '80%', height: 2, background: 'var(--accent)', opacity: 0.7, animation: 'scanLine 2s ease-in-out infinite' }} />
+          </div>
+          <style>{`@keyframes scanLine { 0%,100%{top:20%} 50%{top:80%} }`}</style>
+        </>
+      )}
+
+      {/* Input */}
       <div className="card" style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: scanning ? 'var(--warning)' : 'var(--success)', display: 'inline-block' }} />
           {scanning ? 'جارٍ المسح...' : 'في انتظار المسح'}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            ref={inputRef}
-            className="input-field"
-            style={{ flex: 1 }}
-            value={manualCode}
+          <input ref={inputRef} className="input-field" style={{ flex: 1 }} value={manualCode}
             onChange={e => setManualCode(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleScan(manualCode)}
             placeholder="امسح الـ QR أو اكتب الكود يدوياً..."
-            autoComplete="off"
-          />
-          <button
-            className="btn btn-primary"
-            onClick={() => handleScan(manualCode)}
-            disabled={!manualCode || scanning}
-          >
-            مسح
-          </button>
+            autoComplete="off" />
+          <button className="btn btn-primary" onClick={() => handleScan(manualCode)} disabled={!manualCode || scanning}>مسح</button>
         </div>
       </div>
 
