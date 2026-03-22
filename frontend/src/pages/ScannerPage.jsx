@@ -105,13 +105,17 @@ export default function ScannerPage() {
   return (
     <div style={{ minHeight: '100vh', padding: 16 }}>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent)' }}>Link Space</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)' }}>واجهة الاستقبال</div>
-        </div>
-        <button onClick={logout} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '6px 12px', borderRadius: 8, fontSize: 12 }}>خروج</button>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+      <div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent)' }}>Link Space</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)' }}>واجهة الاستقبال</div>
       </div>
+     <div style={{ display: 'flex', gap: 8 }}>
+       <button onClick={() => navigate('/admin')}
+         style={{ background: 'transparent', border: '1px solid var(--accent)', color: 'var(--accent)', padding: '6px 12px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>← رجوع</button>
+        <button onClick={logout} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '6px 12px', borderRadius: 8, fontSize: 12 }}>خروج</button>
+     </div>
+    </div>
 
       {/* Toggle Mode */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
