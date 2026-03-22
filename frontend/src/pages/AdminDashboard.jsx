@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { adminAPI } from '../utils/api';
+import { adminAPI, sessionsAPI } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
-
-const DAYS_AR = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
@@ -15,16 +13,16 @@ export default function AdminDashboard() {
   const [monthly, setMonthly] = useState(null);
   const [prices, setPrices] = useState([]);
   const [users, setUsers] = useState([]);
+  const [activeSessionIds, setActiveSessionIds] = useState(new Set());
   const [search, setSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
-  const [walletAmount, setWalletAmount] = useState('');
-  const [pointsAmount, setPointsAmount] = useState('');
+  const [amounts, setAmounts] = useState({}); // { userId: { wallet: '', points: '' } }
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const now = new Date();
 
   useEffect(() => { loadOverview(); }, []);
-  useEffect(() => { if (tab === 'users') loadUsers(); }, [tab, search]);
+  useEffect(() => { if (tab === 'users') { loadUsers(); loadActiveSessions(); } }, [tab, search]);
 
   async function loadOverview() {
     try {
@@ -46,22 +44,45 @@ export default function AdminDashboard() {
     } catch { toast.error('خطأ في تحميل العملاء'); }
   }
 
-  async function chargeWallet() {
-    if (!walletAmount || !selectedUser) return;
+  // ✅ جيب الجلسات النشطة عشان تعرف مين موجود فعلاً
+  async function loadActiveSessions() {
     try {
-      await adminAPI.chargeWallet(selectedUser.id, parseFloat(walletAmount));
-      toast.success(`تم شحن ${walletAmount} ج للعميل ${selectedUser.name}`);
-      setWalletAmount('');
+      const { data } = await sessionsAPI.active();
+      const ids = new Set(data.sessions.map(s => s.user_id));
+      setActiveSessionIds(ids);
+    } catch { }
+  }
+
+  // ✅ كل user عنده amounts منفصلة
+  function getAmount(userId, type) {
+    return amounts[userId]?.[type] || '';
+  }
+
+  function setAmount(userId, type, value) {
+    setAmounts(prev => ({
+      ...prev,
+      [userId]: { ...prev[userId], [type]: value }
+    }));
+  }
+
+  async function chargeWallet(u) {
+    const amount = getAmount(u.id, 'wallet');
+    if (!amount || parseFloat(amount) <= 0) return toast.error('أدخل مبلغ صحيح');
+    try {
+      await adminAPI.chargeWallet(u.id, parseFloat(amount));
+      toast.success(`تم شحن ${amount} ج للعميل ${u.name}`);
+      setAmount(u.id, 'wallet', '');
       loadUsers();
     } catch (err) { toast.error(err.response?.data?.error || 'خطأ'); }
   }
 
-  async function addPoints() {
-    if (!pointsAmount || !selectedUser) return;
+  async function addPoints(u) {
+    const points = getAmount(u.id, 'points');
+    if (!points || parseInt(points) <= 0) return toast.error('أدخل نقاط صحيحة');
     try {
-      await adminAPI.addPoints(selectedUser.id, parseInt(pointsAmount));
-      toast.success(`تم إضافة ${pointsAmount} نقطة`);
-      setPointsAmount('');
+      await adminAPI.addPoints(u.id, parseInt(points));
+      toast.success(`تم إضافة ${points} نقطة`);
+      setAmount(u.id, 'points', '');
       loadUsers();
     } catch (err) { toast.error(err.response?.data?.error || 'خطأ'); }
   }
@@ -105,7 +126,6 @@ export default function AdminDashboard() {
         {/* === OVERVIEW === */}
         {tab === 'overview' && (
           <div className="fade-up">
-            {/* Today Summary */}
             <div className="section-title">إحصائيات اليوم</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 12 }}>
               {[
@@ -120,7 +140,6 @@ export default function AdminDashboard() {
               ))}
             </div>
 
-            {/* Monthly Revenue Chart */}
             <div className="section-title">إيرادات آخر 7 أيام</div>
             <div className="card" style={{ marginBottom: 12 }}>
               {chartData.length > 0 ? (
@@ -137,7 +156,6 @@ export default function AdminDashboard() {
               )}
             </div>
 
-            {/* Monthly Totals */}
             <div className="section-title">إجماليات الشهر الحالي</div>
             <div className="card" style={{ marginBottom: 12 }}>
               <div className="stat-row"><span className="stat-label">إجمالي الإيرادات</span><span className="stat-val" style={{ color: 'var(--accent)' }}>{parseFloat(monthly?.totals?.total_revenue || 0).toFixed(2)} ج</span></div>
@@ -145,7 +163,6 @@ export default function AdminDashboard() {
               <div className="stat-row" style={{ border: 'none' }}><span className="stat-label">متوسط مدة الزيارة</span><span className="stat-val">{Math.round(monthly?.totals?.avg_duration || 0)} دقيقة</span></div>
             </div>
 
-            {/* Hourly Heatmap */}
             {daily?.by_hour?.length > 0 && (
               <>
                 <div className="section-title">توزيع الزيارات بالساعة</div>
@@ -176,39 +193,55 @@ export default function AdminDashboard() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
-              {users.map(u => (
-                <div key={u.id} onClick={() => setSelectedUser(selectedUser?.id === u.id ? null : u)}
-                  className="card" style={{ cursor: 'pointer', borderColor: selectedUser?.id === u.id ? 'var(--accent)' : 'var(--border)', transition: 'border-color 0.2s' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div>
-                      <div style={{ fontWeight: 700 }}>{u.name}</div>
-                      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{u.phone}</div>
-                    </div>
-                    <span className={`badge badge-${u.is_active ? 'success' : 'danger'}`}>{u.is_active ? 'نشط' : 'محظور'}</span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 13 }}>
-                    <span>💰 <strong style={{ color: 'var(--accent)' }}>{parseFloat(u.balance).toFixed(2)} ج</strong></span>
-                    <span>⭐ <strong style={{ color: 'var(--warning)' }}>{u.points} نقطة</strong></span>
-                  </div>
+              {users.map(u => {
+                // ✅ نشط = موجود في الجلسة فعلاً
+                const isInSession = activeSessionIds.has(u.id);
 
-                  {selectedUser?.id === u.id && (
-                    <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 14 }} onClick={e => e.stopPropagation()}>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
-                        <div>
-                          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>شحن رصيد (ج)</div>
-                          <input className="input-field" style={{ marginBottom: 6 }} type="number" value={walletAmount} onChange={e => setWalletAmount(e.target.value)} placeholder="0.00" />
-                          <button className="btn btn-primary" style={{ width: '100%', padding: '8px' }} onClick={chargeWallet}>شحن</button>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>إضافة نقاط</div>
-                          <input className="input-field" style={{ marginBottom: 6 }} type="number" value={pointsAmount} onChange={e => setPointsAmount(e.target.value)} placeholder="0" />
-                          <button className="btn btn-outline" style={{ width: '100%', padding: '8px' }} onClick={addPoints}>إضافة</button>
+                return (
+                  <div key={u.id} onClick={() => setSelectedUser(selectedUser?.id === u.id ? null : u)}
+                    className="card" style={{ cursor: 'pointer', borderColor: selectedUser?.id === u.id ? 'var(--accent)' : 'var(--border)', transition: 'border-color 0.2s' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ fontWeight: 700 }}>{u.name}</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{u.phone}</div>
+                      </div>
+                      {/* ✅ نشط بناءً على الجلسة الفعلية */}
+                      {isInSession && (
+                        <span className="badge badge-success">نشط</span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 13 }}>
+                      <span>💰 <strong style={{ color: 'var(--accent)' }}>{parseFloat(u.balance).toFixed(2)} ج</strong></span>
+                      <span>⭐ <strong style={{ color: 'var(--warning)' }}>{u.points} نقطة</strong></span>
+                    </div>
+
+                    {selectedUser?.id === u.id && (
+                      <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 14 }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+                          <div>
+                            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>شحن رصيد (ج)</div>
+                            <input className="input-field" style={{ marginBottom: 6 }} type="number" min="0"
+                              value={getAmount(u.id, 'wallet')}
+                              onChange={e => setAmount(u.id, 'wallet', e.target.value)}
+                              placeholder="0.00" />
+                            <button className="btn btn-primary" style={{ width: '100%', padding: '8px' }}
+                              onClick={() => chargeWallet(u)}>شحن</button>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>إضافة نقاط</div>
+                            <input className="input-field" style={{ marginBottom: 6 }} type="number" min="0"
+                              value={getAmount(u.id, 'points')}
+                              onChange={e => setAmount(u.id, 'points', e.target.value)}
+                              placeholder="0" />
+                            <button className="btn btn-outline" style={{ width: '100%', padding: '8px' }}
+                              onClick={() => addPoints(u)}>إضافة</button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              ))}
+                    )}
+                  </div>
+                );
+              })}
               {users.length === 0 && <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 20, fontSize: 13 }}>لا توجد نتائج</div>}
             </div>
           </div>
@@ -238,7 +271,6 @@ export default function AdminDashboard() {
                         style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 18, cursor: 'pointer' }}>+</button>
                     </div>
                   </div>
-                  {/* Preview calc */}
                   <div style={{ marginTop: 12, padding: '8px 12px', background: 'rgba(0,212,170,0.06)', borderRadius: 8, fontSize: 12, color: 'var(--muted)' }}>
                     مثال: ساعة = <strong style={{ color: 'var(--accent)' }}>{parseFloat(p.price_per_hr).toFixed(2)} ج</strong> &nbsp;|&nbsp; 90 دقيقة = <strong style={{ color: 'var(--accent)' }}>{(parseFloat(p.price_per_hr) * 1.5).toFixed(2)} ج</strong> &nbsp;|&nbsp; 30 دقيقة = <strong style={{ color: 'var(--accent)' }}>{(parseFloat(p.price_per_hr) * 0.5).toFixed(2)} ج</strong>
                   </div>
