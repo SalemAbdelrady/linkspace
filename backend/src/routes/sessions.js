@@ -2,7 +2,6 @@ const router = require('express').Router();
 const db = require('../config/db');
 const { auth, requireRole } = require('../middleware/auth');
 
-// Helper: get price for current hour
 async function getCurrentPrice() {
   const hour = new Date().getHours();
   const { rows } = await db.query(`
@@ -10,7 +9,6 @@ async function getCurrentPrice() {
     WHERE start_hour <= $1 AND end_hour > $1
     LIMIT 1
   `, [hour]);
-  // Night period wraps around midnight
   if (!rows[0]) {
     const { rows: nightRows } = await db.query(
       `SELECT price_per_hr FROM price_settings WHERE period_name = 'night' LIMIT 1`
@@ -20,23 +18,32 @@ async function getCurrentPrice() {
   return parseFloat(rows[0].price_per_hr);
 }
 
-// POST /api/sessions/scan — used by scanner interface
+// POST /api/sessions/scan
 router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
   const { qr_code } = req.body;
   if (!qr_code) return res.status(400).json({ error: 'QR Code مطلوب' });
 
+  // ✅ transaction + FOR UPDATE لمنع race condition
+  const client = await db.pool.connect();
   try {
-    const { rows: userRows } = await db.query(
-      'SELECT id, name, phone, balance, points FROM users WHERE qr_code = $1 AND is_active = true',
+    await client.query('BEGIN');
+
+    const { rows: userRows } = await client.query(
+      `SELECT id, name, phone, balance, points 
+       FROM users 
+       WHERE qr_code = $1 AND is_active = true 
+       FOR UPDATE`,
       [qr_code]
     );
-    const client = userRows[0];
-    if (!client) return res.status(404).json({ error: 'العميل غير موجود' });
+    const user = userRows[0];
+    if (!user) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'العميل غير موجود' });
+    }
 
-    // Check if already has active session
-    const { rows: activeSessions } = await db.query(
+    const { rows: activeSessions } = await client.query(
       `SELECT * FROM sessions WHERE user_id = $1 AND status = 'active' LIMIT 1`,
-      [client.id]
+      [user.id]
     );
 
     if (activeSessions[0]) {
@@ -47,60 +54,67 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
       const durationMin = Math.ceil((checkOut - checkIn) / 60000);
       const cost = parseFloat(((durationMin / 60) * session.price_per_hr).toFixed(2));
 
-      await db.query(`
+      await client.query(`
         UPDATE sessions SET
           check_out = $1, duration_min = $2, cost = $3, status = 'completed'
         WHERE id = $4
       `, [checkOut, durationMin, cost, session.id]);
 
-      // Deduct from wallet if enough balance
       let paymentMethod = 'cash';
-      if (parseFloat(client.balance) >= cost) {
-        await db.query(
+      if (parseFloat(user.balance) >= cost) {
+        await client.query(
           'UPDATE users SET balance = balance - $1 WHERE id = $2',
-          [cost, client.id]
+          [cost, user.id]
         );
-        await db.query(`
+        await client.query(`
           INSERT INTO wallet_transactions (user_id, type, amount, description)
           VALUES ($1, 'debit', $2, 'خصم تكلفة جلسة')
-        `, [client.id, cost]);
+        `, [user.id, cost]);
         paymentMethod = 'wallet';
       }
 
-      // Award loyalty points: 1 point per 10 EGP
       const pointsEarned = Math.floor(cost / 10);
       if (pointsEarned > 0) {
-        await db.query(
+        await client.query(
           'UPDATE users SET points = points + $1 WHERE id = $2',
-          [pointsEarned, client.id]
+          [pointsEarned, user.id]
         );
       }
 
+      await client.query('COMMIT');
+
       return res.json({
         action: 'checkout',
-        client: { name: client.name, phone: client.phone },
+        client: { name: user.name, phone: user.phone },
         session: { durationMin, cost, paymentMethod, pointsEarned },
       });
+
     } else {
       // CHECK-IN
       const pricePerHr = await getCurrentPrice();
-      await db.query(`
+      await client.query(`
         INSERT INTO sessions (user_id, price_per_hr) VALUES ($1, $2)
-      `, [client.id, pricePerHr]);
+      `, [user.id, pricePerHr]);
+
+      await client.query('COMMIT');
 
       return res.json({
         action: 'checkin',
-        client: { name: client.name, phone: client.phone, balance: client.balance },
+        client: { name: user.name, phone: user.phone, balance: user.balance },
         pricePerHr,
       });
     }
+
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error(err);
     res.status(500).json({ error: 'خطأ في الخادم' });
+  } finally {
+    client.release();
   }
 });
 
-// GET /api/sessions/history — client's own history
+// GET /api/sessions/history
 router.get('/history', auth, async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = 10;
@@ -126,12 +140,12 @@ router.get('/history', auth, async (req, res) => {
   }
 });
 
-// GET /api/sessions/active — currently active sessions (staff/admin)
+// GET /api/sessions/active
 router.get('/active', auth, requireRole('staff', 'admin'), async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT s.id, s.check_in, s.price_per_hr,
-             u.name, u.phone, u.balance,
+             u.id as user_id, u.name, u.phone, u.balance,
              EXTRACT(EPOCH FROM (NOW() - s.check_in))/60 AS elapsed_min
       FROM sessions s
       JOIN users u ON u.id = s.user_id
