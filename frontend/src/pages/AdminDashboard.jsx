@@ -16,7 +16,7 @@ export default function AdminDashboard() {
   const [activeSessionIds, setActiveSessionIds] = useState(new Set());
   const [search, setSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
-  const [amounts, setAmounts] = useState({}); // { userId: { wallet: '', points: '' } }
+  const [amounts, setAmounts] = useState({});
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const now = new Date();
@@ -44,7 +44,6 @@ export default function AdminDashboard() {
     } catch { toast.error('خطأ في تحميل العملاء'); }
   }
 
-  // ✅ جيب الجلسات النشطة عشان تعرف مين موجود فعلاً
   async function loadActiveSessions() {
     try {
       const { data } = await sessionsAPI.active();
@@ -53,7 +52,6 @@ export default function AdminDashboard() {
     } catch { }
   }
 
-  // ✅ كل user عنده amounts منفصلة
   function getAmount(userId, type) {
     return amounts[userId]?.[type] || '';
   }
@@ -194,9 +192,7 @@ export default function AdminDashboard() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
               {users.map(u => {
-                // ✅ نشط = موجود في الجلسة فعلاً
                 const isInSession = activeSessionIds.has(u.id);
-
                 return (
                   <div key={u.id} onClick={() => setSelectedUser(selectedUser?.id === u.id ? null : u)}
                     className="card" style={{ cursor: 'pointer', borderColor: selectedUser?.id === u.id ? 'var(--accent)' : 'var(--border)', transition: 'border-color 0.2s' }}>
@@ -205,10 +201,10 @@ export default function AdminDashboard() {
                         <div style={{ fontWeight: 700 }}>{u.name}</div>
                         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{u.phone}</div>
                       </div>
-                      {/* ✅ نشط بناءً على الجلسة الفعلية */}
-                      {isInSession && (
-                        <span className="badge badge-success">نشط</span>
-                      )}
+                      {/* ✅ دايماً بيظهر نشط أو غير نشط */}
+                      <span className={`badge badge-${isInSession ? 'success' : 'danger'}`}>
+                        {isInSession ? 'نشط' : 'غير نشط'}
+                      </span>
                     </div>
                     <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 13 }}>
                       <span>💰 <strong style={{ color: 'var(--accent)' }}>{parseFloat(u.balance).toFixed(2)} ج</strong></span>
@@ -283,3 +279,4 @@ export default function AdminDashboard() {
     </div>
   );
 }
+
