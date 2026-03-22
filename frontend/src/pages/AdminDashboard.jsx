@@ -20,7 +20,6 @@ export default function AdminDashboard() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [amounts, setAmounts] = useState({});
 
-  // أسعار المساحات
   const [priceTab, setPriceTab] = useState('cowork');
   const [spaces, setSpaces] = useState({
     cowork:  { name: 'منطقة العمل المشتركة', price_per_hr: 30 },
@@ -123,6 +122,11 @@ export default function AdminDashboard() {
         {[['overview', 'نظرة عامة'], ['users', 'العملاء'], ['prices', 'الأسعار']].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)} style={{ padding: '7px 16px', borderRadius: 20, border: '1px solid', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer', transition: 'all 0.2s', borderColor: tab === k ? 'var(--accent)' : 'var(--border)', background: tab === k ? 'var(--accent)' : 'transparent', color: tab === k ? '#000' : 'var(--muted)' }}>{label}</button>
         ))}
+        {/* ✅ زر Scanner */}
+        <button onClick={() => navigate('/scanner')}
+          style={{ padding: '7px 16px', borderRadius: 20, border: '1px solid var(--border)', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer', background: 'transparent', color: 'var(--muted)', transition: 'all 0.2s' }}>
+          📡 Scanner
+        </button>
       </div>
 
       <div style={{ padding: 16 }}>
@@ -249,8 +253,6 @@ export default function AdminDashboard() {
         {/* === PRICES === */}
         {tab === 'prices' && (
           <div className="fade-up">
-
-            {/* تبويبات الأسعار */}
             <div style={{ display: 'flex', gap: 4, marginBottom: 16, overflowX: 'auto' }}>
               {[
                 ['cowork',   '🖥️ منطقة العمل'],
@@ -262,7 +264,6 @@ export default function AdminDashboard() {
               ))}
             </div>
 
-            {/* منطقة العمل */}
             {priceTab === 'cowork' && (
               <div className="card">
                 <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>اسم المساحة</div>
@@ -287,7 +288,6 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* غرفة الاجتماعات */}
             {priceTab === 'meeting' && (
               <div className="card">
                 <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>اسم الغرفة</div>
@@ -318,7 +318,6 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* غرفة الدروس */}
             {priceTab === 'lessons' && (
               <div className="card">
                 <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>اسم الغرفة</div>
@@ -349,7 +348,6 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* الخدمات والمشروبات */}
             {priceTab === 'services' && (
               <div>
                 <div className="card" style={{ marginBottom: 12 }}>
@@ -370,7 +368,6 @@ export default function AdminDashboard() {
                       toast.success('تمت الإضافة ✅');
                     }}>إضافة</button>
                 </div>
-
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {services.length === 0 && (
                     <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 20, fontSize: 13 }}>لا توجد خدمات بعد — أضف أول خدمة!</div>
@@ -407,10 +404,8 @@ export default function AdminDashboard() {
                 </div>
               </div>
             )}
-
           </div>
         )}
-
       </div>
     </div>
   );
