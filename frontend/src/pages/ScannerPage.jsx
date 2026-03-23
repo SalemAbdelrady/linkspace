@@ -15,7 +15,7 @@ export default function ScannerPage() {
   const [activeClients, setActiveClients] = useState([]);
   const [cameraActive, setCameraActive] = useState(false);
   const [scanMode, setScanMode] = useState('device');
-  const scanModeRef = useRef('device'); // ✅
+  const scanModeRef = useRef('device');
   const inputRef = useRef(null);
   const html5QrRef = useRef(null);
   const lastScannedRef = useRef('');
@@ -25,7 +25,6 @@ export default function ScannerPage() {
     setTimeout(() => inputRef.current?.focus(), 100);
   }, []);
 
-  // ✅ دالة تغيير الـ mode بتحدث الـ ref برضو
   function changeScanMode(mode) {
     scanModeRef.current = mode;
     setScanMode(mode);
@@ -62,10 +61,8 @@ export default function ScannerPage() {
             decodedText === lastScannedRef.current &&
             now - lastScannedTimeRef.current < 5000
           ) return;
-
           lastScannedRef.current = decodedText;
           lastScannedTimeRef.current = now;
-
           if (!scanningRef.current) await handleScan(decodedText);
         },
         () => {}
@@ -107,11 +104,12 @@ export default function ScannerPage() {
     scanningRef.current = true;
     setScanning(true);
 
-    // ✅ وقف الكاميرا فوراً عشان متستدعيش تاني
-    if (scanModeRef.current === 'camera') await stopCamera();
-
     try {
       const { data } = await sessionsAPI.scan(qrCode.trim());
+
+      // ✅ وقف الكاميرا بعد ما الـ request نجح مش قبله
+      if (scanModeRef.current === 'camera') await stopCamera();
+
       setResult(data);
       setManualCode('');
       loadActive();
@@ -128,7 +126,6 @@ export default function ScannerPage() {
       }
     } catch (err) {
       toast.error(err.response?.data?.error || 'خطأ في المسح');
-      // ✅ لو في error شغل الكاميرا تاني
       if (scanModeRef.current === 'camera') startCamera();
     } finally {
       scanningRef.current = false;
