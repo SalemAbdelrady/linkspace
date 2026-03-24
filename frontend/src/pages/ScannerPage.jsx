@@ -56,14 +56,20 @@ export default function ScannerPage() {
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 220, height: 220 } },
         async (decodedText) => {
+          // ✅ أول حاجة تشيك على scanning
+          if (scanningRef.current) return;
+
           const now = Date.now();
           if (
             decodedText === lastScannedRef.current &&
             now - lastScannedTimeRef.current < 5000
           ) return;
+
+          // ✅ بعدين تحدث الـ refs وتنفذ
           lastScannedRef.current = decodedText;
           lastScannedTimeRef.current = now;
-          if (!scanningRef.current) await handleScan(decodedText);
+
+          await handleScan(decodedText);
         },
         () => {}
       );
@@ -92,22 +98,12 @@ export default function ScannerPage() {
   async function handleScan(qrCode) {
     if (!qrCode.trim() || scanningRef.current) return;
 
-    const now = Date.now();
-    if (
-      qrCode.trim() === lastScannedRef.current &&
-      now - lastScannedTimeRef.current < 5000
-    ) return;
-
-    lastScannedRef.current = qrCode.trim();
-    lastScannedTimeRef.current = now;
-
     scanningRef.current = true;
     setScanning(true);
 
     try {
       const { data } = await sessionsAPI.scan(qrCode.trim());
 
-      // ✅ وقف الكاميرا بعد ما الـ request نجح مش قبله
       if (scanModeRef.current === 'camera') await stopCamera();
 
       setResult(data);
@@ -116,7 +112,6 @@ export default function ScannerPage() {
 
       if (data.action === 'checkin') {
         toast.success(`تم تسجيل دخول ${data.client.name}`);
-        // ✅ شغل الكاميرا تاني بعد ثانيتين
         setTimeout(() => {
           if (scanModeRef.current === 'camera') startCamera();
         }, 2000);
