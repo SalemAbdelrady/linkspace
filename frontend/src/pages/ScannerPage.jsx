@@ -56,16 +56,12 @@ export default function ScannerPage() {
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 220, height: 220 } },
         async (decodedText) => {
-          // ✅ تشيك على scanning بس
           if (scanningRef.current) return;
-
           const now = Date.now();
           if (
             decodedText === lastScannedRef.current &&
             now - lastScannedTimeRef.current < 5000
           ) return;
-
-          // ✅ مش بنحدث الـ refs هنا — handleScan هي اللي بتحدثهم
           await handleScan(decodedText);
         },
         () => {}
@@ -95,7 +91,6 @@ export default function ScannerPage() {
   async function handleScan(qrCode) {
     if (!qrCode.trim() || scanningRef.current) return;
 
-    // ✅ بنحدث الـ refs هنا
     lastScannedRef.current = qrCode.trim();
     lastScannedTimeRef.current = Date.now();
 
@@ -104,9 +99,7 @@ export default function ScannerPage() {
 
     try {
       const { data } = await sessionsAPI.scan(qrCode.trim());
-
       if (scanModeRef.current === 'camera') await stopCamera();
-
       setResult(data);
       setManualCode('');
       loadActive();
@@ -129,6 +122,13 @@ export default function ScannerPage() {
       if (scanModeRef.current === 'device') focusInput();
     }
   }
+
+  // ✅ حساب التكلفة المتوقعة بالحد الأقصى 4 ساعات
+  const calcCost = (elapsedMin, pricePerHr) => {
+    const MAX_HOURS = 4;
+    const hours = Math.min(elapsedMin / 60, MAX_HOURS);
+    return (hours * pricePerHr).toFixed(2);
+  };
 
   const elapsed = (checkIn) => {
     const min = Math.floor((Date.now() - new Date(checkIn)) / 60000);
@@ -250,7 +250,10 @@ export default function ScannerPage() {
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>{s.phone}</div>
                   </td>
                   <td style={{ fontFamily: 'var(--mono)' }}>{elapsed(s.check_in)}</td>
-                  <td style={{ color: 'var(--warning)' }}>{((parseFloat(s.elapsed_min) / 60) * parseFloat(s.price_per_hr)).toFixed(2)} ج</td>
+                  {/* ✅ حساب التكلفة بالحد الأقصى 4 ساعات */}
+                  <td style={{ color: 'var(--warning)' }}>
+                    {calcCost(parseFloat(s.elapsed_min), parseFloat(s.price_per_hr))} ج
+                  </td>
                 </tr>
               ))}
             </tbody>

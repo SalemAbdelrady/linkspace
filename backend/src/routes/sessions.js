@@ -18,12 +18,19 @@ async function getCurrentPrice() {
   return parseFloat(rows[0].price_per_hr);
 }
 
+// ✅ دالة حساب التكلفة بالحد الأقصى 4 ساعات
+function calculateCost(durationMin, pricePerHr) {
+  const MAX_HOURS = 4;
+  const hours = durationMin / 60;
+  const billableHours = Math.min(hours, MAX_HOURS);
+  return parseFloat((billableHours * pricePerHr).toFixed(2));
+}
+
 // POST /api/sessions/scan
 router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
   const { qr_code } = req.body;
   if (!qr_code) return res.status(400).json({ error: 'QR Code مطلوب' });
 
-  // ✅ transaction + FOR UPDATE لمنع race condition
   const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
@@ -52,7 +59,9 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
       const checkOut = new Date();
       const checkIn = new Date(session.check_in);
       const durationMin = Math.ceil((checkOut - checkIn) / 60000);
-      const cost = parseFloat(((durationMin / 60) * session.price_per_hr).toFixed(2));
+
+      // ✅ حساب التكلفة بالحد الأقصى 4 ساعات
+      const cost = calculateCost(durationMin, session.price_per_hr);
 
       await client.query(`
         UPDATE sessions SET
@@ -86,7 +95,7 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
       return res.json({
         action: 'checkout',
         client: { name: user.name, phone: user.phone },
-        session: { durationMin, cost, paymentMethod, pointsEarned },
+        session: { durationMin, cost, paymentMethod, pointsEarned, pricePerHr: session.price_per_hr },
       });
 
     } else {
