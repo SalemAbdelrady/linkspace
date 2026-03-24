@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { adminAPI, sessionsAPI } from '../utils/api';
+import { adminAPI, sessionsAPI, spacesAPI, servicesAPI } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import toast from 'react-hot-toast';
@@ -13,7 +13,6 @@ export default function AdminDashboard() {
   const [tab, setTab] = useState('overview');
   const [daily, setDaily] = useState(null);
   const [monthly, setMonthly] = useState(null);
-  const [prices, setPrices] = useState([]);
   const [users, setUsers] = useState([]);
   const [activeSessionIds, setActiveSessionIds] = useState(new Set());
   const [search, setSearch] = useState('');
@@ -22,31 +21,50 @@ export default function AdminDashboard() {
 
   const [priceTab, setPriceTab] = useState('cowork');
   const [spaces, setSpaces] = useState({
-    cowork:  { name: 'منطقة العمل المشتركة', price_per_hr: 30 },
-    meeting: { name: 'غرفة الاجتماعات', first_hour: 150, extra_hour: 100 },
-    lessons: { name: 'غرفة الدروس', first_hour: 200, extra_hour: 100 },
+    cowork:  { name: 'منطقة العمل المشتركة', first_hour: 30, extra_hour: 30, max_hours: 4 },
+    meeting: { name: 'غرفة الاجتماعات', first_hour: 150, extra_hour: 100, max_hours: 12 },
+    lessons: { name: 'غرفة الدروس', first_hour: 200, extra_hour: 100, max_hours: 12 },
   });
   const [services, setServices] = useState([]);
   const [newService, setNewService] = useState({ name: '', price: '' });
   const [editingService, setEditingService] = useState(null);
+  const [loadingSpaces, setLoadingSpaces] = useState(false);
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const now = new Date();
 
-  useEffect(() => { loadOverview(); }, []);
+  useEffect(() => { loadOverview(); loadSpaces(); loadServices(); }, []);
   useEffect(() => { if (tab === 'users') { loadUsers(); loadActiveSessions(); } }, [tab, search]);
 
   async function loadOverview() {
     try {
-      const [d, m, p] = await Promise.all([
+      const [d, m] = await Promise.all([
         adminAPI.dailyReport(today),
         adminAPI.monthlyReport(now.getFullYear(), now.getMonth() + 1),
-        adminAPI.getPrices(),
       ]);
       setDaily(d.data);
       setMonthly(m.data);
-      setPrices(p.data.prices);
     } catch { toast.error('خطأ في تحميل البيانات'); }
+  }
+
+  async function loadSpaces() {
+    try {
+      const { data } = await spacesAPI.getAll();
+      const mapped = {};
+      data.spaces.forEach(s => { mapped[s.space_key] = s; });
+      setSpaces(prev => ({
+        cowork: { ...prev.cowork, ...mapped.cowork },
+        meeting: { ...prev.meeting, ...mapped.meeting },
+        lessons: { ...prev.lessons, ...mapped.lessons },
+      }));
+    } catch { }
+  }
+
+  async function loadServices() {
+    try {
+      const { data } = await servicesAPI.getAll();
+      setServices(data.services);
+    } catch { }
   }
 
   async function loadUsers() {
@@ -62,6 +80,42 @@ export default function AdminDashboard() {
       const ids = new Set(data.sessions.map(s => s.user_id));
       setActiveSessionIds(ids);
     } catch { }
+  }
+
+  async function saveSpace(key) {
+    setLoadingSpaces(true);
+    try {
+      await spacesAPI.update(key, spaces[key]);
+      toast.success('تم حفظ التغييرات ✅');
+    } catch { toast.error('خطأ في الحفظ'); }
+    finally { setLoadingSpaces(false); }
+  }
+
+  async function addService() {
+    if (!newService.name || !newService.price) return toast.error('أدخل الاسم والسعر');
+    try {
+      const { data } = await servicesAPI.create({ name: newService.name, price: parseFloat(newService.price) });
+      setServices(prev => [...prev, data.service]);
+      setNewService({ name: '', price: '' });
+      toast.success('تمت الإضافة ✅');
+    } catch { toast.error('خطأ في الإضافة'); }
+  }
+
+  async function saveService() {
+    try {
+      await servicesAPI.update(editingService.id, { name: editingService.name, price: parseFloat(editingService.price) });
+      setServices(prev => prev.map(x => x.id === editingService.id ? editingService : x));
+      setEditingService(null);
+      toast.success('تم التعديل ✅');
+    } catch { toast.error('خطأ في التعديل'); }
+  }
+
+  async function deleteService(id) {
+    try {
+      await servicesAPI.delete(id);
+      setServices(prev => prev.filter(x => x.id !== id));
+      toast.success('تم الحذف');
+    } catch { toast.error('خطأ في الحذف'); }
   }
 
   function getAmount(userId, type) {
@@ -122,7 +176,6 @@ export default function AdminDashboard() {
         {[['overview', 'نظرة عامة'], ['users', 'العملاء'], ['prices', 'الأسعار']].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)} style={{ padding: '7px 16px', borderRadius: 20, border: '1px solid', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer', transition: 'all 0.2s', borderColor: tab === k ? 'var(--accent)' : 'var(--border)', background: tab === k ? 'var(--accent)' : 'transparent', color: tab === k ? '#000' : 'var(--muted)' }}>{label}</button>
         ))}
-        {/* ✅ زر Scanner */}
         <button onClick={() => navigate('/scanner')}
           style={{ padding: '7px 16px', borderRadius: 20, border: '1px solid var(--border)', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer', background: 'transparent', color: 'var(--muted)', transition: 'all 0.2s' }}>
           📡 Scanner
@@ -264,6 +317,7 @@ export default function AdminDashboard() {
               ))}
             </div>
 
+            {/* منطقة العمل */}
             {priceTab === 'cowork' && (
               <div className="card">
                 <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>اسم المساحة</div>
@@ -272,22 +326,26 @@ export default function AdminDashboard() {
                   onChange={e => setSpaces(prev => ({ ...prev, cowork: { ...prev.cowork, name: e.target.value } }))} />
                 <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>سعر الساعة (ج)</div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                  <button onClick={() => setSpaces(prev => ({ ...prev, cowork: { ...prev.cowork, price_per_hr: Math.max(1, prev.cowork.price_per_hr - 5) } }))}
+                  <button onClick={() => setSpaces(prev => ({ ...prev, cowork: { ...prev.cowork, first_hour: Math.max(1, prev.cowork.first_hour - 5) } }))}
                     style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 20, cursor: 'pointer' }}>−</button>
                   <div style={{ textAlign: 'center', minWidth: 80 }}>
-                    <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)' }}>{spaces.cowork.price_per_hr}</div>
+                    <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)' }}>{spaces.cowork.first_hour}</div>
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>ج/ساعة</div>
                   </div>
-                  <button onClick={() => setSpaces(prev => ({ ...prev, cowork: { ...prev.cowork, price_per_hr: prev.cowork.price_per_hr + 5 } }))}
+                  <button onClick={() => setSpaces(prev => ({ ...prev, cowork: { ...prev.cowork, first_hour: prev.cowork.first_hour + 5 } }))}
                     style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 20, cursor: 'pointer' }}>+</button>
                 </div>
                 <div style={{ padding: '8px 12px', background: 'rgba(0,212,170,0.06)', borderRadius: 8, fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
-                  مثال: ساعة = <strong style={{ color: 'var(--accent)' }}>{spaces.cowork.price_per_hr} ج</strong> &nbsp;|&nbsp; 90 دقيقة = <strong style={{ color: 'var(--accent)' }}>{(spaces.cowork.price_per_hr * 1.5).toFixed(0)} ج</strong>
+                  ساعة = <strong style={{ color: 'var(--accent)' }}>{spaces.cowork.first_hour} ج</strong> &nbsp;|&nbsp; 90 دقيقة = <strong style={{ color: 'var(--accent)' }}>{(spaces.cowork.first_hour * 1.5).toFixed(0)} ج</strong> &nbsp;|&nbsp; الحد الأقصى = <strong style={{ color: 'var(--accent)' }}>{spaces.cowork.first_hour * spaces.cowork.max_hours} ج</strong>
                 </div>
-                <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => toast.success('تم حفظ إعدادات منطقة العمل ✅')}>حفظ التغييرات</button>
+                <button className="btn btn-primary" style={{ width: '100%' }} disabled={loadingSpaces}
+                  onClick={() => saveSpace('cowork')}>
+                  {loadingSpaces ? 'جارٍ الحفظ...' : 'حفظ التغييرات'}
+                </button>
               </div>
             )}
 
+            {/* غرفة الاجتماعات */}
             {priceTab === 'meeting' && (
               <div className="card">
                 <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>اسم الغرفة</div>
@@ -314,10 +372,14 @@ export default function AdminDashboard() {
                 <div style={{ padding: '8px 12px', background: 'rgba(0,212,170,0.06)', borderRadius: 8, fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
                   ساعة = <strong style={{ color: 'var(--accent)' }}>{spaces.meeting.first_hour} ج</strong> &nbsp;|&nbsp; ساعتين = <strong style={{ color: 'var(--accent)' }}>{spaces.meeting.first_hour + spaces.meeting.extra_hour} ج</strong> &nbsp;|&nbsp; 3 ساعات = <strong style={{ color: 'var(--accent)' }}>{spaces.meeting.first_hour + spaces.meeting.extra_hour * 2} ج</strong>
                 </div>
-                <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => toast.success('تم حفظ إعدادات غرفة الاجتماعات ✅')}>حفظ التغييرات</button>
+                <button className="btn btn-primary" style={{ width: '100%' }} disabled={loadingSpaces}
+                  onClick={() => saveSpace('meeting')}>
+                  {loadingSpaces ? 'جارٍ الحفظ...' : 'حفظ التغييرات'}
+                </button>
               </div>
             )}
 
+            {/* غرفة الدروس */}
             {priceTab === 'lessons' && (
               <div className="card">
                 <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>اسم الغرفة</div>
@@ -344,10 +406,14 @@ export default function AdminDashboard() {
                 <div style={{ padding: '8px 12px', background: 'rgba(0,212,170,0.06)', borderRadius: 8, fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
                   ساعة = <strong style={{ color: 'var(--accent)' }}>{spaces.lessons.first_hour} ج</strong> &nbsp;|&nbsp; ساعتين = <strong style={{ color: 'var(--accent)' }}>{spaces.lessons.first_hour + spaces.lessons.extra_hour} ج</strong> &nbsp;|&nbsp; 3 ساعات = <strong style={{ color: 'var(--accent)' }}>{spaces.lessons.first_hour + spaces.lessons.extra_hour * 2} ج</strong>
                 </div>
-                <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => toast.success('تم حفظ إعدادات غرفة الدروس ✅')}>حفظ التغييرات</button>
+                <button className="btn btn-primary" style={{ width: '100%' }} disabled={loadingSpaces}
+                  onClick={() => saveSpace('lessons')}>
+                  {loadingSpaces ? 'جارٍ الحفظ...' : 'حفظ التغييرات'}
+                </button>
               </div>
             )}
 
+            {/* الخدمات */}
             {priceTab === 'services' && (
               <div>
                 <div className="card" style={{ marginBottom: 12 }}>
@@ -360,13 +426,7 @@ export default function AdminDashboard() {
                       value={newService.price}
                       onChange={e => setNewService(prev => ({ ...prev, price: e.target.value }))} />
                   </div>
-                  <button className="btn btn-primary" style={{ width: '100%' }}
-                    onClick={() => {
-                      if (!newService.name || !newService.price) return toast.error('أدخل الاسم والسعر');
-                      setServices(prev => [...prev, { id: Date.now(), ...newService }]);
-                      setNewService({ name: '', price: '' });
-                      toast.success('تمت الإضافة ✅');
-                    }}>إضافة</button>
+                  <button className="btn btn-primary" style={{ width: '100%' }} onClick={addService}>إضافة</button>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {services.length === 0 && (
@@ -381,11 +441,7 @@ export default function AdminDashboard() {
                           <input className="input-field" type="number" style={{ width: 80 }} value={editingService.price}
                             onChange={e => setEditingService(prev => ({ ...prev, price: e.target.value }))} />
                           <button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: 12 }}
-                            onClick={() => {
-                              setServices(prev => prev.map(x => x.id === s.id ? editingService : x));
-                              setEditingService(null);
-                              toast.success('تم التعديل ✅');
-                            }}>حفظ</button>
+                            onClick={saveService}>حفظ</button>
                         </>
                       ) : (
                         <>
@@ -395,7 +451,7 @@ export default function AdminDashboard() {
                           </div>
                           <button onClick={() => setEditingService(s)}
                             style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '5px 10px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>✏️</button>
-                          <button onClick={() => { setServices(prev => prev.filter(x => x.id !== s.id)); toast.success('تم الحذف'); }}
+                          <button onClick={() => deleteService(s.id)}
                             style={{ background: 'transparent', border: '1px solid rgba(255,71,87,0.3)', color: '#ff4757', padding: '5px 10px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>🗑️</button>
                         </>
                       )}

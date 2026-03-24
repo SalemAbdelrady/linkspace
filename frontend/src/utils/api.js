@@ -58,8 +58,6 @@ export const adminAPI = {
   updatePrice: (id, price_per_hr) => api.put(`/admin/prices/${id}`, { price_per_hr }),
 };
 
-export default api;
-
 // Spaces
 export const spacesAPI = {
   getAll: () => api.get('/spaces'),
@@ -81,3 +79,6 @@ export const subscriptionsAPI = {
   updatePlan: (id, data) => api.put(`/subscriptions/plans/${id}`, data),
   deletePlan: (id) => api.delete(`/subscriptions/plans/${id}`),
 };
+
+// ✅ export default في الآخر
+export default api;

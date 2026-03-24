@@ -71,6 +71,7 @@ async function startServer() {
 }
 
 startServer();
+
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/sessions', require('./routes/sessions'));
