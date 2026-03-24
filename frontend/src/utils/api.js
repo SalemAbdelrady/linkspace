@@ -59,3 +59,25 @@ export const adminAPI = {
 };
 
 export default api;
+
+// Spaces
+export const spacesAPI = {
+  getAll: () => api.get('/spaces'),
+  update: (key, data) => api.put(`/spaces/${key}`, data),
+};
+
+// Services
+export const servicesAPI = {
+  getAll: () => api.get('/services'),
+  create: (data) => api.post('/services', data),
+  update: (id, data) => api.put(`/services/${id}`, data),
+  delete: (id) => api.delete(`/services/${id}`),
+};
+
+// Subscription Plans
+export const subscriptionsAPI = {
+  getPlans: () => api.get('/subscriptions/plans'),
+  createPlan: (data) => api.post('/subscriptions/plans', data),
+  updatePlan: (id, data) => api.put(`/subscriptions/plans/${id}`, data),
+  deletePlan: (id) => api.delete(`/subscriptions/plans/${id}`),
+};

@@ -71,3 +71,12 @@ async function startServer() {
 }
 
 startServer();
+// Routes
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/sessions', require('./routes/sessions'));
+app.use('/api/coupons', require('./routes/coupons'));
+app.use('/api/admin', require('./routes/admin'));
+// ✅ أضف التلاتة دول
+app.use('/api/spaces', require('./routes/spaces'));
+app.use('/api/services', require('./routes/services'));
+app.use('/api/subscriptions', require('./routes/subscriptions'));
