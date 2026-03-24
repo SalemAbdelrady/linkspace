@@ -56,7 +56,7 @@ export default function ScannerPage() {
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 220, height: 220 } },
         async (decodedText) => {
-          // ✅ أول حاجة تشيك على scanning
+          // ✅ تشيك على scanning بس
           if (scanningRef.current) return;
 
           const now = Date.now();
@@ -65,10 +65,7 @@ export default function ScannerPage() {
             now - lastScannedTimeRef.current < 5000
           ) return;
 
-          // ✅ بعدين تحدث الـ refs وتنفذ
-          lastScannedRef.current = decodedText;
-          lastScannedTimeRef.current = now;
-
+          // ✅ مش بنحدث الـ refs هنا — handleScan هي اللي بتحدثهم
           await handleScan(decodedText);
         },
         () => {}
@@ -97,6 +94,10 @@ export default function ScannerPage() {
 
   async function handleScan(qrCode) {
     if (!qrCode.trim() || scanningRef.current) return;
+
+    // ✅ بنحدث الـ refs هنا
+    lastScannedRef.current = qrCode.trim();
+    lastScannedTimeRef.current = Date.now();
 
     scanningRef.current = true;
     setScanning(true);
