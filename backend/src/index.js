@@ -20,7 +20,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-app.options('*', cors()); // Preflight requests
+app.options('*', cors());
 
 // Helmet بعد CORS
 app.use(helmet({
@@ -37,11 +37,14 @@ app.use(limiter);
 app.use(express.json({ limit: '10kb' }));
 app.use(morgan('dev'));
 
-// Routes
+// ✅ Routes كلها هنا قبل startServer
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/sessions', require('./routes/sessions'));
 app.use('/api/coupons', require('./routes/coupons'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/spaces', require('./routes/spaces'));
+app.use('/api/services', require('./routes/services'));
+app.use('/api/subscriptions', require('./routes/subscriptions'));
 
 // Health check
 app.get('/api/health', (_, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
@@ -72,12 +75,3 @@ async function startServer() {
 
 startServer();
 
-// Routes
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/sessions', require('./routes/sessions'));
-app.use('/api/coupons', require('./routes/coupons'));
-app.use('/api/admin', require('./routes/admin'));
-// ✅ أضف التلاتة دول
-app.use('/api/spaces', require('./routes/spaces'));
-app.use('/api/services', require('./routes/services'));
-app.use('/api/subscriptions', require('./routes/subscriptions'));
