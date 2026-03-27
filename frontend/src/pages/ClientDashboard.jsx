@@ -27,7 +27,12 @@ function LiveTimer({ checkIn, pricePerHr }) {
   const h = Math.floor(elapsed / 3600);
   const m = Math.floor((elapsed % 3600) / 60);
   const s = elapsed % 60;
-  const cost = ((elapsed / 3600) * pricePerHr).toFixed(2);
+  
+  // ✅ الحد الأقصى 4 ساعات
+  const MAX_SECONDS = 4 * 3600;
+  const billableSeconds = Math.min(elapsed, MAX_SECONDS);
+  const cost = ((billableSeconds / 3600) * pricePerHr).toFixed(2);
+  
   const fmt = [h, m, s].map(v => String(v).padStart(2, '0')).join(':');
 
   return (
