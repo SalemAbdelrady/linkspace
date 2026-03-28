@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { sessionsAPI, couponsAPI } from '../utils/api';
+import { sessionsAPI, couponsAPI, spacesAPI } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
@@ -14,7 +14,7 @@ function ProgressBar({ value, max }) {
   );
 }
 
-function LiveTimer({ checkIn, pricePerHr }) {
+function LiveTimer({ checkIn, pricePerHr, maxHours = 4 }) {
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     const start = new Date(checkIn);
@@ -27,22 +27,35 @@ function LiveTimer({ checkIn, pricePerHr }) {
   const h = Math.floor(elapsed / 3600);
   const m = Math.floor((elapsed % 3600) / 60);
   const s = elapsed % 60;
-  
-  // ✅ الحد الأقصى 4 ساعات
-  const MAX_SECONDS = 4 * 3600;
+  const fmt = [h, m, s].map(v => String(v).padStart(2, '0')).join(':');
+
+  // ✅ الحد الأقصى من الـ space settings
+  const MAX_SECONDS = maxHours * 3600;
   const billableSeconds = Math.min(elapsed, MAX_SECONDS);
   const cost = ((billableSeconds / 3600) * pricePerHr).toFixed(2);
-  
-  const fmt = [h, m, s].map(v => String(v).padStart(2, '0')).join(':');
+  const isMaxed = elapsed >= MAX_SECONDS;
 
   return (
     <div style={{ background: 'rgba(46,213,115,0.07)', border: '1px solid rgba(46,213,115,0.3)', borderRadius: 'var(--radius)', padding: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <span className="pulse-dot" />
         <span style={{ fontWeight: 700, fontSize: 14 }}>جلسة نشطة</span>
+        {isMaxed && (
+          <span style={{ fontSize: 11, background: 'rgba(0,212,170,0.15)', color: 'var(--accent)', padding: '2px 8px', borderRadius: 10 }}>
+            وصلت للحد الأقصى
+          </span>
+        )}
       </div>
-      <div className="stat-row"><span className="stat-label">المدة</span><span className="stat-val" style={{ fontFamily: 'var(--mono)' }}>{fmt}</span></div>
-      <div className="stat-row" style={{ border: 'none' }}><span className="stat-label">التكلفة</span><span className="stat-val" style={{ color: 'var(--warning)' }}>{cost} ج</span></div>
+      <div className="stat-row">
+        <span className="stat-label">المدة</span>
+        <span className="stat-val" style={{ fontFamily: 'var(--mono)' }}>{fmt}</span>
+      </div>
+      <div className="stat-row" style={{ border: 'none' }}>
+        <span className="stat-label">التكلفة</span>
+        <span className="stat-val" style={{ color: isMaxed ? 'var(--success)' : 'var(--warning)' }}>
+          {cost} ج {isMaxed && '✅'}
+        </span>
+      </div>
     </div>
   );
 }
@@ -53,10 +66,21 @@ export default function ClientDashboard() {
   const [coupons, setCoupons] = useState([]);
   const [activeSession, setActiveSession] = useState(null);
   const [loadingSessions, setLoadingSessions] = useState(true);
+  const [coworkSpace, setCoworkSpace] = useState({ first_hour: 30, max_hours: 4 });
 
   useEffect(() => {
     loadData();
+    loadCoworkPrice();
   }, []);
+
+  // ✅ جيب سعر منطقة العمل من الـ Backend
+  async function loadCoworkPrice() {
+    try {
+      const { data } = await spacesAPI.getAll();
+      const cowork = data.spaces.find(s => s.space_key === 'cowork');
+      if (cowork) setCoworkSpace(cowork);
+    } catch { }
+  }
 
   async function loadData() {
     try {
@@ -107,8 +131,14 @@ export default function ClientDashboard() {
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-        <div className="card"><div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>الرصيد</div><div style={{ fontSize: 26, fontWeight: 700, color: 'var(--accent)' }}>{parseFloat(user?.balance || 0).toFixed(2)} ج</div></div>
-        <div className="card"><div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>النقاط</div><div style={{ fontSize: 26, fontWeight: 700, color: 'var(--warning)' }}>{user?.points || 0}</div></div>
+        <div className="card">
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>الرصيد</div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--accent)' }}>{parseFloat(user?.balance || 0).toFixed(2)} ج</div>
+        </div>
+        <div className="card">
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>النقاط</div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--warning)' }}>{user?.points || 0}</div>
+        </div>
       </div>
 
       {/* Points Progress */}
@@ -124,31 +154,36 @@ export default function ClientDashboard() {
       </div>
 
       {/* QR Code */}
-<div className="section-title">كود الدخول</div>
-<div className="card" style={{ textAlign: 'center', marginBottom: 12 }}>
-  {user?.qr_image ? (
-    <>
-      <div style={{ display: 'inline-block', padding: 12, background: '#fff', borderRadius: 12, border: '3px solid var(--accent)' }}>
-        <img src={user.qr_image} alt="QR Code" style={{ width: 160, height: 160, display: 'block' }} />
+      <div className="section-title">كود الدخول</div>
+      <div className="card" style={{ textAlign: 'center', marginBottom: 12 }}>
+        {user?.qr_image ? (
+          <>
+            <div style={{ display: 'inline-block', padding: 12, background: '#fff', borderRadius: 12, border: '3px solid var(--accent)' }}>
+              <img src={user.qr_image} alt="QR Code" style={{ width: 160, height: 160, display: 'block' }} />
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 10, fontFamily: 'var(--mono)', letterSpacing: 2 }}>
+              {user.qr_code}
+            </div>
+          </>
+        ) : (
+          <div style={{ width: 160, height: 160, margin: '0 auto', background: 'rgba(0,212,170,0.1)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>
+            جارٍ التحميل...
+          </div>
+        )}
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>اعرض هذا الكود عند الدخول والخروج</div>
       </div>
-      <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 10, fontFamily: 'var(--mono)', letterSpacing: 2 }}>
-        {user.qr_code}
-      </div>
-    </>
-  ) : (
-    <div style={{ width: 160, height: 160, margin: '0 auto', background: 'rgba(0,212,170,0.1)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>
-      جارٍ التحميل...
-    </div>
-  )}
-  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>اعرض هذا الكود عند الدخول والخروج</div>
-</div>
 
       {/* Active Session */}
       {activeSession && (
         <>
           <div className="section-title">الجلسة الحالية</div>
           <div style={{ marginBottom: 12 }}>
-            <LiveTimer checkIn={activeSession.check_in} pricePerHr={activeSession.price_per_hr || 15} />
+            {/* ✅ بنجيب السعر من space_settings مش من الـ session */}
+            <LiveTimer
+              checkIn={activeSession.check_in}
+              pricePerHr={parseFloat(coworkSpace.first_hour)}
+              maxHours={parseInt(coworkSpace.max_hours) || 4}
+            />
           </div>
         </>
       )}
@@ -163,7 +198,9 @@ export default function ClientDashboard() {
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table className="data-table">
-              <thead><tr><th>التاريخ</th><th>المدة</th><th>التكلفة</th><th>الحالة</th></tr></thead>
+              <thead>
+                <tr><th>التاريخ</th><th>المدة</th><th>التكلفة</th><th>الحالة</th></tr>
+              </thead>
               <tbody>
                 {sessions.slice(0, 8).map(s => (
                   <tr key={s.id}>
@@ -200,3 +237,4 @@ export default function ClientDashboard() {
     </div>
   );
 }
+
