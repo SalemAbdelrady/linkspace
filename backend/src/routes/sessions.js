@@ -2,27 +2,25 @@ const router = require('express').Router();
 const db = require('../config/db');
 const { auth, requireRole } = require('../middleware/auth');
 
+// ✅ جيب السعر من space_settings بدل price_settings
 async function getCurrentPrice() {
-  const hour = new Date().getHours();
-  const { rows } = await db.query(`
-    SELECT price_per_hr FROM price_settings
-    WHERE start_hour <= $1 AND end_hour > $1
-    LIMIT 1
-  `, [hour]);
-  if (!rows[0]) {
-    const { rows: nightRows } = await db.query(
-      `SELECT price_per_hr FROM price_settings WHERE period_name = 'night' LIMIT 1`
-    );
-    return parseFloat(nightRows[0]?.price_per_hr || 12);
-  }
-  return parseFloat(rows[0].price_per_hr);
+  const { rows } = await db.query(
+    `SELECT first_hour FROM space_settings WHERE space_key = 'cowork' LIMIT 1`
+  );
+  return parseFloat(rows[0]?.first_hour || 30);
 }
 
-// ✅ دالة حساب التكلفة بالحد الأقصى 4 ساعات
-function calculateCost(durationMin, pricePerHr) {
-  const MAX_HOURS = 4;
+// ✅ دالة حساب التكلفة بالحد الأقصى من space_settings
+async function getMaxHours() {
+  const { rows } = await db.query(
+    `SELECT max_hours FROM space_settings WHERE space_key = 'cowork' LIMIT 1`
+  );
+  return parseInt(rows[0]?.max_hours || 4);
+}
+
+function calculateCost(durationMin, pricePerHr, maxHours = 4) {
   const hours = durationMin / 60;
-  const billableHours = Math.min(hours, MAX_HOURS);
+  const billableHours = Math.min(hours, maxHours);
   return parseFloat((billableHours * pricePerHr).toFixed(2));
 }
 
@@ -60,8 +58,9 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
       const checkIn = new Date(session.check_in);
       const durationMin = Math.ceil((checkOut - checkIn) / 60000);
 
-      // ✅ حساب التكلفة بالحد الأقصى 4 ساعات
-      const cost = calculateCost(durationMin, session.price_per_hr);
+      // ✅ جيب الحد الأقصى من الـ Database
+      const maxHours = await getMaxHours();
+      const cost = calculateCost(durationMin, session.price_per_hr, maxHours);
 
       await client.query(`
         UPDATE sessions SET
@@ -168,3 +167,4 @@ router.get('/active', auth, requireRole('staff', 'admin'), async (req, res) => {
 });
 
 module.exports = router;
+
