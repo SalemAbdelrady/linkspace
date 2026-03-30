@@ -2,11 +2,10 @@ const router = require('express').Router();
 const db = require('../config/db');
 const { auth, requireRole } = require('../middleware/auth');
 
-const isStaffOrAdmin = [auth, requireRole('staff', 'admin')];
 const isAdmin = [auth, requireRole('admin')];
 
-// GET /api/spaces
-router.get('/', ...isStaffOrAdmin, async (req, res) => {
+// GET /api/spaces — متاح لكل المستخدمين المسجلين
+router.get('/', auth, async (req, res) => {
   try {
     const { rows } = await db.query('SELECT * FROM space_settings ORDER BY id');
     res.json({ spaces: rows });
@@ -15,7 +14,7 @@ router.get('/', ...isStaffOrAdmin, async (req, res) => {
   }
 });
 
-// PUT /api/spaces/:key
+// PUT /api/spaces/:key — للأدمن فقط
 router.put('/:key', ...isAdmin, async (req, res) => {
   const { name, first_hour, extra_hour, max_hours } = req.body;
   try {
@@ -33,4 +32,3 @@ router.put('/:key', ...isAdmin, async (req, res) => {
   }
 });
 
-module.exports = router;
