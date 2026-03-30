@@ -31,4 +31,5 @@ router.put('/:key', ...isAdmin, async (req, res) => {
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
+module.exports = router;
 
