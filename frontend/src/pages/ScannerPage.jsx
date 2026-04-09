@@ -15,6 +15,7 @@ export default function ScannerPage() {
   const [activeClients, setActiveClients] = useState([]);
   const [cameraActive, setCameraActive] = useState(false);
   const [scanMode, setScanMode] = useState('device');
+  const [tick, setTick] = useState(0); // ✅ عشان الجدول يتحدث كل ثانية
   const scanModeRef = useRef('device');
   const inputRef = useRef(null);
   const html5QrRef = useRef(null);
@@ -47,6 +48,12 @@ export default function ScannerPage() {
     }
     return () => stopCamera();
   }, [scanMode]);
+
+  // ✅ تحديث الجدول كل ثانية (عشان المدة والتكلفة تتغير live)
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   async function startCamera() {
     try {
@@ -123,17 +130,36 @@ export default function ScannerPage() {
     }
   }
 
-  // ✅ حساب التكلفة المتوقعة بالحد الأقصى 4 ساعات
-  const calcCost = (elapsedMin, pricePerHr) => {
-    const MAX_HOURS = 4;
-    const hours = Math.min(elapsedMin / 60, MAX_HOURS);
-    return (hours * pricePerHr).toFixed(2);
-  };
+  // ✅ نفس منطق الـ Backend والـ ClientDashboard:
+  //    Math.ceil  → أي كسر من ساعة = ساعة كاملة
+  //    Math.max 1 → الحد الأدنى ساعة واحدة دايماً
+  //    Math.min 4 → لا يتجاوز الحد الأقصى
+  //
+  //  أمثلة (pricePerHr = 30):
+  //    0  → 59  دقيقة : 1 ساعة = 30 ج
+  //    60 → 119 دقيقة : 2 ساعة = 60 ج
+  //   120 → 179 دقيقة : 3 ساعة = 90 ج
+  //   180 → 240 دقيقة : 4 ساعة = 120 ج  ← يقف هنا
+  function calcCost(checkIn, pricePerHr, maxHours = 4) {
+    const elapsedMs  = Date.now() - new Date(checkIn);
+    const rawHours   = elapsedMs / 3600000;
+    const billedHours = Math.min(Math.max(Math.ceil(rawHours), 1), maxHours);
+    return (billedHours * pricePerHr).toFixed(2);
+  }
 
-  const elapsed = (checkIn) => {
-    const min = Math.floor((Date.now() - new Date(checkIn)) / 60000);
-    return `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')} س`;
-  };
+  // ✅ عرض الوقت المنقضي الفعلي (ساعة:دقيقة:ثانية) — بيتحدث كل ثانية بسبب tick
+  function elapsed(checkIn) {
+    const totalSec = Math.floor((Date.now() - new Date(checkIn)) / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    return [h, m, s].map(v => String(v).padStart(2, '0')).join(':') + ' س';
+  }
+
+  // ✅ عرض المدة كساعات كاملة محاسَب عليها (للـ checkout result)
+  function getBilledHours(durationMin, maxHours = 4) {
+    return Math.min(Math.max(Math.ceil(durationMin / 60), 1), maxHours);
+  }
 
   return (
     <div style={{ minHeight: '100vh', padding: 16 }}>
@@ -224,7 +250,16 @@ export default function ScannerPage() {
             </>
           ) : (
             <>
-              <div className="stat-row"><span className="stat-label">المدة</span><span className="stat-val">{Math.floor(result.session.durationMin / 60)}س {result.session.durationMin % 60}د</span></div>
+              {/* ✅ عرض الساعات الكاملة المحاسَب عليها مش الدقائق الخام */}
+              <div className="stat-row">
+                <span className="stat-label">المدة</span>
+                <span className="stat-val">
+                  {getBilledHours(result.session.durationMin)} ساعة
+                  <span style={{ fontSize: 11, color: 'var(--muted)', marginRight: 6 }}>
+                    ({result.session.durationMin} د فعلية)
+                  </span>
+                </span>
+              </div>
               <div className="stat-row"><span className="stat-label">التكلفة</span><span className="stat-val" style={{ color: 'var(--warning)', fontSize: 18 }}>{result.session.cost} ج</span></div>
               <div className="stat-row"><span className="stat-label">الدفع</span><span className={`badge badge-${result.session.paymentMethod === 'wallet' ? 'info' : 'warning'}`}>{result.session.paymentMethod === 'wallet' ? 'من المحفظة' : 'كاش'}</span></div>
               <div className="stat-row" style={{ border: 'none' }}><span className="stat-label">نقاط مكتسبة</span><span className="stat-val" style={{ color: 'var(--success)' }}>+{result.session.pointsEarned} نقطة</span></div>
@@ -249,10 +284,11 @@ export default function ScannerPage() {
                     <div style={{ fontWeight: 600 }}>{s.name}</div>
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>{s.phone}</div>
                   </td>
+                  {/* ✅ المدة الفعلية بتتحدث كل ثانية */}
                   <td style={{ fontFamily: 'var(--mono)' }}>{elapsed(s.check_in)}</td>
-                  {/* ✅ حساب التكلفة بالحد الأقصى 4 ساعات */}
-                  <td style={{ color: 'var(--warning)' }}>
-                    {calcCost(parseFloat(s.elapsed_min), parseFloat(s.price_per_hr))} ج
+                  {/* ✅ التكلفة بالساعة الكاملة — تقفز 30 / 60 / 90 / 120 بس */}
+                  <td style={{ color: 'var(--warning)', fontWeight: 600 }}>
+                    {calcCost(s.check_in, parseFloat(s.price_per_hr))} ج
                   </td>
                 </tr>
               ))}
@@ -263,3 +299,4 @@ export default function ScannerPage() {
     </div>
   );
 }
+
