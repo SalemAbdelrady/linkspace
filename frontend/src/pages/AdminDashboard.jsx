@@ -7,6 +7,70 @@ import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 
+// ✅ مكون موحد: input رقمي مع +/− بمقدار 1 فقط
+// - value/onChange: التحكم من الأب
+// - min: الحد الأدنى (default 1)
+// - step: مقدار الزيادة/النقصان (default 1)
+// - suffix: الوحدة (ج / نقطة / ساعة)
+function NumberInput({ value, onChange, min = 1, step = 1, suffix = '' }) {
+  const num = parseFloat(value) || 0;
+
+  function handleChange(e) {
+    const raw = e.target.value;
+    // اسمح بالكتابة الحرة، بس منع القيم السالبة عند الخروج
+    onChange(raw);
+  }
+
+  function handleBlur() {
+    // عند الخروج من الحقل، تأكد إن القيمة >= min
+    const clamped = Math.max(min, parseFloat(value) || min);
+    onChange(clamped);
+  }
+
+  function increment() {
+    onChange(parseFloat((num + step).toFixed(2)));
+  }
+
+  function decrement() {
+    onChange(parseFloat(Math.max(min, num - step).toFixed(2)));
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <button onClick={decrement}
+        style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 20, cursor: 'pointer', flexShrink: 0 }}>−</button>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, justifyContent: 'center' }}>
+        <input
+          type="number"
+          value={value}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          min={min}
+          step={step}
+          style={{
+            width: 80,
+            textAlign: 'center',
+            fontSize: 22,
+            fontWeight: 700,
+            color: 'var(--accent)',
+            background: 'transparent',
+            border: 'none',
+            borderBottom: '1px solid var(--border)',
+            outline: 'none',
+            padding: '2px 0',
+            fontFamily: 'var(--mono)',
+          }}
+        />
+        {suffix && <span style={{ fontSize: 11, color: 'var(--muted)' }}>{suffix}</span>}
+      </div>
+
+      <button onClick={increment}
+        style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 20, cursor: 'pointer', flexShrink: 0 }}>+</button>
+    </div>
+  );
+}
+
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -53,7 +117,7 @@ export default function AdminDashboard() {
       const mapped = {};
       data.spaces.forEach(s => { mapped[s.space_key] = s; });
       setSpaces(prev => ({
-        cowork: { ...prev.cowork, ...mapped.cowork },
+        cowork:  { ...prev.cowork,  ...mapped.cowork  },
         meeting: { ...prev.meeting, ...mapped.meeting },
         lessons: { ...prev.lessons, ...mapped.lessons },
       }));
@@ -119,7 +183,7 @@ export default function AdminDashboard() {
   }
 
   function getAmount(userId, type) {
-    return amounts[userId]?.[type] || '';
+    return amounts[userId]?.[type] ?? '';
   }
 
   function setAmount(userId, type, value) {
@@ -271,27 +335,39 @@ export default function AdminDashboard() {
                       <span>💰 <strong style={{ color: 'var(--accent)' }}>{parseFloat(u.balance).toFixed(2)} ج</strong></span>
                       <span>⭐ <strong style={{ color: 'var(--warning)' }}>{u.points} نقطة</strong></span>
                     </div>
+
                     {selectedUser?.id === u.id && (
                       <div style={{ marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 14 }} onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 10 }}>
+
+                          {/* ✅ شحن رصيد — input مع +/− بمقدار 1 */}
                           <div>
-                            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>شحن رصيد (ج)</div>
-                            <input className="input-field" style={{ marginBottom: 6 }} type="number" min="0"
+                            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>شحن رصيد (ج)</div>
+                            <NumberInput
                               value={getAmount(u.id, 'wallet')}
-                              onChange={e => setAmount(u.id, 'wallet', e.target.value)}
-                              placeholder="0.00" />
-                            <button className="btn btn-primary" style={{ width: '100%', padding: '8px' }}
+                              onChange={val => setAmount(u.id, 'wallet', val)}
+                              min={1}
+                              step={1}
+                              suffix="ج"
+                            />
+                            <button className="btn btn-primary" style={{ width: '100%', padding: '8px', marginTop: 8 }}
                               onClick={() => chargeWallet(u)}>شحن</button>
                           </div>
+
+                          {/* ✅ إضافة نقاط — input مع +/− بمقدار 1 */}
                           <div>
-                            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>إضافة نقاط</div>
-                            <input className="input-field" style={{ marginBottom: 6 }} type="number" min="0"
+                            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>إضافة نقاط</div>
+                            <NumberInput
                               value={getAmount(u.id, 'points')}
-                              onChange={e => setAmount(u.id, 'points', e.target.value)}
-                              placeholder="0" />
-                            <button className="btn btn-outline" style={{ width: '100%', padding: '8px' }}
+                              onChange={val => setAmount(u.id, 'points', val)}
+                              min={1}
+                              step={1}
+                              suffix="نقطة"
+                            />
+                            <button className="btn btn-outline" style={{ width: '100%', padding: '8px', marginTop: 8 }}
                               onClick={() => addPoints(u)}>إضافة</button>
                           </div>
+
                         </div>
                       </div>
                     )}
@@ -317,26 +393,28 @@ export default function AdminDashboard() {
               ))}
             </div>
 
-            {/* منطقة العمل */}
+            {/* ── منطقة العمل ── */}
             {priceTab === 'cowork' && (
               <div className="card">
                 <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>اسم المساحة</div>
                 <input className="input-field" style={{ marginBottom: 14 }}
                   value={spaces.cowork.name}
                   onChange={e => setSpaces(prev => ({ ...prev, cowork: { ...prev.cowork, name: e.target.value } }))} />
+
                 <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>سعر الساعة (ج)</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                  <button onClick={() => setSpaces(prev => ({ ...prev, cowork: { ...prev.cowork, first_hour: Math.max(1, prev.cowork.first_hour - 5) } }))}
-                    style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 20, cursor: 'pointer' }}>−</button>
-                  <div style={{ textAlign: 'center', minWidth: 80 }}>
-                    <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)' }}>{spaces.cowork.first_hour}</div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>ج/ساعة</div>
-                  </div>
-                  <button onClick={() => setSpaces(prev => ({ ...prev, cowork: { ...prev.cowork, first_hour: prev.cowork.first_hour + 5 } }))}
-                    style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 20, cursor: 'pointer' }}>+</button>
-                </div>
-                <div style={{ padding: '8px 12px', background: 'rgba(0,212,170,0.06)', borderRadius: 8, fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
-                  ساعة = <strong style={{ color: 'var(--accent)' }}>{spaces.cowork.first_hour} ج</strong> &nbsp;|&nbsp; 90 دقيقة = <strong style={{ color: 'var(--accent)' }}>{(spaces.cowork.first_hour * 1.5).toFixed(0)} ج</strong> &nbsp;|&nbsp; الحد الأقصى = <strong style={{ color: 'var(--accent)' }}>{spaces.cowork.first_hour * spaces.cowork.max_hours} ج</strong>
+                {/* ✅ input مع +/− بمقدار 1 بدل +5 */}
+                <NumberInput
+                  value={spaces.cowork.first_hour}
+                  onChange={val => setSpaces(prev => ({ ...prev, cowork: { ...prev.cowork, first_hour: parseFloat(val) || 1 } }))}
+                  min={1}
+                  step={1}
+                  suffix="ج/ساعة"
+                />
+
+                <div style={{ padding: '8px 12px', background: 'rgba(0,212,170,0.06)', borderRadius: 8, fontSize: 12, color: 'var(--muted)', margin: '14px 0 12px' }}>
+                  ساعة = <strong style={{ color: 'var(--accent)' }}>{spaces.cowork.first_hour} ج</strong>
+                  &nbsp;|&nbsp; 90 دقيقة = <strong style={{ color: 'var(--accent)' }}>{(spaces.cowork.first_hour * 2).toFixed(0)} ج</strong>
+                  &nbsp;|&nbsp; الحد الأقصى = <strong style={{ color: 'var(--accent)' }}>{spaces.cowork.first_hour * spaces.cowork.max_hours} ج</strong>
                 </div>
                 <button className="btn btn-primary" style={{ width: '100%' }} disabled={loadingSpaces}
                   onClick={() => saveSpace('cowork')}>
@@ -345,32 +423,33 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* غرفة الاجتماعات */}
+            {/* ── غرفة الاجتماعات ── */}
             {priceTab === 'meeting' && (
               <div className="card">
                 <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>اسم الغرفة</div>
                 <input className="input-field" style={{ marginBottom: 14 }}
                   value={spaces.meeting.name}
                   onChange={e => setSpaces(prev => ({ ...prev, meeting: { ...prev.meeting, name: e.target.value } }))} />
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 14 }}>
                   {[['first_hour', 'سعر أول ساعة'], ['extra_hour', 'كل ساعة إضافية']].map(([key, label]) => (
                     <div key={key}>
                       <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>{label} (ج)</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <button onClick={() => setSpaces(prev => ({ ...prev, meeting: { ...prev.meeting, [key]: Math.max(1, prev.meeting[key] - 10) } }))}
-                          style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 18, cursor: 'pointer' }}>−</button>
-                        <div style={{ textAlign: 'center', minWidth: 50 }}>
-                          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)' }}>{spaces.meeting[key]}</div>
-                          <div style={{ fontSize: 10, color: 'var(--muted)' }}>ج</div>
-                        </div>
-                        <button onClick={() => setSpaces(prev => ({ ...prev, meeting: { ...prev.meeting, [key]: prev.meeting[key] + 10 } }))}
-                          style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 18, cursor: 'pointer' }}>+</button>
-                      </div>
+                      {/* ✅ input مع +/− بمقدار 1 بدل +10 */}
+                      <NumberInput
+                        value={spaces.meeting[key]}
+                        onChange={val => setSpaces(prev => ({ ...prev, meeting: { ...prev.meeting, [key]: parseFloat(val) || 1 } }))}
+                        min={1}
+                        step={1}
+                        suffix="ج"
+                      />
                     </div>
                   ))}
                 </div>
                 <div style={{ padding: '8px 12px', background: 'rgba(0,212,170,0.06)', borderRadius: 8, fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
-                  ساعة = <strong style={{ color: 'var(--accent)' }}>{spaces.meeting.first_hour} ج</strong> &nbsp;|&nbsp; ساعتين = <strong style={{ color: 'var(--accent)' }}>{spaces.meeting.first_hour + spaces.meeting.extra_hour} ج</strong> &nbsp;|&nbsp; 3 ساعات = <strong style={{ color: 'var(--accent)' }}>{spaces.meeting.first_hour + spaces.meeting.extra_hour * 2} ج</strong>
+                  ساعة = <strong style={{ color: 'var(--accent)' }}>{spaces.meeting.first_hour} ج</strong>
+                  &nbsp;|&nbsp; ساعتين = <strong style={{ color: 'var(--accent)' }}>{spaces.meeting.first_hour + spaces.meeting.extra_hour} ج</strong>
+                  &nbsp;|&nbsp; 3 ساعات = <strong style={{ color: 'var(--accent)' }}>{spaces.meeting.first_hour + spaces.meeting.extra_hour * 2} ج</strong>
                 </div>
                 <button className="btn btn-primary" style={{ width: '100%' }} disabled={loadingSpaces}
                   onClick={() => saveSpace('meeting')}>
@@ -379,32 +458,33 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* غرفة الدروس */}
+            {/* ── غرفة الدروس ── */}
             {priceTab === 'lessons' && (
               <div className="card">
                 <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>اسم الغرفة</div>
                 <input className="input-field" style={{ marginBottom: 14 }}
                   value={spaces.lessons.name}
                   onChange={e => setSpaces(prev => ({ ...prev, lessons: { ...prev.lessons, name: e.target.value } }))} />
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 14 }}>
                   {[['first_hour', 'سعر أول ساعة'], ['extra_hour', 'كل ساعة إضافية']].map(([key, label]) => (
                     <div key={key}>
                       <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>{label} (ج)</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <button onClick={() => setSpaces(prev => ({ ...prev, lessons: { ...prev.lessons, [key]: Math.max(1, prev.lessons[key] - 10) } }))}
-                          style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 18, cursor: 'pointer' }}>−</button>
-                        <div style={{ textAlign: 'center', minWidth: 50 }}>
-                          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--accent)' }}>{spaces.lessons[key]}</div>
-                          <div style={{ fontSize: 10, color: 'var(--muted)' }}>ج</div>
-                        </div>
-                        <button onClick={() => setSpaces(prev => ({ ...prev, lessons: { ...prev.lessons, [key]: prev.lessons[key] + 10 } }))}
-                          style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: 18, cursor: 'pointer' }}>+</button>
-                      </div>
+                      {/* ✅ input مع +/− بمقدار 1 بدل +10 */}
+                      <NumberInput
+                        value={spaces.lessons[key]}
+                        onChange={val => setSpaces(prev => ({ ...prev, lessons: { ...prev.lessons, [key]: parseFloat(val) || 1 } }))}
+                        min={1}
+                        step={1}
+                        suffix="ج"
+                      />
                     </div>
                   ))}
                 </div>
                 <div style={{ padding: '8px 12px', background: 'rgba(0,212,170,0.06)', borderRadius: 8, fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
-                  ساعة = <strong style={{ color: 'var(--accent)' }}>{spaces.lessons.first_hour} ج</strong> &nbsp;|&nbsp; ساعتين = <strong style={{ color: 'var(--accent)' }}>{spaces.lessons.first_hour + spaces.lessons.extra_hour} ج</strong> &nbsp;|&nbsp; 3 ساعات = <strong style={{ color: 'var(--accent)' }}>{spaces.lessons.first_hour + spaces.lessons.extra_hour * 2} ج</strong>
+                  ساعة = <strong style={{ color: 'var(--accent)' }}>{spaces.lessons.first_hour} ج</strong>
+                  &nbsp;|&nbsp; ساعتين = <strong style={{ color: 'var(--accent)' }}>{spaces.lessons.first_hour + spaces.lessons.extra_hour} ج</strong>
+                  &nbsp;|&nbsp; 3 ساعات = <strong style={{ color: 'var(--accent)' }}>{spaces.lessons.first_hour + spaces.lessons.extra_hour * 2} ج</strong>
                 </div>
                 <button className="btn btn-primary" style={{ width: '100%' }} disabled={loadingSpaces}
                   onClick={() => saveSpace('lessons')}>
@@ -413,7 +493,7 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* الخدمات */}
+            {/* ── الخدمات ── */}
             {priceTab === 'services' && (
               <div>
                 <div className="card" style={{ marginBottom: 12 }}>
@@ -460,9 +540,11 @@ export default function AdminDashboard() {
                 </div>
               </div>
             )}
+
           </div>
         )}
       </div>
     </div>
   );
 }
+
