@@ -16,6 +16,7 @@ function ProgressBar({ value, max }) {
 
 function LiveTimer({ checkIn, pricePerHr, maxHours = 4 }) {
   const [elapsed, setElapsed] = useState(0);
+
   useEffect(() => {
     const start = new Date(checkIn);
     const tick = () => setElapsed(Math.floor((Date.now() - start) / 1000));
@@ -24,16 +25,26 @@ function LiveTimer({ checkIn, pricePerHr, maxHours = 4 }) {
     return () => clearInterval(id);
   }, [checkIn]);
 
-  const h = Math.floor(elapsed / 3600);
-  const m = Math.floor((elapsed % 3600) / 60);
-  const s = elapsed % 60;
+  // ─── عرض الوقت المنقضي الحقيقي (ساعة:دقيقة:ثانية) ───────────────
+  const h   = Math.floor(elapsed / 3600);
+  const m   = Math.floor((elapsed % 3600) / 60);
+  const s   = elapsed % 60;
   const fmt = [h, m, s].map(v => String(v).padStart(2, '0')).join(':');
 
-  // ✅ الحد الأقصى من الـ space settings
-  const MAX_SECONDS = maxHours * 3600;
-  const billableSeconds = Math.min(elapsed, MAX_SECONDS);
-  const cost = ((billableSeconds / 3600) * pricePerHr).toFixed(2);
-  const isMaxed = elapsed >= MAX_SECONDS;
+  // ─── حساب التكلفة بالساعة الكاملة (نفس منطق الـ Backend) ──────────
+  //  Math.ceil  → أي كسر من ساعة = ساعة كاملة
+  //  Math.max 1 → الحد الأدنى ساعة واحدة دايماً (حتى لو دخل ثانية واحدة)
+  //  Math.min   → لا يتجاوز maxHours
+  //
+  //  مثال (pricePerHr = 30):
+  //    0  → 59  دقيقة : billedHours = 1 → 30 ج
+  //    60 → 119 دقيقة : billedHours = 2 → 60 ج
+  //   120 → 179 دقيقة : billedHours = 3 → 90 ج
+  //   180 → 240 دقيقة : billedHours = 4 → 120 ج  ← يقف هنا
+  const rawHours    = elapsed / 3600;
+  const billedHours = Math.min(Math.max(Math.ceil(rawHours), 1), maxHours);
+  const cost        = (billedHours * pricePerHr).toFixed(2);
+  const isMaxed     = billedHours >= maxHours;
 
   return (
     <div style={{ background: 'rgba(46,213,115,0.07)', border: '1px solid rgba(46,213,115,0.3)', borderRadius: 'var(--radius)', padding: 14 }}>
@@ -46,12 +57,22 @@ function LiveTimer({ checkIn, pricePerHr, maxHours = 4 }) {
           </span>
         )}
       </div>
+
       <div className="stat-row">
         <span className="stat-label">المدة</span>
         <span className="stat-val" style={{ fontFamily: 'var(--mono)' }}>{fmt}</span>
       </div>
+
+      {/* ✅ عدد الساعات المحاسَب عليها */}
+      <div className="stat-row">
+        <span className="stat-label">الساعات المحاسَب عليها</span>
+        <span className="stat-val" style={{ color: 'var(--muted)' }}>
+          {billedHours} {billedHours === 1 ? 'ساعة' : 'ساعات'}
+        </span>
+      </div>
+
       <div className="stat-row" style={{ border: 'none' }}>
-        <span className="stat-label">التكلفة</span>
+        <span className="stat-label">التكلفة الحالية</span>
         <span className="stat-val" style={{ color: isMaxed ? 'var(--success)' : 'var(--warning)' }}>
           {cost} ج {isMaxed && '✅'}
         </span>
@@ -73,7 +94,6 @@ export default function ClientDashboard() {
     loadCoworkPrice();
   }, []);
 
-  // ✅ جيب سعر منطقة العمل من الـ Backend
   async function loadCoworkPrice() {
     try {
       const { data } = await spacesAPI.getAll();
@@ -178,7 +198,6 @@ export default function ClientDashboard() {
         <>
           <div className="section-title">الجلسة الحالية</div>
           <div style={{ marginBottom: 12 }}>
-            {/* ✅ بنجيب السعر من space_settings مش من الـ session */}
             <LiveTimer
               checkIn={activeSession.check_in}
               pricePerHr={parseFloat(coworkSpace.first_hour)}
@@ -205,7 +224,12 @@ export default function ClientDashboard() {
                 {sessions.slice(0, 8).map(s => (
                   <tr key={s.id}>
                     <td>{format(new Date(s.check_in), 'dd MMM', { locale: ar })}</td>
-                    <td>{s.duration_min ? `${Math.floor(s.duration_min / 60)}س ${s.duration_min % 60}د` : '—'}</td>
+                    {/* ✅ عرض الساعات الكاملة المحاسَب عليها مش الدقائق الخام */}
+                    <td>
+                      {s.duration_min
+                        ? `${Math.min(Math.max(Math.ceil(s.duration_min / 60), 1), 4)} ساعة`
+                        : '—'}
+                    </td>
                     <td style={{ color: 'var(--accent)' }}>{s.cost ? `${parseFloat(s.cost).toFixed(2)} ج` : '—'}</td>
                     <td><span className={`badge badge-${s.payment_method === 'wallet' ? 'info' : 'warning'}`}>{s.payment_method === 'wallet' ? 'محفظة' : 'كاش'}</span></td>
                   </tr>

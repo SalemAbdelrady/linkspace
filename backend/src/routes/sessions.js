@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db = require('../config/db');
 const { auth, requireRole } = require('../middleware/auth');
 
-// ✅ جيب السعر من space_settings بدل price_settings
+// ✅ جيب السعر من space_settings
 async function getCurrentPrice() {
   const { rows } = await db.query(
     `SELECT first_hour FROM space_settings WHERE space_key = 'cowork' LIMIT 1`
@@ -10,7 +10,7 @@ async function getCurrentPrice() {
   return parseFloat(rows[0]?.first_hour || 30);
 }
 
-// ✅ دالة حساب التكلفة بالحد الأقصى من space_settings
+// ✅ جيب الحد الأقصى من space_settings
 async function getMaxHours() {
   const { rows } = await db.query(
     `SELECT max_hours FROM space_settings WHERE space_key = 'cowork' LIMIT 1`
@@ -18,10 +18,21 @@ async function getMaxHours() {
   return parseInt(rows[0]?.max_hours || 4);
 }
 
+// ✅ المنطق الجديد:
+//    - Math.ceil  → أي كسر من ساعة = ساعة كاملة
+//    - Math.max 1 → الحد الأدنى ساعة واحدة دايماً
+//    - Math.min   → لا يتجاوز الحد الأقصى (default 4 ساعات)
+//
+//  أمثلة (pricePerHr = 30):
+//    5  دقائق  → ceil(0.08) = 1h → 30 جنيه
+//    30 دقيقة  → ceil(0.50) = 1h → 30 جنيه
+//    61 دقيقة  → ceil(1.01) = 2h → 60 جنيه
+//   121 دقيقة  → ceil(2.01) = 3h → 90 جنيه
+//   300 دقيقة  → ceil(5.00) = 4h → 120 جنيه  (مقيّد بالحد الأقصى)
 function calculateCost(durationMin, pricePerHr, maxHours = 4) {
-  const hours = durationMin / 60;
-  const billableHours = Math.min(hours, maxHours);
-  return parseFloat((billableHours * pricePerHr).toFixed(2));
+  const rawHours    = durationMin / 60;
+  const billedHours = Math.min(Math.max(Math.ceil(rawHours), 1), maxHours);
+  return parseFloat((billedHours * pricePerHr).toFixed(2));
 }
 
 // POST /api/sessions/scan
@@ -52,21 +63,27 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
     );
 
     if (activeSessions[0]) {
-      // CHECK-OUT
-      const session = activeSessions[0];
-      const checkOut = new Date();
-      const checkIn = new Date(session.check_in);
+      // ─── CHECK-OUT ───────────────────────────────────────────────
+      const session  = activeSessions[0];
+
+      // ✅ UTC fix: toISOString() يحفظ الوقت نظيف بدون offset
+      const checkOut    = new Date();
+      const checkOutISO = checkOut.toISOString();
+
+      const checkIn     = new Date(session.check_in);
       const durationMin = Math.ceil((checkOut - checkIn) / 60000);
 
-      // ✅ جيب الحد الأقصى من الـ Database
       const maxHours = await getMaxHours();
-      const cost = calculateCost(durationMin, session.price_per_hr, maxHours);
+      const cost     = calculateCost(durationMin, session.price_per_hr, maxHours);
 
       await client.query(`
         UPDATE sessions SET
-          check_out = $1, duration_min = $2, cost = $3, status = 'completed'
+          check_out    = $1,
+          duration_min = $2,
+          cost         = $3,
+          status       = 'completed'
         WHERE id = $4
-      `, [checkOut, durationMin, cost, session.id]);
+      `, [checkOutISO, durationMin, cost, session.id]);
 
       let paymentMethod = 'cash';
       if (parseFloat(user.balance) >= cost) {
@@ -92,14 +109,22 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
       await client.query('COMMIT');
 
       return res.json({
-        action: 'checkout',
-        client: { name: user.name, phone: user.phone },
-        session: { durationMin, cost, paymentMethod, pointsEarned, pricePerHr: session.price_per_hr },
+        action : 'checkout',
+        client : { name: user.name, phone: user.phone },
+        session: {
+          durationMin,
+          cost,
+          paymentMethod,
+          pointsEarned,
+          pricePerHr: session.price_per_hr,
+        },
       });
 
     } else {
-      // CHECK-IN
+      // ─── CHECK-IN ────────────────────────────────────────────────
       const pricePerHr = await getCurrentPrice();
+
+      // ✅ UTC fix: NOW() في PostgreSQL دايماً UTC — لا تحتاج تعديل
       await client.query(`
         INSERT INTO sessions (user_id, price_per_hr) VALUES ($1, $2)
       `, [user.id, pricePerHr]);
@@ -107,8 +132,8 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
       await client.query('COMMIT');
 
       return res.json({
-        action: 'checkin',
-        client: { name: user.name, phone: user.phone, balance: user.balance },
+        action    : 'checkin',
+        client    : { name: user.name, phone: user.phone, balance: user.balance },
         pricePerHr,
       });
     }
@@ -124,8 +149,8 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
 
 // GET /api/sessions/history
 router.get('/history', auth, async (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = 10;
+  const page   = parseInt(req.query.page) || 1;
+  const limit  = 10;
   const offset = (page - 1) * limit;
 
   try {
@@ -141,7 +166,12 @@ router.get('/history', auth, async (req, res) => {
       [req.user.id]
     );
 
-    res.json({ sessions: rows, total: parseInt(countRows[0].count), page, limit });
+    res.json({
+      sessions : rows,
+      total    : parseInt(countRows[0].count),
+      page,
+      limit,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'خطأ في الخادم' });

@@ -12,6 +12,25 @@ const SERVICES_LIST = [
   { id: 6, name: 'سكانر', price: 5 },
 ];
 
+// ✅ UTC Fix: بيستخدم timezone الجهاز تلقائياً بدون تحديد offset
+function formatTime(isoString) {
+  if (!isoString) return '—';
+  return new Date(isoString).toLocaleTimeString('ar-EG', {
+    hour:   '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+// ✅ تحويل الدقائق الخام → ساعات كاملة محاسَب عليها (نفس منطق الـ Backend)
+//    Math.ceil  → أي كسر من ساعة = ساعة كاملة
+//    Math.max 1 → الحد الأدنى ساعة واحدة دايماً
+//    Math.min 4 → لا يتجاوز الحد الأقصى
+function getBilledHours(durationMin, maxHours = 4) {
+  const rawHours = durationMin / 60;
+  return Math.min(Math.max(Math.ceil(rawHours), 1), maxHours);
+}
+
 export default function InvoicePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -34,12 +53,17 @@ export default function InvoicePage() {
     );
   }
 
-  const sessionCost = parseFloat(session.cost || 0);
-  const servicesCost = addedServices.reduce((sum, s) => sum + s.price * s.qty, 0);
-  const total = sessionCost + servicesCost;
+  const sessionCost   = parseFloat(session.cost || 0);
+  const servicesCost  = addedServices.reduce((sum, s) => sum + s.price * s.qty, 0);
+  const total         = sessionCost + servicesCost;
+
+  // ✅ الساعات الكاملة المحاسَب عليها
+  const billedHours = getBilledHours(session.durationMin);
 
   const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`;
-  const now = new Date();
+  const now     = new Date();
+
+  // ✅ UTC Fix: toLocaleDateString/toLocaleTimeString بتستخدم timezone الجهاز تلقائياً
   const dateStr = now.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
   const timeStr = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
 
@@ -122,10 +146,25 @@ export default function InvoicePage() {
               <span>منطقة العمل المشتركة</span>
               <span style={{ fontWeight: 600 }}>{sessionCost.toFixed(2)} ج</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)' }}>
-              <span>المدة: {Math.floor(session.durationMin / 60)}س {session.durationMin % 60}د</span>
+
+            {/* ✅ عرض الساعات الكاملة المحاسَب عليها + وقت الدخول والخروج صح */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>
+              <span>
+                المدة: {billedHours} {billedHours === 1 ? 'ساعة' : 'ساعات'}
+                <span style={{ fontSize: 11, marginRight: 4, opacity: 0.7 }}>
+                  ({session.durationMin} د فعلية)
+                </span>
+              </span>
               <span>سعر الساعة: {session.pricePerHr || '—'} ج</span>
             </div>
+
+            {/* ✅ UTC Fix: وقت الدخول والخروج بـ timezone الجهاز */}
+            {session.checkIn && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginTop: 4, opacity: 0.8 }}>
+                <span>دخول: {formatTime(session.checkIn)}</span>
+                <span>خروج: {formatTime(session.checkOut || new Date().toISOString())}</span>
+              </div>
+            )}
           </div>
 
           {/* الخدمات المضافة */}
@@ -231,3 +270,4 @@ export default function InvoicePage() {
     </>
   );
 }
+
