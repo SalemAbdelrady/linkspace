@@ -9,8 +9,7 @@ const seed = require('./utils/seed');
 
 const app = express();
 
-const invoicesRouter = require('./routes/invoices');
-app.use('/api/invoices', invoicesRouter);
+
 
 // Trust proxy for Railway
 app.set('trust proxy', 1);
@@ -48,6 +47,7 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api/spaces', require('./routes/spaces'));
 app.use('/api/services', require('./routes/services'));
 app.use('/api/subscriptions', require('./routes/subscriptions'));
+app.use('/api/invoices',      require('./routes/invoices'));  
 
 // Health check
 app.get('/api/health', (_, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
