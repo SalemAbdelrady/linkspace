@@ -45,6 +45,10 @@ export const couponsAPI = {
   myCoupons: () => api.get('/coupons/my'),
   validate: (code, user_id) => api.post('/coupons/validate', { code, user_id }),
   use:      (body) => api.post('/coupons/use', body),
+  // في couponsAPI:
+adminAll:    ()       => api.get('/coupons/admin/all'),
+adminCreate: (body)   => api.post('/coupons/admin/create', body),
+adminRevoke: (id)     => api.post(`/coupons/admin/revoke/${id}`),
 };
 
 // Admin
