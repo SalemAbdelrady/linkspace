@@ -2,18 +2,20 @@ const router = require('express').Router();
 const db = require('../config/db');
 const { auth, requireRole } = require('../middleware/auth');
 
-const isAdmin = [auth, requireRole('admin')];
+const isAdmin        = [auth, requireRole('admin')];
 const isStaffOrAdmin = [auth, requireRole('staff', 'admin')];
 
 // GET /api/admin/users
 router.get('/users', ...isStaffOrAdmin, async (req, res) => {
   const { search = '', page = 1 } = req.query;
-  const limit = 20;
+  const limit  = 20;
   const offset = (parseInt(page) - 1) * limit;
 
   try {
     const { rows } = await db.query(`
-      SELECT id, name, phone, role, balance, points, is_active, created_at
+      SELECT id, name, phone, role, balance, points,
+             qr_code, qr_image,
+             is_active, created_at
       FROM users
       WHERE (name ILIKE $1 OR phone ILIKE $1) AND role = 'client'
       ORDER BY created_at DESC
@@ -107,7 +109,7 @@ router.get('/reports/daily', ...isStaffOrAdmin, async (req, res) => {
 
 // GET /api/admin/reports/monthly
 router.get('/reports/monthly', ...isStaffOrAdmin, async (req, res) => {
-  const year = req.query.year || new Date().getFullYear();
+  const year  = req.query.year  || new Date().getFullYear();
   const month = req.query.month || new Date().getMonth() + 1;
 
   try {
@@ -117,7 +119,7 @@ router.get('/reports/monthly', ...isStaffOrAdmin, async (req, res) => {
         COUNT(*) AS visits,
         COALESCE(SUM(cost), 0) AS revenue
       FROM sessions
-      WHERE EXTRACT(YEAR FROM check_in) = $1
+      WHERE EXTRACT(YEAR  FROM check_in) = $1
         AND EXTRACT(MONTH FROM check_in) = $2
         AND status = 'completed'
       GROUP BY day ORDER BY day
@@ -129,7 +131,7 @@ router.get('/reports/monthly', ...isStaffOrAdmin, async (req, res) => {
         COALESCE(SUM(cost), 0) AS total_revenue,
         COALESCE(AVG(duration_min), 0) AS avg_duration
       FROM sessions
-      WHERE EXTRACT(YEAR FROM check_in) = $1
+      WHERE EXTRACT(YEAR  FROM check_in) = $1
         AND EXTRACT(MONTH FROM check_in) = $2
         AND status = 'completed'
     `, [year, month]);
