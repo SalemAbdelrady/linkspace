@@ -3,7 +3,7 @@ const db = require('../config/db');
 const { auth, requireRole } = require('../middleware/auth');
 
 const POINTS_THRESHOLD = parseInt(process.env.COUPON_POINTS_THRESHOLD) || 100;
-const COUPON_DISCOUNT = parseInt(process.env.COUPON_DISCOUNT_PERCENT) || 20;
+const COUPON_DISCOUNT  = parseInt(process.env.COUPON_DISCOUNT_PERCENT)  || 20;
 
 function generateCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -22,7 +22,7 @@ router.post('/redeem', auth, async (req, res) => {
   }
 
   try {
-    const code = generateCode();
+    const code      = generateCode();
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30);
 
@@ -56,7 +56,7 @@ router.get('/my', auth, async (req, res) => {
   }
 });
 
-// POST /api/coupons/validate — validate a coupon code
+// POST /api/coupons/validate — validate a coupon code [staff/admin]
 router.post('/validate', auth, requireRole('staff', 'admin'), async (req, res) => {
   const { code, user_id } = req.body;
   try {
@@ -68,6 +68,38 @@ router.post('/validate', auth, requireRole('staff', 'admin'), async (req, res) =
     if (!rows[0]) return res.status(404).json({ valid: false, error: 'كوبون غير صالح أو منتهي' });
     res.json({ valid: true, coupon: rows[0] });
   } catch (err) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// ✅ POST /api/coupons/use — mark coupon as used after invoice [staff/admin]
+//    body: { code, user_id }
+//    - بيتأكد إن الكوبون صالح وينتمي للعميل الصح
+//    - بيعمله is_used = true atomically
+router.post('/use', auth, requireRole('staff', 'admin'), async (req, res) => {
+  const { code, user_id } = req.body;
+  if (!code || !user_id) {
+    return res.status(400).json({ error: 'code و user_id مطلوبان' });
+  }
+
+  try {
+    const { rows } = await db.query(`
+      UPDATE coupons
+      SET is_used = true
+      WHERE code    = $1
+        AND user_id = $2
+        AND is_used = false
+        AND expires_at > NOW()
+      RETURNING *
+    `, [code, user_id]);
+
+    if (!rows[0]) {
+      return res.status(404).json({ error: 'كوبون غير صالح أو مستخدم مسبقاً' });
+    }
+
+    res.json({ success: true, coupon: rows[0] });
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });

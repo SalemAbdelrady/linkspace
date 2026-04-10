@@ -44,6 +44,7 @@ export const couponsAPI = {
   redeem: () => api.post('/coupons/redeem'),
   myCoupons: () => api.get('/coupons/my'),
   validate: (code, user_id) => api.post('/coupons/validate', { code, user_id }),
+  use:      (body) => api.post('/coupons/use', body),
 };
 
 // Admin
