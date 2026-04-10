@@ -64,12 +64,9 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
 
     if (activeSessions[0]) {
       // ─── CHECK-OUT ───────────────────────────────────────────────
-      const session  = activeSessions[0];
-
-      // ✅ UTC fix: toISOString() يحفظ الوقت نظيف بدون offset
+      const session     = activeSessions[0];
       const checkOut    = new Date();
       const checkOutISO = checkOut.toISOString();
-
       const checkIn     = new Date(session.check_in);
       const durationMin = Math.ceil((checkOut - checkIn) / 60000);
 
@@ -110,13 +107,16 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
 
       return res.json({
         action : 'checkout',
-        client : { name: user.name, phone: user.phone },
+        client : { name: user.name, phone: user.phone, id: user.id },
         session: {
+          id:          session.id,        // ✅ محتاجه في InvoicePage لحفظ الفاتورة
           durationMin,
           cost,
           paymentMethod,
           pointsEarned,
-          pricePerHr: session.price_per_hr,
+          pricePerHr:  session.price_per_hr,
+          checkIn:     session.check_in,  // ✅ لعرض وقت الدخول في الفاتورة
+          checkOut:    checkOutISO,        // ✅ لعرض وقت الخروج في الفاتورة
         },
       });
 
@@ -124,7 +124,6 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
       // ─── CHECK-IN ────────────────────────────────────────────────
       const pricePerHr = await getCurrentPrice();
 
-      // ✅ UTC fix: NOW() في PostgreSQL دايماً UTC — لا تحتاج تعديل
       await client.query(`
         INSERT INTO sessions (user_id, price_per_hr) VALUES ($1, $2)
       `, [user.id, pricePerHr]);
