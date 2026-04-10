@@ -43,7 +43,7 @@ export const sessionsAPI = {
 export const couponsAPI = {
   redeem: () => api.post('/coupons/redeem'),
   myCoupons: () => api.get('/coupons/my'),
-  validate: (code, user_id) => api.post('/coupons/validate', { code, user_id }),
+  validate: (body) => api.post('/coupons/validate', body),
   use:      (body) => api.post('/coupons/use', body),
   // في couponsAPI:
 adminAll:    ()       => api.get('/coupons/admin/all'),
