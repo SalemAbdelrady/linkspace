@@ -33,7 +33,7 @@ export default function InvoicePage() {
   const [addedServices, setAddedServices] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState('wallet');
   const [note,          setNote]          = useState('');
-  const [saved,         setSaved]         = useState(false); // ✅ منع الحفظ مرتين
+  const [saved,         setSaved]         = useState(false);
 
   // ── كوبون ─────────────────────────────────────────────────────────
   const [couponCode,    setCouponCode]    = useState('');
@@ -51,6 +51,7 @@ export default function InvoicePage() {
     );
   }
 
+  // ── حسابات الفاتورة ────────────────────────────────────────────────
   const sessionCost    = parseFloat(session.cost || 0);
   const servicesCost   = addedServices.reduce((sum, s) => sum + s.price * s.qty, 0);
   const subtotal       = sessionCost + servicesCost;
@@ -59,13 +60,29 @@ export default function InvoicePage() {
   const total          = parseFloat((subtotal - discountAmount).toFixed(2));
   const billedHours    = getBilledHours(session.durationMin);
 
-  // ✅ رقم الفاتورة ثابت طول عمر الكومبوننت
+  // ── رصيد العميل ───────────────────────────────────────────────────
+  const clientBalance   = parseFloat(client.balance || 0);
+  const walletCovers    = clientBalance >= total;           // الرصيد يكفي كامل الفاتورة
+  const walletPartial   = clientBalance > 0 && clientBalance < total; // يكفي جزء فقط
+  const walletFromTotal = walletPartial ? clientBalance : total;      // المبلغ المخصوم من المحفظة
+  const cashRemainder   = walletPartial ? parseFloat((total - clientBalance).toFixed(2)) : 0;
+
+  // ── رقم الفاتورة ─────────────────────────────────────────────────
   const [invoiceNumber] = useState(`INV-${Date.now().toString().slice(-6)}`);
   const now     = new Date();
   const dateStr = now.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
   const timeStr = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
 
-  // ── كوبون actions ──────────────────────────────────────────────────
+  // ── الـ payment_method الفعلي المُرسَل للـ backend ────────────────
+  // لو اختار محفظة لكن الرصيد جزئي → نرسل 'partial' مع تفاصيل
+  function getEffectivePayment() {
+    if (paymentMethod === 'cash') return 'cash';
+    if (walletCovers)             return 'wallet';
+    if (walletPartial)            return 'partial';
+    return 'cash'; // لا يوجد رصيد أصلاً
+  }
+
+  // ── كوبون actions ─────────────────────────────────────────────────
   async function validateCoupon() {
     const code = couponCode.trim().toUpperCase();
     if (!code) return toast.error('أدخل كود الكوبون');
@@ -89,7 +106,6 @@ export default function InvoicePage() {
     } catch (err) { console.error('coupon use error:', err); }
   }
 
-  // ✅ حفظ الفاتورة في الـ DB — بيشتغل مرة واحدة بس
   async function saveInvoice() {
     if (saved) return;
     try {
@@ -109,13 +125,12 @@ export default function InvoicePage() {
         discount_amount: discountAmount,
         subtotal,
         total,
-        payment_method:  paymentMethod,
+        payment_method:  getEffectivePayment(),
         note:            note || null,
       });
       setSaved(true);
     } catch (err) {
       console.error('invoice save error:', err);
-      // مش بيوقف الـ flow — الفاتورة اتطبعت حتى لو الحفظ فشل
     }
   }
 
@@ -137,15 +152,62 @@ export default function InvoicePage() {
 
   async function handlePrint() {
     await markCouponUsed();
-    await saveInvoice(); // ✅ حفظ قبل الطباعة
+    await saveInvoice();
     window.print();
     toast.success('تمت طباعة الفاتورة');
   }
 
   async function handleDone() {
     await markCouponUsed();
-    await saveInvoice(); // ✅ حفظ عند الإنهاء
+    await saveInvoice();
     navigate('/scanner');
+  }
+
+  // ── مكوّن عرض رصيد العميل ─────────────────────────────────────────
+  function WalletStatus() {
+    if (clientBalance <= 0) {
+      return (
+        <div style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 13, color: 'var(--muted)' }}>💰 رصيد العميل</span>
+          <span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 600 }}>0.00 ج — لا يوجد رصيد</span>
+        </div>
+      );
+    }
+
+    if (walletCovers) {
+      return (
+        <div style={{ padding: '10px 14px', background: 'rgba(46,213,115,0.08)', border: '1px solid rgba(46,213,115,0.4)', borderRadius: 10, marginBottom: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 13, color: 'var(--success)', fontWeight: 600 }}>💰 رصيد العميل المتاح</span>
+            <span style={{ fontSize: 15, color: 'var(--success)', fontWeight: 700 }}>{clientBalance.toFixed(2)} ج</span>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
+            ✅ الرصيد يغطي الفاتورة بالكامل — سيُخصم <strong style={{ color: 'var(--accent)' }}>{total.toFixed(2)} ج</strong> من المحفظة
+          </div>
+        </div>
+      );
+    }
+
+    // رصيد جزئي
+    return (
+      <div style={{ padding: '10px 14px', background: 'rgba(255,165,2,0.08)', border: '1px solid rgba(255,165,2,0.4)', borderRadius: 10, marginBottom: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <span style={{ fontSize: 13, color: 'var(--warning)', fontWeight: 600 }}>💰 رصيد العميل المتاح</span>
+          <span style={{ fontSize: 15, color: 'var(--warning)', fontWeight: 700 }}>{clientBalance.toFixed(2)} ج</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)', marginBottom: 2 }}>
+          <span>⚠️ الرصيد لا يكفي الفاتورة كاملاً</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginTop: 6, padding: '6px 8px', background: 'rgba(0,0,0,0.2)', borderRadius: 8 }}>
+          <span style={{ color: 'var(--muted)' }}>من المحفظة:</span>
+          <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{walletFromTotal.toFixed(2)} ج</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginTop: 4, padding: '6px 8px', background: 'rgba(0,0,0,0.2)', borderRadius: 8 }}>
+          <span style={{ color: 'var(--muted)' }}>المتبقي كاش:</span>
+          <span style={{ color: 'var(--warning)', fontWeight: 700 }}>{cashRemainder.toFixed(2)} ج</span>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -268,12 +330,19 @@ export default function InvoicePage() {
             </div>
           </div>
 
-          {/* طريقة الدفع */}
+          {/* طريقة الدفع في الفاتورة المطبوعة */}
           <div style={{ textAlign: 'center', fontSize: 13 }}>
             <span style={{ color: 'var(--muted)' }}>طريقة الدفع: </span>
-            <span className={`badge badge-${paymentMethod === 'wallet' ? 'info' : 'warning'}`}>
-              {paymentMethod === 'wallet' ? '💳 محفظة' : '💵 كاش'}
-            </span>
+            {getEffectivePayment() === 'partial' ? (
+              <span>
+                <span className="badge badge-info" style={{ marginLeft: 4 }}>💳 {walletFromTotal.toFixed(2)} ج محفظة</span>
+                <span className="badge badge-warning" style={{ marginRight: 4 }}>💵 {cashRemainder.toFixed(2)} ج كاش</span>
+              </span>
+            ) : (
+              <span className={`badge badge-${paymentMethod === 'wallet' ? 'info' : 'warning'}`}>
+                {paymentMethod === 'wallet' ? '💳 محفظة' : '💵 كاش'}
+              </span>
+            )}
           </div>
           <div style={{ textAlign: 'center', marginTop: 16, fontSize: 12, color: 'var(--muted)' }}>شكراً لزيارتكم 🙏</div>
         </div>
@@ -322,9 +391,13 @@ export default function InvoicePage() {
             </div>
           )}
 
-          {/* طريقة الدفع */}
+          {/* ── طريقة الدفع مع عرض الرصيد ── */}
           <div className="section-title">طريقة الدفع</div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+
+          {/* عرض رصيد العميل دائماً */}
+          <WalletStatus />
+
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
             {[['wallet','💳 محفظة'], ['cash','💵 كاش']].map(([method, label]) => (
               <button key={method} onClick={() => setPaymentMethod(method)}
                 style={{ flex: 1, padding: '10px', borderRadius: 10, border: '1px solid', fontSize: 13, fontWeight: 600, cursor: 'pointer', borderColor: paymentMethod === method ? 'var(--accent)' : 'var(--border)', background: paymentMethod === method ? 'var(--accent)' : 'transparent', color: paymentMethod === method ? '#000' : 'var(--muted)' }}>
@@ -332,6 +405,13 @@ export default function InvoicePage() {
               </button>
             ))}
           </div>
+
+          {/* تحذير لو اختار محفظة وما في رصيد */}
+          {paymentMethod === 'wallet' && clientBalance <= 0 && (
+            <div style={{ padding: '8px 12px', background: 'rgba(255,71,87,0.08)', border: '1px solid rgba(255,71,87,0.3)', borderRadius: 8, marginBottom: 16, fontSize: 12, color: '#ff4757' }}>
+              ⚠️ لا يوجد رصيد في محفظة العميل — سيُحوَّل للدفع كاش
+            </div>
+          )}
 
           {/* ملاحظة */}
           <div className="section-title">ملاحظة (اختياري)</div>
