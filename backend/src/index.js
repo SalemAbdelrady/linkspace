@@ -9,6 +9,9 @@ const seed = require('./utils/seed');
 
 const app = express();
 
+const invoicesRouter = require('./routes/invoices');
+app.use('/api/invoices', invoicesRouter);
+
 // Trust proxy for Railway
 app.set('trust proxy', 1);
 

@@ -85,5 +85,12 @@ export const subscriptionsAPI = {
   deletePlan: (id) => api.delete(`/subscriptions/plans/${id}`),
 };
 
+// invoicesAPI
+export const invoicesAPI = {
+  create:  (body)   => api.post('/invoices', body),
+  getAll:  (params) => api.get('/invoices', { params }),
+  getOne:  (id)     => api.get(`/invoices/${id}`),
+};
+
 // ✅ export default في الآخر
 export default api;

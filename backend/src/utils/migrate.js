@@ -34,7 +34,7 @@ async function migrate() {
     );
   `);
 
-  // ✅ user_id nullable — الكوبون العام (يدوي من الأدمن) مش مربوط بعميل
+  // ✅ user_id nullable — الكوبون العام مش مربوط بعميل
   await db.query(`
     CREATE TABLE IF NOT EXISTS coupons (
       id           SERIAL PRIMARY KEY,
@@ -47,7 +47,6 @@ async function migrate() {
     );
   `);
 
-  // ✅ لو الجدول موجود مسبقاً بـ NOT NULL — بيشيل القيد تلقائياً
   await db.query(`
     ALTER TABLE coupons ALTER COLUMN user_id DROP NOT NULL;
   `);
@@ -110,13 +109,42 @@ async function migrate() {
     );
   `);
 
+  // ✅ جدول الفواتير الكاملة
+  //    session_id  → ربط بالجلسة
+  //    services    → JSON مصفوفة الخدمات المضافة [{name, price, qty}]
+  //    coupon_code → كود الكوبون لو اتستخدم
+  //    discount_pct / discount_amount → تفاصيل الخصم
+  //    subtotal    → قبل الخصم
+  //    total       → بعد الخصم
+  //    note        → ملاحظة الموظف
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS invoices (
+      id              SERIAL PRIMARY KEY,
+      invoice_number  VARCHAR(20) UNIQUE NOT NULL,
+      session_id      INTEGER REFERENCES sessions(id) ON DELETE SET NULL,
+      user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      client_name     VARCHAR(100) NOT NULL,
+      client_phone    VARCHAR(20) NOT NULL,
+      session_cost    NUMERIC(10,2) NOT NULL DEFAULT 0,
+      duration_min    INTEGER,
+      price_per_hr    NUMERIC(10,2),
+      services        JSONB NOT NULL DEFAULT '[]',
+      services_cost   NUMERIC(10,2) NOT NULL DEFAULT 0,
+      coupon_code     VARCHAR(30),
+      discount_pct    INTEGER NOT NULL DEFAULT 0,
+      discount_amount NUMERIC(10,2) NOT NULL DEFAULT 0,
+      subtotal        NUMERIC(10,2) NOT NULL DEFAULT 0,
+      total           NUMERIC(10,2) NOT NULL DEFAULT 0,
+      payment_method  VARCHAR(20) NOT NULL DEFAULT 'cash',
+      note            TEXT,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
   // ── Default data ──────────────────────────────────────────────────
   await db.query(`
     INSERT INTO price_settings (period_name, start_hour, end_hour, price_per_hr)
-    VALUES
-      ('morning', 6,  14, 10),
-      ('evening', 14, 22, 15),
-      ('night',   22, 6,  12)
+    VALUES ('morning',6,14,10), ('evening',14,22,15), ('night',22,6,12)
     ON CONFLICT DO NOTHING;
   `);
 
@@ -131,13 +159,7 @@ async function migrate() {
 
   await db.query(`
     INSERT INTO services (name, price)
-    VALUES
-      ('قهوة', 15),
-      ('شاي', 10),
-      ('مياه', 5),
-      ('عصير', 20),
-      ('طباعة (ورقة)', 3),
-      ('سكانر', 5)
+    VALUES ('قهوة',15),('شاي',10),('مياه',5),('عصير',20),('طباعة (ورقة)',3),('سكانر',5)
     ON CONFLICT DO NOTHING;
   `);
 
@@ -151,11 +173,13 @@ async function migrate() {
   `);
 
   // ── Indexes ───────────────────────────────────────────────────────
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_sessions_status  ON sessions(status);`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_coupons_user_id  ON coupons(user_id);`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_wallet_user_id   ON wallet_transactions(user_id);`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_users_phone      ON users(phone);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_sessions_user_id  ON sessions(user_id);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_sessions_status   ON sessions(status);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_coupons_user_id   ON coupons(user_id);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_wallet_user_id    ON wallet_transactions(user_id);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_users_phone       ON users(phone);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_invoices_user_id  ON invoices(user_id);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_invoices_created  ON invoices(created_at DESC);`);
 
   console.log('✅ Migrations completed!');
 }
