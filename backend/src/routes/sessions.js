@@ -2,7 +2,6 @@ const router = require('express').Router();
 const db = require('../config/db');
 const { auth, requireRole } = require('../middleware/auth');
 
-// ✅ جيب السعر من space_settings
 async function getCurrentPrice() {
   const { rows } = await db.query(
     `SELECT first_hour FROM space_settings WHERE space_key = 'cowork' LIMIT 1`
@@ -10,7 +9,6 @@ async function getCurrentPrice() {
   return parseFloat(rows[0]?.first_hour || 30);
 }
 
-// ✅ جيب الحد الأقصى من space_settings
 async function getMaxHours() {
   const { rows } = await db.query(
     `SELECT max_hours FROM space_settings WHERE space_key = 'cowork' LIMIT 1`
@@ -18,17 +16,6 @@ async function getMaxHours() {
   return parseInt(rows[0]?.max_hours || 4);
 }
 
-// ✅ المنطق الجديد:
-//    - Math.ceil  → أي كسر من ساعة = ساعة كاملة
-//    - Math.max 1 → الحد الأدنى ساعة واحدة دايماً
-//    - Math.min   → لا يتجاوز الحد الأقصى (default 4 ساعات)
-//
-//  أمثلة (pricePerHr = 30):
-//    5  دقائق  → ceil(0.08) = 1h → 30 جنيه
-//    30 دقيقة  → ceil(0.50) = 1h → 30 جنيه
-//    61 دقيقة  → ceil(1.01) = 2h → 60 جنيه
-//   121 دقيقة  → ceil(2.01) = 3h → 90 جنيه
-//   300 دقيقة  → ceil(5.00) = 4h → 120 جنيه  (مقيّد بالحد الأقصى)
 function calculateCost(durationMin, pricePerHr, maxHours = 4) {
   const rawHours    = durationMin / 60;
   const billedHours = Math.min(Math.max(Math.ceil(rawHours), 1), maxHours);
@@ -107,16 +94,21 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
 
       return res.json({
         action : 'checkout',
-        client : { name: user.name, phone: user.phone, id: user.id },
+        client : {
+          name   : user.name,
+          phone  : user.phone,
+          id     : user.id,
+          balance: user.balance,  // ✅ أضفنا الـ balance
+        },
         session: {
-          id:          session.id,        // ✅ محتاجه في InvoicePage لحفظ الفاتورة
+          id          : session.id,
           durationMin,
           cost,
           paymentMethod,
           pointsEarned,
-          pricePerHr:  session.price_per_hr,
-          checkIn:     session.check_in,  // ✅ لعرض وقت الدخول في الفاتورة
-          checkOut:    checkOutISO,        // ✅ لعرض وقت الخروج في الفاتورة
+          pricePerHr  : session.price_per_hr,
+          checkIn     : session.check_in,
+          checkOut    : checkOutISO,
         },
       });
 
