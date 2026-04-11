@@ -2,7 +2,15 @@ const router = require('express').Router();
 const db     = require('../config/db');
 const { auth, requireRole } = require('../middleware/auth');
 
-// POST /api/invoices — حفظ فاتورة كاملة [staff/admin]
+// ── migration guard: أضف الأعمدة الجديدة لو مش موجودة ──────────────
+;(async () => {
+  try {
+    await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS wallet_paid NUMERIC(10,2) NOT NULL DEFAULT 0`);
+    await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS cash_paid   NUMERIC(10,2) NOT NULL DEFAULT 0`);
+  } catch (e) { /* تجاهل — الأعمدة موجودة مسبقاً */ }
+})();
+
+// POST /api/invoices — حفظ فاتورة + خصم المحفظة في transaction واحدة [staff/admin]
 router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
   const {
     invoice_number,
@@ -13,7 +21,7 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
     session_cost,
     duration_min,
     price_per_hr,
-    services,       // [{name, price, qty}]
+    services,
     services_cost,
     coupon_code,
     discount_pct,
@@ -28,8 +36,56 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
     return res.status(400).json({ error: 'بيانات ناقصة' });
   }
 
+  const client = await db.connect();
   try {
-    const { rows } = await db.query(`
+    await client.query('BEGIN');
+
+    // ── 1. جلب الرصيد الحالي للعميل ──────────────────────────────────
+    const { rows: userRows } = await client.query(
+      'SELECT balance FROM users WHERE id = $1 FOR UPDATE',
+      [user_id]
+    );
+    if (!userRows[0]) throw new Error('العميل غير موجود');
+
+    const currentBalance = parseFloat(userRows[0].balance);
+    const totalAmount    = parseFloat(total || 0);
+
+    // ── 2. حساب المبالغ بحسب طريقة الدفع ────────────────────────────
+    let walletPaid = 0;
+    let cashPaid   = 0;
+
+    if (payment_method === 'wallet') {
+      // دفع كامل من المحفظة
+      walletPaid = Math.min(currentBalance, totalAmount);
+      cashPaid   = parseFloat((totalAmount - walletPaid).toFixed(2));
+    } else if (payment_method === 'partial') {
+      // رصيد جزئي + كاش
+      walletPaid = Math.min(currentBalance, totalAmount);
+      cashPaid   = parseFloat((totalAmount - walletPaid).toFixed(2));
+    } else {
+      // كاش فقط
+      walletPaid = 0;
+      cashPaid   = totalAmount;
+    }
+
+    // ── 3. خصم الرصيد من المحفظة لو في مبلغ محفظة ──────────────────
+    if (walletPaid > 0) {
+      await client.query(
+        'UPDATE users SET balance = balance - $1 WHERE id = $2',
+        [walletPaid, user_id]
+      );
+      await client.query(`
+        INSERT INTO wallet_transactions (user_id, type, amount, description)
+        VALUES ($1, 'debit', $2, $3)
+      `, [
+        user_id,
+        walletPaid,
+        `فاتورة #${invoice_number}${cashPaid > 0 ? ` (+ ${cashPaid.toFixed(2)} ج كاش)` : ''}`,
+      ]);
+    }
+
+    // ── 4. حفظ الفاتورة ───────────────────────────────────────────────
+    const { rows } = await client.query(`
       INSERT INTO invoices (
         invoice_number, session_id, user_id,
         client_name, client_phone,
@@ -37,16 +93,20 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
         services, services_cost,
         coupon_code, discount_pct, discount_amount,
         subtotal, total,
+        wallet_paid, cash_paid,
         payment_method, note
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,
-        $9,$10,$11,$12,$13,$14,$15,$16,$17
+        $9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19
       )
       ON CONFLICT (invoice_number) DO NOTHING
       RETURNING *
     `, [
-      invoice_number, session_id || null, user_id,
-      client_name, client_phone,
+      invoice_number,
+      session_id     || null,
+      user_id,
+      client_name,
+      client_phone,
       session_cost   || 0,
       duration_min   || 0,
       price_per_hr   || 0,
@@ -56,20 +116,32 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
       discount_pct   || 0,
       discount_amount|| 0,
       subtotal       || 0,
-      total          || 0,
+      totalAmount,
+      walletPaid,
+      cashPaid,
       payment_method || 'cash',
       note           || null,
     ]);
 
-    res.status(201).json({ invoice: rows[0] });
+    await client.query('COMMIT');
+
+    res.status(201).json({
+      invoice:     rows[0],
+      wallet_paid: walletPaid,
+      cash_paid:   cashPaid,
+      new_balance: parseFloat((currentBalance - walletPaid).toFixed(2)),
+    });
+
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error(err);
     res.status(500).json({ error: 'خطأ في حفظ الفاتورة' });
+  } finally {
+    client.release();
   }
 });
 
 // GET /api/invoices — كل الفواتير [staff/admin]
-//   query: ?page=1&search=اسم&date=2026-04-10
 router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
   const page   = parseInt(req.query.page)  || 1;
   const limit  = 20;

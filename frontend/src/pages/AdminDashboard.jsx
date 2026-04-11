@@ -6,7 +6,6 @@ import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
-import { QRCodeSVG } from 'qrcode.react';
 
 // ── NumberInput ───────────────────────────────────────────────────────
 function NumberInput({ value, onChange, min = 1, step = 1, suffix = '' }) {
@@ -61,27 +60,21 @@ function UserModal({ u, isInSession, amounts, getAmount, setAmount, chargeWallet
           </div>
         </div>
 
-        {/* QR Code — يتولد ديناميكياً من qr_code النصي */}
+        {/* QR Code */}
         <div style={{ marginBottom: 20, paddingBottom: 20, borderBottom: '1px dashed var(--border)', textAlign: 'center' }}>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>كود الدخول</div>
-          {u.qr_code ? (
-            <>
-              <div style={{ display: 'inline-block', padding: 12, background: '#fff', borderRadius: 16, border: '3px solid var(--accent)', marginBottom: 10 }}>
-                <QRCodeSVG
-                  value={u.qr_code}
-                  size={160}
-                  bgColor="#ffffff"
-                  fgColor="#000000"
-                  level="M"
-                />
-              </div>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: 18, fontWeight: 700, color: 'var(--accent)', letterSpacing: 3 }}>
-                {u.qr_code}
-              </div>
-            </>
+          {u.qr_image ? (
+            <div style={{ display: 'inline-block', padding: 12, background: '#fff', borderRadius: 16, border: '3px solid var(--accent)', marginBottom: 10 }}>
+              <img src={u.qr_image} alt="QR Code" style={{ width: 160, height: 160, display: 'block' }} />
+            </div>
           ) : (
             <div style={{ width: 160, height: 160, margin: '0 auto 10px', background: 'rgba(0,212,170,0.06)', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 13 }}>
               لا يوجد QR
+            </div>
+          )}
+          {u.qr_code && (
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 18, fontWeight: 700, color: 'var(--accent)', letterSpacing: 3 }}>
+              {u.qr_code}
             </div>
           )}
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>اعرض هذا الكود عند الدخول والخروج</div>
@@ -172,10 +165,24 @@ function InvoiceModal({ invoice, onClose }) {
             <span>الإجمالي</span><span>{parseFloat(invoice.total).toFixed(2)} ج</span>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span className={`badge badge-${invoice.payment_method === 'wallet' ? 'info' : 'warning'}`}>
-            {invoice.payment_method === 'wallet' ? '💳 محفظة' : '💵 كاش'}
-          </span>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* عرض تفصيلي: محفظة + كاش أو أحدهما */}
+          {parseFloat(invoice.wallet_paid || 0) > 0 && (
+            <span className="badge badge-info">
+              💳 {parseFloat(invoice.wallet_paid).toFixed(2)} ج محفظة
+            </span>
+          )}
+          {parseFloat(invoice.cash_paid || 0) > 0 && (
+            <span className="badge badge-warning">
+              💵 {parseFloat(invoice.cash_paid).toFixed(2)} ج كاش
+            </span>
+          )}
+          {/* fallback للفواتير القديمة قبل التحديث */}
+          {!parseFloat(invoice.wallet_paid || 0) && !parseFloat(invoice.cash_paid || 0) && (
+            <span className={`badge badge-${invoice.payment_method === 'wallet' ? 'info' : 'warning'}`}>
+              {invoice.payment_method === 'wallet' ? '💳 محفظة' : '💵 كاش'}
+            </span>
+          )}
           {invoice.note && <span style={{ fontSize: 12, color: 'var(--muted)' }}>{invoice.note}</span>}
         </div>
       </div>
@@ -194,7 +201,7 @@ export default function AdminDashboard() {
   const [users,            setUsers]            = useState([]);
   const [activeSessionIds, setActiveSessionIds] = useState(new Set());
   const [search,           setSearch]           = useState('');
-  const [selectedUser,     setSelectedUser]     = useState(null);
+  const [selectedUser,     setSelectedUser]     = useState(null); // للمودال
   const [amounts,          setAmounts]          = useState({});
 
   const [priceTab, setPriceTab] = useState('cowork');
@@ -296,6 +303,7 @@ export default function AdminDashboard() {
       await adminAPI.chargeWallet(u.id, parseFloat(amount));
       toast.success(`تم شحن ${amount} ج للعميل ${u.name}`);
       setAmount(u.id, 'wallet', '');
+      // ✅ تحديث الرصيد في المودال بدون إغلاقه
       setUsers(prev => prev.map(x => x.id === u.id ? { ...x, balance: parseFloat(x.balance) + parseFloat(amount) } : x));
       setSelectedUser(prev => prev ? { ...prev, balance: parseFloat(prev.balance) + parseFloat(amount) } : prev);
     } catch (err) { toast.error(err.response?.data?.error || 'خطأ'); }
@@ -307,6 +315,7 @@ export default function AdminDashboard() {
       await adminAPI.addPoints(u.id, parseInt(points));
       toast.success(`تم إضافة ${points} نقطة`);
       setAmount(u.id, 'points', '');
+      // ✅ تحديث النقاط في المودال بدون إغلاقه
       setUsers(prev => prev.map(x => x.id === u.id ? { ...x, points: x.points + parseInt(points) } : x));
       setSelectedUser(prev => prev ? { ...prev, points: prev.points + parseInt(points) } : prev);
     } catch (err) { toast.error(err.response?.data?.error || 'خطأ'); }
@@ -434,6 +443,7 @@ export default function AdminDashboard() {
               {users.map(u => {
                 const isInSession = activeSessionIds.has(u.id);
                 return (
+                  // ✅ الضغط يفتح المودال مباشرةً
                   <div key={u.id} onClick={() => setSelectedUser(u)} className="card"
                     style={{ cursor: 'pointer', transition: 'border-color 0.2s' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -645,7 +655,10 @@ export default function AdminDashboard() {
                       </div>
                       <div style={{ textAlign: 'left' }}>
                         <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent)' }}>{parseFloat(inv.total).toFixed(2)} ج</div>
-                        <span className={`badge badge-${inv.payment_method==='wallet'?'info':'warning'}`} style={{ fontSize: 10 }}>{inv.payment_method==='wallet'?'محفظة':'كاش'}</span>
+                        {parseFloat(inv.wallet_paid||0)>0 && parseFloat(inv.cash_paid||0)>0
+                          ? <><span className="badge badge-info" style={{fontSize:10}}>💳 {parseFloat(inv.wallet_paid).toFixed(0)} ج</span><span className="badge badge-warning" style={{fontSize:10,marginRight:3}}>💵 {parseFloat(inv.cash_paid).toFixed(0)} ج</span></>
+                          : <span className={`badge badge-${inv.payment_method==='wallet'?'info':'warning'}`} style={{fontSize:10}}>{inv.payment_method==='wallet'?'💳 محفظة':'💵 كاش'}</span>
+                        }
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 11, color: 'var(--muted)' }}>
@@ -672,3 +685,4 @@ export default function AdminDashboard() {
     </div>
   );
 }
+
