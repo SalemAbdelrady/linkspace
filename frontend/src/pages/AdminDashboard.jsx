@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 
 // ── NumberInput ───────────────────────────────────────────────────────
 function NumberInput({ value, onChange, min = 1, step = 1, suffix = '' }) {
