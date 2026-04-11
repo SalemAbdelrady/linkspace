@@ -36,7 +36,7 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
     return res.status(400).json({ error: 'بيانات ناقصة' });
   }
 
-  const client = await db.connect();
+  const client = await db.pool.connect();
   try {
     await client.query('BEGIN');
 
