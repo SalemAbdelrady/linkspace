@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 
 // ── NumberInput ───────────────────────────────────────────────────────
 function NumberInput({ value, onChange, min = 1, step = 1, suffix = '' }) {
@@ -63,9 +64,9 @@ function UserModal({ u, isInSession, amounts, getAmount, setAmount, chargeWallet
         {/* QR Code */}
         <div style={{ marginBottom: 20, paddingBottom: 20, borderBottom: '1px dashed var(--border)', textAlign: 'center' }}>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>كود الدخول</div>
-          {u.qr_image ? (
+          {u.qr_code ? (
             <div style={{ display: 'inline-block', padding: 12, background: '#fff', borderRadius: 16, border: '3px solid var(--accent)', marginBottom: 10 }}>
-              <img src={u.qr_image} alt="QR Code" style={{ width: 160, height: 160, display: 'block' }} />
+              <QRCodeSVG value={u.qr_code} size={160} bgColor="#ffffff" fgColor="#000000" level="M" />
             </div>
           ) : (
             <div style={{ width: 160, height: 160, margin: '0 auto 10px', background: 'rgba(0,212,170,0.06)', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 13 }}>
