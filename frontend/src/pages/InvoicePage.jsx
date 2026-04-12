@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { couponsAPI, invoicesAPI, servicesAPI } from '../utils/api';
+import { couponsAPI, invoicesAPI, servicesAPI, sessionsAPI } from '../utils/api';
 import toast from 'react-hot-toast';
 
 function formatTime(isoString) {
@@ -22,9 +22,11 @@ export default function InvoicePage() {
   const { session, client } = location.state || {};
 
   const [servicesList,  setServicesList]  = useState([]);
+  const [serviceSearch, setServiceSearch] = useState(''); // ✅ بحث في الخدمات
   const [addedServices, setAddedServices] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState('cash'); // ✅ الافتراضي كاش
   const [note,          setNote]          = useState('');
+  const [paid,          setPaid]          = useState(false); // ✅ منع الدفع مرتين
   const [saved,         setSaved]         = useState(false);
 
   useEffect(() => {
@@ -99,6 +101,29 @@ export default function InvoicePage() {
     catch (err) { console.error('coupon use error:', err); }
   }
 
+  // ✅ الخصم من المحفظة — بيحصل مرة واحدة بس
+  async function processPayment() {
+    if (paid) return;
+    const method = getEffectiveMethod();
+    if (method === 'cash') {
+      // كاش بحت — مش محتاج endpoint
+      setPaid(true);
+      return;
+    }
+    try {
+      await sessionsAPI.pay({
+        session_id     : session.id,
+        user_id        : client.id,
+        payment_method : method,
+        cost           : total,
+      });
+      setPaid(true);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'خطأ في عملية الدفع');
+      throw err; // وقف الـ flow لو فشل
+    }
+  }
+
   // ── حفظ الفاتورة ──────────────────────────────────────────────────
   async function saveInvoice() {
     if (saved) return;
@@ -145,18 +170,20 @@ export default function InvoicePage() {
   async function handlePrint() {
     try {
       await markCouponUsed();
-      await saveInvoice(); // ✅ الخصم والحفظ هنا في نفس الوقت
+      await processPayment(); // ✅ الخصم هنا
+      await saveInvoice();
       window.print();
       toast.success('تمت طباعة الفاتورة');
-    } catch { }
+    } catch { /* processPayment رفع error بالفعل */ }
   }
 
   async function handleDone() {
     try {
       await markCouponUsed();
-      await saveInvoice(); // ✅ الخصم والحفظ هنا في نفس الوقت
+      await processPayment(); // ✅ الخصم هنا
+      await saveInvoice();
       navigate('/scanner');
-    } catch { }
+    } catch { /* processPayment رفع error بالفعل */ }
   }
 
   // ── مكون حالة الرصيد ──────────────────────────────────────────────
@@ -342,16 +369,33 @@ export default function InvoicePage() {
           {servicesList.length === 0 ? (
             <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 16, fontSize: 13, marginBottom: 16 }}>جارٍ تحميل الخدمات...</div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
-              {servicesList.map(s => (
-                <button key={s.id} onClick={() => addService(s)}
-                  style={{ padding: '10px 8px', borderRadius: 10, border: '1px solid', background: addedServices.find(x => x.id === s.id) ? 'rgba(0,212,170,0.1)' : 'transparent', borderColor: addedServices.find(x => x.id === s.id) ? 'var(--accent)' : 'var(--border)', cursor: 'pointer', textAlign: 'center' }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{s.name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--accent)' }}>{s.price} ج</div>
-                  {addedServices.find(x => x.id === s.id) && <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 2 }}>×{addedServices.find(x => x.id === s.id).qty}</div>}
-                </button>
-              ))}
-            </div>
+            <>
+              {/* ✅ شريط بحث يظهر دائماً */}
+              <input
+                className="input-field"
+                placeholder="🔍 ابحث عن خدمة أو مشروب..."
+                value={serviceSearch}
+                onChange={e => setServiceSearch(e.target.value)}
+                style={{ marginBottom: 10 }}
+              />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
+                {servicesList
+                  .filter(s => !serviceSearch || s.name.toLowerCase().includes(serviceSearch.toLowerCase()))
+                  .map(s => (
+                    <button key={s.id} onClick={() => addService(s)}
+                      style={{ padding: '10px 8px', borderRadius: 10, border: '1px solid', background: addedServices.find(x => x.id === s.id) ? 'rgba(0,212,170,0.1)' : 'transparent', borderColor: addedServices.find(x => x.id === s.id) ? 'var(--accent)' : 'var(--border)', cursor: 'pointer', textAlign: 'center' }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{s.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--accent)' }}>{s.price} ج</div>
+                      {addedServices.find(x => x.id === s.id) && <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 2 }}>×{addedServices.find(x => x.id === s.id).qty}</div>}
+                    </button>
+                  ))}
+                {serviceSearch && servicesList.filter(s => s.name.toLowerCase().includes(serviceSearch.toLowerCase())).length === 0 && (
+                  <div style={{ gridColumn: '1/-1', textAlign: 'center', color: 'var(--muted)', padding: 16, fontSize: 13 }}>
+                    لا توجد نتائج لـ "{serviceSearch}"
+                  </div>
+                )}
+              </div>
+            </>
           )}
 
           <div className="section-title">كوبون خصم (اختياري)</div>
