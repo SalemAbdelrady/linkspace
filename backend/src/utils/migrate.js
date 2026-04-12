@@ -34,7 +34,6 @@ async function migrate() {
     );
   `);
 
-  // ✅ user_id nullable — الكوبون العام مش مربوط بعميل
   await db.query(`
     CREATE TABLE IF NOT EXISTS coupons (
       id           SERIAL PRIMARY KEY,
@@ -85,15 +84,36 @@ async function migrate() {
     );
   `);
 
+  // ✅ name UNIQUE — يمنع تكرار الخدمات عند كل restart
   await db.query(`
     CREATE TABLE IF NOT EXISTS services (
       id         SERIAL PRIMARY KEY,
-      name       VARCHAR(100) NOT NULL,
+      name       VARCHAR(100) UNIQUE NOT NULL,
       price      NUMERIC(10,2) NOT NULL,
       is_active  BOOLEAN NOT NULL DEFAULT true,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+  `);
+
+  // ✅ لو الجدول موجود مسبقاً بدون UNIQUE — نضيفه بدون حذف البيانات
+  await db.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'services_name_unique'
+      ) THEN
+        -- أولاً: احذف المكررات واحتفظ بأقدم نسخة
+        DELETE FROM services
+        WHERE id NOT IN (
+          SELECT MIN(id) FROM services GROUP BY name
+        );
+        -- ثانياً: أضف الـ constraint
+        ALTER TABLE services ADD CONSTRAINT services_name_unique UNIQUE (name);
+      END IF;
+    END
+    $$;
   `);
 
   await db.query(`
@@ -109,14 +129,6 @@ async function migrate() {
     );
   `);
 
-  // ✅ جدول الفواتير الكاملة
-  //    session_id  → ربط بالجلسة
-  //    services    → JSON مصفوفة الخدمات المضافة [{name, price, qty}]
-  //    coupon_code → كود الكوبون لو اتستخدم
-  //    discount_pct / discount_amount → تفاصيل الخصم
-  //    subtotal    → قبل الخصم
-  //    total       → بعد الخصم
-  //    note        → ملاحظة الموظف
   await db.query(`
     CREATE TABLE IF NOT EXISTS invoices (
       id              SERIAL PRIMARY KEY,
@@ -157,10 +169,11 @@ async function migrate() {
     ON CONFLICT (space_key) DO NOTHING;
   `);
 
+  // ✅ ON CONFLICT (name) — بيتجاهل التكرار بعد إضافة الـ UNIQUE constraint
   await db.query(`
     INSERT INTO services (name, price)
     VALUES ('قهوة',15),('شاي',10),('مياه',5),('عصير',20),('طباعة (ورقة)',3),('سكانر',5)
-    ON CONFLICT DO NOTHING;
+    ON CONFLICT (name) DO NOTHING;
   `);
 
   await db.query(`
