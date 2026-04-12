@@ -8,14 +8,20 @@ on:
 jobs:
   backup:
     runs-on: ubuntu-latest
-    container:
-      image: postgres:18-alpine
+    # ✅ مفيش container هنا — الـ runner نفسه عنده git وكل حاجة
+    # pg_dump هنثبته مباشرة على الـ runner
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ✅ تثبيت postgresql-client عشان نقدر نستخدم pg_dump
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
 
       - name: Run pg_dump
         env:
@@ -34,7 +40,10 @@ jobs:
       - name: Keep only last 30 backups
         run: |
           cd backups
-          ls -t *.sql | tail -n +31 | xargs -r rm --
+          COUNT=$(ls *.sql 2>/dev/null | wc -l)
+          if [ "$COUNT" -gt 30 ]; then
+            ls -t *.sql | tail -n +31 | xargs rm --
+          fi
           echo "🗂️ Backups kept: $(ls *.sql | wc -l)"
 
       - name: Commit and push backup
