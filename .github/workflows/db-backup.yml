@@ -22,7 +22,7 @@ jobs:
 
       - name: Run pg_dump
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_PUBLIC_URL }}
         run: |
           mkdir -p backups
           FILENAME="backups/backup_$(date +'%Y-%m-%d_%H-%M').sql"
