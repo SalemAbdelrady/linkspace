@@ -8,8 +8,6 @@ on:
 jobs:
   backup:
     runs-on: ubuntu-latest
-    # ✅ مفيش container هنا — الـ runner نفسه عنده git وكل حاجة
-    # pg_dump هنثبته مباشرة على الـ runner
 
     steps:
       - name: Checkout repo
@@ -17,11 +15,21 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # ✅ تثبيت postgresql-client عشان نقدر نستخدم pg_dump
-      - name: Install PostgreSQL client
+      # ✅ تثبيت postgresql-client-18 بالظبط عشان يتطابق مع Railway
+      - name: Install PostgreSQL 18 client
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y postgresql-client
+          # أضف PGDG repo عشان نقدر نثبت version 18
+          sudo apt-get install -y curl ca-certificates
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo gpg --dearmor -o /usr/share/keyrings/pgdg.gpg
+          echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] \
+            https://apt.postgresql.org/pub/repos/apt \
+            $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client-18
+          pg_dump --version
 
       - name: Run pg_dump
         env:
