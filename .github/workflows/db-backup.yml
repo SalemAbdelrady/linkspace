@@ -1,0 +1,49 @@
+name: Daily Database Backup
+
+on:
+  schedule:
+    - cron: '0 2 * * *'   # كل يوم الساعة 2 صباحاً UTC (4 صباحاً بتوقيت مصر)
+  workflow_dispatch:        # تشغيل يدوي من GitHub لو احتجت
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
+
+      - name: Run pg_dump
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          mkdir -p backups
+          FILENAME="backups/backup_$(date +'%Y-%m-%d_%H-%M').sql"
+          pg_dump "$DATABASE_URL" \
+            --no-owner \
+            --no-acl \
+            --format=plain \
+            > "$FILENAME"
+          echo "✅ Backup saved: $FILENAME"
+          echo "📦 Size: $(du -sh $FILENAME | cut -f1)"
+
+      - name: Keep only last 30 backups
+        run: |
+          cd backups
+          ls -t *.sql | tail -n +31 | xargs -r rm --
+          echo "🗂️ Backups kept: $(ls *.sql | wc -l)"
+
+      - name: Commit and push backup
+        run: |
+          git config user.name  "Backup Bot"
+          git config user.email "backup@linkspace.app"
+          git add backups/
+          git diff --staged --quiet || git commit -m "backup: $(date +'%Y-%m-%d %H:%M') auto backup"
+          git push
