@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { couponsAPI, invoicesAPI, servicesAPI, sessionsAPI } from '../utils/api';
+import { couponsAPI, invoicesAPI, servicesAPI } from '../utils/api';
 import toast from 'react-hot-toast';
 
 function formatTime(isoString) {
@@ -25,7 +25,6 @@ export default function InvoicePage() {
   const [addedServices, setAddedServices] = useState([]);
   const [paymentMethod, setPaymentMethod] = useState('cash'); // ✅ الافتراضي كاش
   const [note,          setNote]          = useState('');
-  const [paid,          setPaid]          = useState(false); // ✅ منع الدفع مرتين
   const [saved,         setSaved]         = useState(false);
 
   useEffect(() => {
@@ -100,29 +99,6 @@ export default function InvoicePage() {
     catch (err) { console.error('coupon use error:', err); }
   }
 
-  // ✅ الخصم من المحفظة — بيحصل مرة واحدة بس
-  async function processPayment() {
-    if (paid) return;
-    const method = getEffectiveMethod();
-    if (method === 'cash') {
-      // كاش بحت — مش محتاج endpoint
-      setPaid(true);
-      return;
-    }
-    try {
-      await sessionsAPI.pay({
-        session_id     : session.id,
-        user_id        : client.id,
-        payment_method : method,
-        cost           : total,
-      });
-      setPaid(true);
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'خطأ في عملية الدفع');
-      throw err; // وقف الـ flow لو فشل
-    }
-  }
-
   // ── حفظ الفاتورة ──────────────────────────────────────────────────
   async function saveInvoice() {
     if (saved) return;
@@ -169,20 +145,18 @@ export default function InvoicePage() {
   async function handlePrint() {
     try {
       await markCouponUsed();
-      await processPayment(); // ✅ الخصم هنا
-      await saveInvoice();
+      await saveInvoice(); // ✅ الخصم والحفظ هنا في نفس الوقت
       window.print();
       toast.success('تمت طباعة الفاتورة');
-    } catch { /* processPayment رفع error بالفعل */ }
+    } catch { }
   }
 
   async function handleDone() {
     try {
       await markCouponUsed();
-      await processPayment(); // ✅ الخصم هنا
-      await saveInvoice();
+      await saveInvoice(); // ✅ الخصم والحفظ هنا في نفس الوقت
       navigate('/scanner');
-    } catch { /* processPayment رفع error بالفعل */ }
+    } catch { }
   }
 
   // ── مكون حالة الرصيد ──────────────────────────────────────────────
