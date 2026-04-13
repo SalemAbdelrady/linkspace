@@ -187,20 +187,6 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
   }
 });
 
-// GET /api/invoices/:id — فاتورة واحدة [staff/admin]
-router.get('/:id', auth, requireRole('staff', 'admin'), async (req, res) => {
-  try {
-    const { rows } = await db.query(
-      'SELECT * FROM invoices WHERE id = $1', [req.params.id]
-    );
-    if (!rows[0]) return res.status(404).json({ error: 'فاتورة غير موجودة' });
-    res.json({ invoice: rows[0] });
-  } catch (err) {
-    res.status(500).json({ error: 'خطأ في الخادم' });
-  }
-  
-});
-
 // GET /api/invoices/my — فواتير العميل الحالي
 router.get('/my', auth, async (req, res) => {
   const page   = parseInt(req.query.page) || 1;
@@ -224,6 +210,20 @@ router.get('/my', auth, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
+});
+
+// GET /api/invoices/:id — فاتورة واحدة [staff/admin]
+router.get('/:id', auth, requireRole('staff', 'admin'), async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT * FROM invoices WHERE id = $1', [req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'فاتورة غير موجودة' });
+    res.json({ invoice: rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+  
 });
 
 module.exports = router;
