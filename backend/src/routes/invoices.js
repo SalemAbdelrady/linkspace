@@ -54,16 +54,29 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
     let walletPaid = 0;
     let cashPaid   = 0;
 
-    if (payment_method === 'wallet') {
-      // دفع كامل من المحفظة
-      walletPaid = Math.min(currentBalance, totalAmount);
-      cashPaid   = parseFloat((totalAmount - walletPaid).toFixed(2));
+    if (payment_method === 'cash') {
+      // كاش بحت — لا خصم من المحفظة
+      walletPaid = 0;
+      cashPaid   = totalAmount;
+
+    } else if (payment_method === 'wallet') {
+      // محفظة كاملة — الرصيد يكفي الفاتورة بالكامل
+      if (currentBalance < totalAmount) {
+        // لو الرصيد ما يكفيش → حوّله لـ partial تلقائياً
+        walletPaid = currentBalance;
+        cashPaid   = parseFloat((totalAmount - walletPaid).toFixed(2));
+      } else {
+        // الرصيد يكفي → خصم المبلغ بالضبط
+        walletPaid = totalAmount;
+        cashPaid   = 0;
+      }
+
     } else if (payment_method === 'partial') {
-      // رصيد جزئي + كاش
-      walletPaid = Math.min(currentBalance, totalAmount);
+      // رصيد جزئي + كاش — اخصم كل الرصيد المتاح فقط
+      walletPaid = currentBalance;
       cashPaid   = parseFloat((totalAmount - walletPaid).toFixed(2));
+
     } else {
-      // كاش فقط
       walletPaid = 0;
       cashPaid   = totalAmount;
     }
