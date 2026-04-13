@@ -14,7 +14,7 @@ router.get('/users', ...isStaffOrAdmin, async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT id, name, phone, role, balance, points,
-             qr_code,
+             qr_code, qr_image,
              is_active, created_at
       FROM users
       WHERE (name ILIKE $1 OR phone ILIKE $1) AND role = 'client'
