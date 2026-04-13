@@ -1,5 +1,6 @@
-const router = require('express').Router();
-const db = require('../config/db');
+const router  = require('express').Router();
+const db      = require('../config/db');
+const QRCode  = require('qrcode');
 const { auth, requireRole } = require('../middleware/auth');
 
 const isAdmin        = [auth, requireRole('admin')];
@@ -14,7 +15,7 @@ router.get('/users', ...isStaffOrAdmin, async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT id, name, phone, role, balance, points,
-             qr_code, qr_image,
+             qr_code,
              is_active, created_at
       FROM users
       WHERE (name ILIKE $1 OR phone ILIKE $1) AND role = 'client'
@@ -22,8 +23,18 @@ router.get('/users', ...isStaffOrAdmin, async (req, res) => {
       LIMIT $2 OFFSET $3
     `, [`%${search}%`, limit, offset]);
 
-    res.json({ users: rows });
+    // ✅ نولد qr_image من qr_code لكل عميل — نفس منطق auth.js
+    const usersWithQR = await Promise.all(
+      rows.map(async (u) => {
+        if (!u.qr_code) return { ...u, qr_image: null };
+        const qr_image = await QRCode.toDataURL(u.qr_code, { width: 200, margin: 1 });
+        return { ...u, qr_image };
+      })
+    );
+
+    res.json({ users: usersWithQR });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });

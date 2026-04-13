@@ -1,179 +1,97 @@
-const router  = require('express').Router();
-const db      = require('../config/db');
-const QRCode  = require('qrcode');
-const { auth, requireRole } = require('../middleware/auth');
+const router = require('express').Router();
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const QRCode = require('qrcode');
+const { body, validationResult } = require('express-validator');
+const db = require('../config/db');
+const { auth } = require('../middleware/auth');
 
-const isAdmin        = [auth, requireRole('admin')];
-const isStaffOrAdmin = [auth, requireRole('staff', 'admin')];
+// توليد رقم عشوائي 7 أرقام
+function generateQrCode() {
+  return Math.floor(1000000 + Math.random() * 9000000).toString();
+}
 
-// GET /api/admin/users
-router.get('/users', ...isStaffOrAdmin, async (req, res) => {
-  const { search = '', page = 1 } = req.query;
-  const limit  = 20;
-  const offset = (parseInt(page) - 1) * limit;
+// POST /api/auth/register
+router.post('/register', [
+  body('name').trim().notEmpty().withMessage('الاسم مطلوب'),
+  body('phone').matches(/^01[0125][0-9]{8}$/).withMessage('رقم موبايل غير صحيح'),
+  body('password').isLength({ min: 6 }).withMessage('كلمة السر 6 أحرف على الأقل'),
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
+  const { name, phone, password } = req.body;
 
   try {
+    const existing = await db.query('SELECT id FROM users WHERE phone = $1', [phone]);
+    if (existing.rows[0]) {
+      return res.status(409).json({ error: 'رقم الموبايل مسجل بالفعل' });
+    }
+
+    const hash = await bcrypt.hash(password, 12);
+    const qrToken = generateQrCode();
+
     const { rows } = await db.query(`
-      SELECT id, name, phone, role, balance, points,
-             qr_code,
-             is_active, created_at
-      FROM users
-      WHERE (name ILIKE $1 OR phone ILIKE $1) AND role = 'client'
-      ORDER BY created_at DESC
-      LIMIT $2 OFFSET $3
-    `, [`%${search}%`, limit, offset]);
+      INSERT INTO users (name, phone, password, role, qr_code)
+      VALUES ($1, $2, $3, 'client', $4)
+      RETURNING id, name, phone, role, balance, points, qr_code
+    `, [name, phone, hash, qrToken]);
 
-    // ✅ نولد qr_image من qr_code لكل عميل — نفس منطق auth.js
-    const usersWithQR = await Promise.all(
-      rows.map(async (u) => {
-        if (!u.qr_code) return { ...u, qr_image: null };
-        const qr_image = await QRCode.toDataURL(u.qr_code, { width: 200, margin: 1 });
-        return { ...u, qr_image };
-      })
-    );
+    const user = rows[0];
+    const qrDataUrl = await QRCode.toDataURL(qrToken, { width: 200, margin: 1 });
 
-    res.json({ users: usersWithQR });
+    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    });
+
+    res.status(201).json({ token, user: { ...user, qr_image: qrDataUrl } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
 
-// PATCH /api/admin/users/:id/wallet — charge wallet
-router.patch('/users/:id/wallet', ...isStaffOrAdmin, async (req, res) => {
-  const { amount, note } = req.body;
-  if (!amount || isNaN(amount) || amount <= 0) {
-    return res.status(400).json({ error: 'المبلغ غير صحيح' });
+// POST /api/auth/login
+router.post('/login', [
+  body('phone').notEmpty().withMessage('رقم الموبايل مطلوب'),
+  body('password').notEmpty().withMessage('كلمة السر مطلوبة'),
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
   }
 
-  try {
-    await db.query('UPDATE users SET balance = balance + $1 WHERE id = $2', [amount, req.params.id]);
-    await db.query(`
-      INSERT INTO wallet_transactions (user_id, type, amount, description)
-      VALUES ($1, 'credit', $2, $3)
-    `, [req.params.id, amount, note || 'شحن يدوي من الإدارة']);
+  const { phone, password } = req.body;
 
-    const { rows } = await db.query('SELECT balance FROM users WHERE id = $1', [req.params.id]);
-    res.json({ success: true, new_balance: rows[0].balance });
-  } catch (err) {
-    res.status(500).json({ error: 'خطأ في الخادم' });
-  }
-});
-
-// PATCH /api/admin/users/:id/points — add points
-router.patch('/users/:id/points', ...isStaffOrAdmin, async (req, res) => {
-  const { points } = req.body;
-  if (!points || isNaN(points)) return res.status(400).json({ error: 'النقاط غير صحيحة' });
-
-  try {
-    await db.query('UPDATE users SET points = points + $1 WHERE id = $2', [points, req.params.id]);
-    const { rows } = await db.query('SELECT points FROM users WHERE id = $1', [req.params.id]);
-    res.json({ success: true, new_points: rows[0].points });
-  } catch (err) {
-    res.status(500).json({ error: 'خطأ في الخادم' });
-  }
-});
-
-// PATCH /api/admin/users/:id/toggle — activate/deactivate
-router.patch('/users/:id/toggle', ...isAdmin, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'UPDATE users SET is_active = NOT is_active WHERE id = $1 RETURNING is_active',
-      [req.params.id]
+      'SELECT * FROM users WHERE phone = $1 AND is_active = true',
+      [phone]
     );
-    res.json({ is_active: rows[0].is_active });
+    const user = rows[0];
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return res.status(401).json({ error: 'رقم الموبايل أو كلمة السر غلط' });
+    }
+
+    const qrDataUrl = await QRCode.toDataURL(user.qr_code, { width: 200, margin: 1 });
+    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    });
+
+    const { password: _, ...safeUser } = user;
+    res.json({ token, user: { ...safeUser, qr_image: qrDataUrl } });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
 
-// GET /api/admin/reports/daily
-router.get('/reports/daily', ...isStaffOrAdmin, async (req, res) => {
-  const date = req.query.date || new Date().toISOString().split('T')[0];
-
-  try {
-    const { rows: revenue } = await db.query(`
-      SELECT
-        COUNT(*) AS visits,
-        COALESCE(SUM(cost), 0) AS total_revenue,
-        COALESCE(AVG(duration_min), 0) AS avg_duration
-      FROM sessions
-      WHERE DATE(check_in) = $1 AND status = 'completed'
-    `, [date]);
-
-    const { rows: byHour } = await db.query(`
-      SELECT EXTRACT(HOUR FROM check_in) AS hour, COUNT(*) AS visits
-      FROM sessions
-      WHERE DATE(check_in) = $1
-      GROUP BY hour ORDER BY hour
-    `, [date]);
-
-    const { rows: activeNow } = await db.query(`
-      SELECT COUNT(*) AS count FROM sessions WHERE status = 'active'
-    `);
-
-    res.json({ date, summary: revenue[0], by_hour: byHour, active_now: activeNow[0].count });
-  } catch (err) {
-    res.status(500).json({ error: 'خطأ في الخادم' });
-  }
-});
-
-// GET /api/admin/reports/monthly
-router.get('/reports/monthly', ...isStaffOrAdmin, async (req, res) => {
-  const year  = req.query.year  || new Date().getFullYear();
-  const month = req.query.month || new Date().getMonth() + 1;
-
-  try {
-    const { rows: daily } = await db.query(`
-      SELECT
-        DATE(check_in) AS day,
-        COUNT(*) AS visits,
-        COALESCE(SUM(cost), 0) AS revenue
-      FROM sessions
-      WHERE EXTRACT(YEAR  FROM check_in) = $1
-        AND EXTRACT(MONTH FROM check_in) = $2
-        AND status = 'completed'
-      GROUP BY day ORDER BY day
-    `, [year, month]);
-
-    const { rows: totals } = await db.query(`
-      SELECT
-        COUNT(*) AS total_visits,
-        COALESCE(SUM(cost), 0) AS total_revenue,
-        COALESCE(AVG(duration_min), 0) AS avg_duration
-      FROM sessions
-      WHERE EXTRACT(YEAR  FROM check_in) = $1
-        AND EXTRACT(MONTH FROM check_in) = $2
-        AND status = 'completed'
-    `, [year, month]);
-
-    res.json({ year, month, daily, totals: totals[0] });
-  } catch (err) {
-    res.status(500).json({ error: 'خطأ في الخادم' });
-  }
-});
-
-// GET/PUT /api/admin/prices
-router.get('/prices', ...isStaffOrAdmin, async (req, res) => {
-  const { rows } = await db.query('SELECT * FROM price_settings ORDER BY id');
-  res.json({ prices: rows });
-});
-
-router.put('/prices/:id', ...isAdmin, async (req, res) => {
-  const { price_per_hr } = req.body;
-  if (!price_per_hr || isNaN(price_per_hr) || price_per_hr <= 0) {
-    return res.status(400).json({ error: 'السعر غير صحيح' });
-  }
-
-  try {
-    const { rows } = await db.query(`
-      UPDATE price_settings SET price_per_hr = $1, updated_at = NOW()
-      WHERE id = $2 RETURNING *
-    `, [price_per_hr, req.params.id]);
-    res.json({ price: rows[0] });
-  } catch (err) {
-    res.status(500).json({ error: 'خطأ في الخادم' });
-  }
+// GET /api/auth/me
+router.get('/me', auth, async (req, res) => {
+  const qrDataUrl = await QRCode.toDataURL(req.user.qr_code, { width: 200, margin: 1 });
+  res.json({ user: { ...req.user, qr_image: qrDataUrl } });
 });
 
 module.exports = router;
