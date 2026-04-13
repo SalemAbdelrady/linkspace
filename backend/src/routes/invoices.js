@@ -198,6 +198,32 @@ router.get('/:id', auth, requireRole('staff', 'admin'), async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
+  
+});
+
+// GET /api/invoices/my — فواتير العميل الحالي
+router.get('/my', auth, async (req, res) => {
+  const page   = parseInt(req.query.page) || 1;
+  const limit  = 10;
+  const offset = (page - 1) * limit;
+
+  try {
+    const { rows } = await db.query(`
+      SELECT * FROM invoices
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      LIMIT $2 OFFSET $3
+    `, [req.user.id, limit, offset]);
+
+    const { rows: countRows } = await db.query(
+      'SELECT COUNT(*) FROM invoices WHERE user_id = $1',
+      [req.user.id]
+    );
+
+    res.json({ invoices: rows, total: parseInt(countRows[0].count), page, limit });
+  } catch (err) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
 module.exports = router;

@@ -91,6 +91,7 @@ export const invoicesAPI = {
   create:  (body)   => api.post('/invoices', body),
   getAll:  (params) => api.get('/invoices', { params }),
   getOne:  (id)     => api.get(`/invoices/${id}`),
+  getClientInvoices: (params) => api.get('/invoices/my', { params }),
 };
 
 // ✅ export default في الآخر
