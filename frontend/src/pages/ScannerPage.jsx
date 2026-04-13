@@ -1,38 +1,44 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { sessionsAPI } from '../utils/api';
+import { sessionsAPI, spacesAPI } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Html5Qrcode } from 'html5-qrcode';
 
+// أيقونات المساحات
+const SPACE_ICONS = { cowork: '🖥️', meeting: '🤝', lessons: '📚' };
+
 export default function ScannerPage() {
   const { logout } = useAuth();
   const navigate = useNavigate();
-  const [result, setResult] = useState(null);
-  const [scanning, setScanning] = useState(false);
-  const scanningRef = useRef(false);
-  const [manualCode, setManualCode] = useState('');
+  const [result,        setResult]        = useState(null);
+  const [scanning,      setScanning]      = useState(false);
+  const scanningRef     = useRef(false);
+  const [manualCode,    setManualCode]    = useState('');
   const [activeClients, setActiveClients] = useState([]);
-  const [cameraActive, setCameraActive] = useState(false);
-  const [scanMode, setScanMode] = useState('device');
-  const [tick, setTick] = useState(0); // ✅ عشان الجدول يتحدث كل ثانية
-  const scanModeRef = useRef('device');
-  const inputRef = useRef(null);
-  const html5QrRef = useRef(null);
-  const lastScannedRef = useRef('');
+  const [cameraActive,  setCameraActive]  = useState(false);
+  const [scanMode,      setScanMode]      = useState('device');
+  const [tick,          setTick]          = useState(0);
+
+  // ✅ المساحات والمساحة المختارة
+  const [spaces,        setSpaces]        = useState([]);
+  const [selectedSpace, setSelectedSpace] = useState('cowork');
+
+  const scanModeRef        = useRef('device');
+  const inputRef           = useRef(null);
+  const html5QrRef         = useRef(null);
+  const lastScannedRef     = useRef('');
   const lastScannedTimeRef = useRef(0);
 
   const focusInput = useCallback(() => {
     setTimeout(() => inputRef.current?.focus(), 100);
   }, []);
 
-  function changeScanMode(mode) {
-    scanModeRef.current = mode;
-    setScanMode(mode);
-  }
+  function changeScanMode(mode) { scanModeRef.current = mode; setScanMode(mode); }
 
   useEffect(() => {
     loadActive();
+    loadSpaces();
     focusInput();
     const handleClick = () => { if (scanModeRef.current === 'device') focusInput(); };
     document.addEventListener('click', handleClick);
@@ -40,20 +46,23 @@ export default function ScannerPage() {
   }, [focusInput]);
 
   useEffect(() => {
-    if (scanMode === 'camera') {
-      startCamera();
-    } else {
-      stopCamera();
-      focusInput();
-    }
+    if (scanMode === 'camera') { startCamera(); }
+    else { stopCamera(); focusInput(); }
     return () => stopCamera();
   }, [scanMode]);
 
-  // ✅ تحديث الجدول كل ثانية (عشان المدة والتكلفة تتغير live)
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(id);
   }, []);
+
+  // ✅ جيب المساحات من الـ API
+  async function loadSpaces() {
+    try {
+      const { data } = await spacesAPI.getAll();
+      setSpaces(data.spaces || []);
+    } catch { }
+  }
 
   async function startCamera() {
     try {
@@ -65,10 +74,7 @@ export default function ScannerPage() {
         async (decodedText) => {
           if (scanningRef.current) return;
           const now = Date.now();
-          if (
-            decodedText === lastScannedRef.current &&
-            now - lastScannedTimeRef.current < 5000
-          ) return;
+          if (decodedText === lastScannedRef.current && now - lastScannedTimeRef.current < 5000) return;
           await handleScan(decodedText);
         },
         () => {}
@@ -89,33 +95,28 @@ export default function ScannerPage() {
   }
 
   async function loadActive() {
-    try {
-      const { data } = await sessionsAPI.active();
-      setActiveClients(data.sessions);
-    } catch { }
+    try { const { data } = await sessionsAPI.active(); setActiveClients(data.sessions); } catch { }
   }
 
   async function handleScan(qrCode) {
     if (!qrCode.trim() || scanningRef.current) return;
 
-    lastScannedRef.current = qrCode.trim();
+    lastScannedRef.current     = qrCode.trim();
     lastScannedTimeRef.current = Date.now();
-
-    scanningRef.current = true;
+    scanningRef.current        = true;
     setScanning(true);
 
     try {
-      const { data } = await sessionsAPI.scan(qrCode.trim());
+      // ✅ بيبعت space_key مع كل scan
+      const { data } = await sessionsAPI.scan(qrCode.trim(), selectedSpace);
       if (scanModeRef.current === 'camera') await stopCamera();
       setResult(data);
       setManualCode('');
       loadActive();
 
       if (data.action === 'checkin') {
-        toast.success(`تم تسجيل دخول ${data.client.name}`);
-        setTimeout(() => {
-          if (scanModeRef.current === 'camera') startCamera();
-        }, 2000);
+        toast.success(`تم تسجيل دخول ${data.client.name} — ${data.spaceName}`);
+        setTimeout(() => { if (scanModeRef.current === 'camera') startCamera(); }, 2000);
       } else {
         toast.success(`تم تسجيل خروج ${data.client.name}`);
         navigate('/invoice', { state: { session: data.session, client: data.client } });
@@ -130,24 +131,13 @@ export default function ScannerPage() {
     }
   }
 
-  // ✅ نفس منطق الـ Backend والـ ClientDashboard:
-  //    Math.ceil  → أي كسر من ساعة = ساعة كاملة
-  //    Math.max 1 → الحد الأدنى ساعة واحدة دايماً
-  //    Math.min 4 → لا يتجاوز الحد الأقصى
-  //
-  //  أمثلة (pricePerHr = 30):
-  //    0  → 59  دقيقة : 1 ساعة = 30 ج
-  //    60 → 119 دقيقة : 2 ساعة = 60 ج
-  //   120 → 179 دقيقة : 3 ساعة = 90 ج
-  //   180 → 240 دقيقة : 4 ساعة = 120 ج  ← يقف هنا
   function calcCost(checkIn, pricePerHr, maxHours = 4) {
-    const elapsedMs  = Date.now() - new Date(checkIn);
-    const rawHours   = elapsedMs / 3600000;
+    const elapsedMs   = Date.now() - new Date(checkIn);
+    const rawHours    = elapsedMs / 3600000;
     const billedHours = Math.min(Math.max(Math.ceil(rawHours), 1), maxHours);
     return (billedHours * pricePerHr).toFixed(2);
   }
 
-  // ✅ عرض الوقت المنقضي الفعلي (ساعة:دقيقة:ثانية) — بيتحدث كل ثانية بسبب tick
   function elapsed(checkIn) {
     const totalSec = Math.floor((Date.now() - new Date(checkIn)) / 1000);
     const h = Math.floor(totalSec / 3600);
@@ -156,10 +146,11 @@ export default function ScannerPage() {
     return [h, m, s].map(v => String(v).padStart(2, '0')).join(':') + ' س';
   }
 
-  // ✅ عرض المدة كساعات كاملة محاسَب عليها (للـ checkout result)
   function getBilledHours(durationMin, maxHours = 4) {
     return Math.min(Math.max(Math.ceil(durationMin / 60), 1), maxHours);
   }
+
+  const currentSpace = spaces.find(s => s.space_key === selectedSpace);
 
   return (
     <div style={{ minHeight: '100vh', padding: 16 }}>
@@ -177,6 +168,47 @@ export default function ScannerPage() {
         </div>
       </div>
 
+      {/* ✅ اختيار نوع المساحة — قبل المسح */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8, fontWeight: 600 }}>نوع المساحة</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {spaces.length === 0 ? (
+            // Fallback لو المساحات لم تُحمَّل بعد
+            [
+              { space_key: 'cowork',  name: 'منطقة العمل المشتركة', first_hour: 30  },
+              { space_key: 'meeting', name: 'غرفة الاجتماعات',      first_hour: 150 },
+              { space_key: 'lessons', name: 'غرفة الدروس',           first_hour: 200 },
+            ].map(s => (
+              <button key={s.space_key} onClick={() => setSelectedSpace(s.space_key)}
+                style={{ flex: 1, padding: '10px 8px', borderRadius: 12, border: '1px solid', fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', textAlign: 'center', borderColor: selectedSpace === s.space_key ? 'var(--accent)' : 'var(--border)', background: selectedSpace === s.space_key ? 'rgba(0,212,170,0.12)' : 'transparent', color: selectedSpace === s.space_key ? 'var(--accent)' : 'var(--muted)' }}>
+                <div style={{ fontSize: 18, marginBottom: 4 }}>{SPACE_ICONS[s.space_key]}</div>
+                <div style={{ fontSize: 11 }}>{s.name}</div>
+                <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 2 }}>{s.first_hour} ج/س</div>
+              </button>
+            ))
+          ) : (
+            spaces.map(s => (
+              <button key={s.space_key} onClick={() => setSelectedSpace(s.space_key)}
+                style={{ flex: 1, padding: '10px 8px', borderRadius: 12, border: '1px solid', fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', textAlign: 'center', borderColor: selectedSpace === s.space_key ? 'var(--accent)' : 'var(--border)', background: selectedSpace === s.space_key ? 'rgba(0,212,170,0.12)' : 'transparent', color: selectedSpace === s.space_key ? 'var(--accent)' : 'var(--muted)' }}>
+                <div style={{ fontSize: 18, marginBottom: 4 }}>{SPACE_ICONS[s.space_key] || '🏢'}</div>
+                <div style={{ fontSize: 11 }}>{s.name}</div>
+                <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 2 }}>{s.first_hour} ج/س</div>
+              </button>
+            ))
+          )}
+        </div>
+        {/* ✅ معلومات المساحة المختارة */}
+        {currentSpace && (
+          <div style={{ marginTop: 8, padding: '6px 12px', background: 'rgba(0,212,170,0.06)', borderRadius: 8, fontSize: 12, color: 'var(--muted)', display: 'flex', justifyContent: 'space-between' }}>
+            <span>{SPACE_ICONS[selectedSpace]} {currentSpace.name}</span>
+            <span>
+              أول ساعة: <strong style={{ color: 'var(--accent)' }}>{currentSpace.first_hour} ج</strong>
+              &nbsp;·&nbsp; الحد الأقصى: <strong style={{ color: 'var(--accent)' }}>{currentSpace.max_hours} ساعة</strong>
+            </span>
+          </div>
+        )}
+      </div>
+
       {/* Toggle Mode */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         {[['device', '📡 ماسح ضوئي'], ['camera', '📷 كاميرا']].map(([mode, label]) => (
@@ -191,9 +223,7 @@ export default function ScannerPage() {
       {scanMode === 'camera' && (
         <div style={{ marginBottom: 16 }}>
           <div id="camera-reader" style={{ width: '100%', borderRadius: 16, overflow: 'hidden', border: '2px solid var(--accent)' }} />
-          {!cameraActive && (
-            <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 20, fontSize: 13 }}>جارٍ تشغيل الكاميرا...</div>
-          )}
+          {!cameraActive && <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 20, fontSize: 13 }}>جارٍ تشغيل الكاميرا...</div>}
         </div>
       )}
 
@@ -209,9 +239,11 @@ export default function ScannerPage() {
               <div key={i} style={{ position: 'absolute', width: 20, height: 20, borderColor: 'var(--accent)', borderStyle: 'solid', ...(Object.fromEntries(s.split(';').map(p => p.split(':')))) }} />
             ))}
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>{scanning ? '⏳' : '📡'}</div>
+              <div style={{ fontSize: 32, marginBottom: 4 }}>{scanning ? '⏳' : (SPACE_ICONS[selectedSpace] || '📡')}</div>
               <div style={{ fontSize: 13, color: 'var(--accent)', opacity: 0.8 }}>{scanning ? 'جارٍ المسح...' : 'جاهز للمسح'}</div>
-              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{scanning ? '' : 'امسح الـ QR الآن'}</div>
+              {!scanning && currentSpace && (
+                <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>{currentSpace.name}</div>
+              )}
             </div>
             <div style={{ position: 'absolute', width: '80%', height: 2, background: 'var(--accent)', opacity: 0.7, animation: 'scanLine 2s ease-in-out infinite' }} />
           </div>
@@ -242,7 +274,18 @@ export default function ScannerPage() {
           <div style={{ fontWeight: 700, fontSize: 16, color: result.action === 'checkin' ? 'var(--success)' : 'var(--warning)', marginBottom: 4 }}>
             {result.action === 'checkin' ? 'تم تسجيل الدخول' : 'انتهاء الجلسة'}
           </div>
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>{result.client.name}</div>
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>{result.client.name}</div>
+          {/* ✅ اسم المساحة في الـ result */}
+          {result.spaceName && (
+            <div style={{ fontSize: 12, color: 'var(--accent)', marginBottom: 8 }}>
+              {SPACE_ICONS[result.spaceKey] || '🏢'} {result.spaceName}
+            </div>
+          )}
+          {result.session?.spaceName && (
+            <div style={{ fontSize: 12, color: 'var(--accent)', marginBottom: 8 }}>
+              {SPACE_ICONS[result.session.spaceKey] || '🏢'} {result.session.spaceName}
+            </div>
+          )}
           {result.action === 'checkin' ? (
             <>
               <div className="stat-row"><span className="stat-label">الرصيد</span><span className="stat-val" style={{ color: 'var(--accent)' }}>{parseFloat(result.client.balance).toFixed(2)} ج</span></div>
@@ -250,18 +293,14 @@ export default function ScannerPage() {
             </>
           ) : (
             <>
-              {/* ✅ عرض الساعات الكاملة المحاسَب عليها مش الدقائق الخام */}
               <div className="stat-row">
                 <span className="stat-label">المدة</span>
                 <span className="stat-val">
-                  {getBilledHours(result.session.durationMin)} ساعة
-                  <span style={{ fontSize: 11, color: 'var(--muted)', marginRight: 6 }}>
-                    ({result.session.durationMin} د فعلية)
-                  </span>
+                  {getBilledHours(result.session.durationMin, result.session.maxHours)} ساعة
+                  <span style={{ fontSize: 11, color: 'var(--muted)', marginRight: 6 }}>({result.session.durationMin} د فعلية)</span>
                 </span>
               </div>
               <div className="stat-row"><span className="stat-label">التكلفة</span><span className="stat-val" style={{ color: 'var(--warning)', fontSize: 18 }}>{result.session.cost} ج</span></div>
-              <div className="stat-row"><span className="stat-label">الدفع</span><span className={`badge badge-${result.session.paymentMethod === 'wallet' ? 'info' : 'warning'}`}>{result.session.paymentMethod === 'wallet' ? 'من المحفظة' : 'كاش'}</span></div>
               <div className="stat-row" style={{ border: 'none' }}><span className="stat-label">نقاط مكتسبة</span><span className="stat-val" style={{ color: 'var(--success)' }}>+{result.session.pointsEarned} نقطة</span></div>
             </>
           )}
@@ -276,7 +315,9 @@ export default function ScannerPage() {
           <div style={{ padding: 16, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>لا يوجد عملاء نشطون</div>
         ) : (
           <table className="data-table">
-            <thead><tr><th>العميل</th><th>المدة</th><th>التكلفة المتوقعة</th></tr></thead>
+            <thead>
+              <tr><th>العميل</th><th>المساحة</th><th>المدة</th><th>التكلفة المتوقعة</th></tr>
+            </thead>
             <tbody>
               {activeClients.map(s => (
                 <tr key={s.id}>
@@ -284,11 +325,14 @@ export default function ScannerPage() {
                     <div style={{ fontWeight: 600 }}>{s.name}</div>
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>{s.phone}</div>
                   </td>
-                  {/* ✅ المدة الفعلية بتتحدث كل ثانية */}
+                  {/* ✅ اسم المساحة في جدول النشطين */}
+                  <td style={{ fontSize: 12 }}>
+                    <span>{SPACE_ICONS[s.space_key] || '🏢'}</span>
+                    <span style={{ color: 'var(--muted)', marginRight: 4 }}>{s.space_name || 'منطقة العمل'}</span>
+                  </td>
                   <td style={{ fontFamily: 'var(--mono)' }}>{elapsed(s.check_in)}</td>
-                  {/* ✅ التكلفة بالساعة الكاملة — تقفز 30 / 60 / 90 / 120 بس */}
                   <td style={{ color: 'var(--warning)', fontWeight: 600 }}>
-                    {calcCost(s.check_in, parseFloat(s.price_per_hr))} ج
+                    {calcCost(s.check_in, parseFloat(s.price_per_hr), s.max_hours || 4)} ج
                   </td>
                 </tr>
               ))}

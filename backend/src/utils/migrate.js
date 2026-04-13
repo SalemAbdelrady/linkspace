@@ -20,6 +20,10 @@ async function migrate() {
   `);
 
   await db.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS qr_image TEXT;
+  `);
+
+  await db.query(`
     CREATE TABLE IF NOT EXISTS sessions (
       id             SERIAL PRIMARY KEY,
       user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -28,11 +32,16 @@ async function migrate() {
       duration_min   INTEGER,
       price_per_hr   NUMERIC(10,2) NOT NULL,
       cost           NUMERIC(10,2),
-      payment_method VARCHAR(20) DEFAULT 'wallet',
+      payment_method VARCHAR(20) DEFAULT 'cash',
       status         VARCHAR(20) NOT NULL DEFAULT 'active',
       created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  // ✅ إضافة space_key و space_name للجلسات
+  await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS space_key  VARCHAR(30) NOT NULL DEFAULT 'cowork';`);
+  await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS space_name VARCHAR(100) NOT NULL DEFAULT 'منطقة العمل المشتركة';`);
+  await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS max_hours  INTEGER NOT NULL DEFAULT 4;`);
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS coupons (
@@ -45,10 +54,7 @@ async function migrate() {
       created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
-
-  await db.query(`
-    ALTER TABLE coupons ALTER COLUMN user_id DROP NOT NULL;
-  `);
+  await db.query(`ALTER TABLE coupons ALTER COLUMN user_id DROP NOT NULL;`);
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS wallet_transactions (
@@ -84,7 +90,6 @@ async function migrate() {
     );
   `);
 
-  // ✅ name UNIQUE — يمنع تكرار الخدمات عند كل restart
   await db.query(`
     CREATE TABLE IF NOT EXISTS services (
       id         SERIAL PRIMARY KEY,
@@ -96,24 +101,14 @@ async function migrate() {
     );
   `);
 
-  // ✅ لو الجدول موجود مسبقاً بدون UNIQUE — نضيفه بدون حذف البيانات
   await db.query(`
     DO $$
     BEGIN
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conname = 'services_name_unique'
-      ) THEN
-        -- أولاً: احذف المكررات واحتفظ بأقدم نسخة
-        DELETE FROM services
-        WHERE id NOT IN (
-          SELECT MIN(id) FROM services GROUP BY name
-        );
-        -- ثانياً: أضف الـ constraint
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'services_name_unique') THEN
+        DELETE FROM services WHERE id NOT IN (SELECT MIN(id) FROM services GROUP BY name);
         ALTER TABLE services ADD CONSTRAINT services_name_unique UNIQUE (name);
       END IF;
-    END
-    $$;
+    END $$;
   `);
 
   await db.query(`
@@ -137,6 +132,8 @@ async function migrate() {
       user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       client_name     VARCHAR(100) NOT NULL,
       client_phone    VARCHAR(20) NOT NULL,
+      space_key       VARCHAR(30) NOT NULL DEFAULT 'cowork',
+      space_name      VARCHAR(100) NOT NULL DEFAULT 'منطقة العمل المشتركة',
       session_cost    NUMERIC(10,2) NOT NULL DEFAULT 0,
       duration_min    INTEGER,
       price_per_hr    NUMERIC(10,2),
@@ -152,6 +149,9 @@ async function migrate() {
       created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
+
+  await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_key  VARCHAR(30) NOT NULL DEFAULT 'cowork';`);
+  await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_name VARCHAR(100) NOT NULL DEFAULT 'منطقة العمل المشتركة';`);
 
   // ── Default data ──────────────────────────────────────────────────
   await db.query(`
@@ -169,7 +169,6 @@ async function migrate() {
     ON CONFLICT (space_key) DO NOTHING;
   `);
 
-  // ✅ ON CONFLICT (name) — بيتجاهل التكرار بعد إضافة الـ UNIQUE constraint
   await db.query(`
     INSERT INTO services (name, price)
     VALUES ('قهوة',15),('شاي',10),('مياه',5),('عصير',20),('طباعة (ورقة)',3),('سكانر',5)
