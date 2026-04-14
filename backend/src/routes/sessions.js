@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db = require('../config/db');
 const { auth, requireRole } = require('../middleware/auth');
 
-// ✅ جيب بيانات المساحة (السعر + max_hours + الاسم) بناءً على space_key
+// ✅ جيب بيانات المساحة بناءً على space_key
 async function getSpaceSettings(spaceKey = 'cowork') {
   const { rows } = await db.query(
     `SELECT name, first_hour, extra_hour, max_hours
@@ -12,7 +12,7 @@ async function getSpaceSettings(spaceKey = 'cowork') {
   return rows[0] || { name: 'منطقة العمل المشتركة', first_hour: 30, extra_hour: 30, max_hours: 4 };
 }
 
-// ✅ حساب التكلفة — ساعة كاملة دايماً، الحد الأدنى ساعة، الحد الأقصى max_hours
+// ✅ حساب التكلفة بالساعة الكاملة مع max_hours لكل مساحة
 function calculateCost(durationMin, pricePerHr, maxHours = 4) {
   const rawHours    = durationMin / 60;
   const billedHours = Math.min(Math.max(Math.ceil(rawHours), 1), maxHours);
@@ -20,7 +20,7 @@ function calculateCost(durationMin, pricePerHr, maxHours = 4) {
 }
 
 // POST /api/sessions/scan
-// body: { qr_code, space_key? }  ← space_key اختياري، الافتراضي 'cowork'
+// body: { qr_code, space_key? }
 router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
   const { qr_code, space_key = 'cowork' } = req.body;
   if (!qr_code) return res.status(400).json({ error: 'QR Code مطلوب' });
@@ -31,9 +31,7 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
 
     const { rows: userRows } = await client.query(
       `SELECT id, name, phone, balance, points
-       FROM users
-       WHERE qr_code = $1 AND is_active = true
-       FOR UPDATE`,
+       FROM users WHERE qr_code = $1 AND is_active = true FOR UPDATE`,
       [qr_code]
     );
     const user = userRows[0];
@@ -55,9 +53,9 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
       const checkIn     = new Date(session.check_in);
       const durationMin = Math.ceil((checkOut - checkIn) / 60000);
 
-      // ✅ استخدم max_hours المحفوظ في الجلسة نفسها
-      const maxHours = session.max_hours || 4;
-      const cost     = calculateCost(durationMin, session.price_per_hr, maxHours);
+      // ✅ استخدم max_hours المحفوظ في الجلسة (الخاص بالمساحة المحجوزة)
+      const maxHours     = parseInt(session.max_hours) || 4;
+      const cost         = calculateCost(durationMin, session.price_per_hr, maxHours);
       const pointsEarned = Math.floor(cost / 10);
 
       await client.query(`
@@ -89,6 +87,7 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
           pricePerHr  : session.price_per_hr,
           spaceKey    : session.space_key,
           spaceName   : session.space_name,
+          maxHours,               // ✅ بيجي للـ InvoicePage عشان يحسب billedHours صح
           checkIn     : session.check_in,
           checkOut    : checkOutISO,
         },
@@ -96,7 +95,6 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
 
     } else {
       // ─── CHECK-IN ─────────────────────────────────────────────────
-      // ✅ جيب بيانات المساحة المختارة
       const space = await getSpaceSettings(space_key);
 
       await client.query(`
@@ -125,7 +123,7 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
   }
 });
 
-// POST /api/sessions/pay — خصم الرصيد بعد اختيار الموظف
+// POST /api/sessions/pay
 router.post('/pay', auth, requireRole('staff', 'admin'), async (req, res) => {
   const { session_id, user_id, payment_method, cost } = req.body;
   if (!session_id || !user_id || !payment_method || cost === undefined) {
@@ -196,7 +194,7 @@ router.get('/history', auth, async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT id, check_in, check_out, duration_min, cost,
-             payment_method, status, space_key, space_name
+             payment_method, status, space_key, space_name, max_hours
       FROM sessions WHERE user_id = $1
       ORDER BY check_in DESC LIMIT $2 OFFSET $3
     `, [req.user.id, limit, offset]);
@@ -214,7 +212,8 @@ router.get('/history', auth, async (req, res) => {
 router.get('/active', auth, requireRole('staff', 'admin'), async (req, res) => {
   try {
     const { rows } = await db.query(`
-      SELECT s.id, s.check_in, s.price_per_hr, s.space_key, s.space_name, s.max_hours,
+      SELECT s.id, s.check_in, s.price_per_hr,
+             s.space_key, s.space_name, s.max_hours,
              u.id as user_id, u.name, u.phone, u.balance,
              EXTRACT(EPOCH FROM (NOW() - s.check_in))/60 AS elapsed_min
       FROM sessions s
