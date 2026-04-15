@@ -7,6 +7,8 @@ const { auth, requireRole } = require('../middleware/auth');
   try {
     await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS wallet_paid NUMERIC(10,2) NOT NULL DEFAULT 0`);
     await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS cash_paid   NUMERIC(10,2) NOT NULL DEFAULT 0`);
+    await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_key   VARCHAR(20)   DEFAULT 'cowork'`);
+    await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_name  VARCHAR(100)  DEFAULT 'منطقة العمل المشتركة'`);
   } catch (e) { /* تجاهل — الأعمدة موجودة مسبقاً */ }
 })();
 
@@ -18,6 +20,8 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
     user_id,
     client_name,
     client_phone,
+    space_key,
+    space_name,
     session_cost,
     duration_min,
     price_per_hr,
@@ -102,6 +106,7 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
       INSERT INTO invoices (
         invoice_number, session_id, user_id,
         client_name, client_phone,
+        space_key, space_name,
         session_cost, duration_min, price_per_hr,
         services, services_cost,
         coupon_code, discount_pct, discount_amount,
@@ -109,8 +114,9 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
         wallet_paid, cash_paid,
         payment_method, note
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,
-        $9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19
+        $1,$2,$3,$4,$5,$6,$7,
+        $8,$9,$10,$11,$12,
+        $13,$14,$15,$16,$17,$18,$19,$20,$21
       )
       ON CONFLICT (invoice_number) DO NOTHING
       RETURNING *
@@ -120,6 +126,8 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
       user_id,
       client_name,
       client_phone,
+      space_key      || 'cowork',
+      space_name     || 'منطقة العمل المشتركة',
       session_cost   || 0,
       duration_min   || 0,
       price_per_hr   || 0,
@@ -187,31 +195,6 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
   }
 });
 
-// GET /api/invoices/my — فواتير العميل الحالي
-router.get('/my', auth, async (req, res) => {
-  const page   = parseInt(req.query.page) || 1;
-  const limit  = 10;
-  const offset = (page - 1) * limit;
-
-  try {
-    const { rows } = await db.query(`
-      SELECT * FROM invoices
-      WHERE user_id = $1
-      ORDER BY created_at DESC
-      LIMIT $2 OFFSET $3
-    `, [req.user.id, limit, offset]);
-
-    const { rows: countRows } = await db.query(
-      'SELECT COUNT(*) FROM invoices WHERE user_id = $1',
-      [req.user.id]
-    );
-
-    res.json({ invoices: rows, total: parseInt(countRows[0].count), page, limit });
-  } catch (err) {
-    res.status(500).json({ error: 'خطأ في الخادم' });
-  }
-});
-
 // GET /api/invoices/:id — فاتورة واحدة [staff/admin]
 router.get('/:id', auth, requireRole('staff', 'admin'), async (req, res) => {
   try {
@@ -223,7 +206,7 @@ router.get('/:id', auth, requireRole('staff', 'admin'), async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
-  
 });
 
 module.exports = router;
+

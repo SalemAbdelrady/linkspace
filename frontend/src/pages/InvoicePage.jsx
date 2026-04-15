@@ -1,11 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { couponsAPI, invoicesAPI, servicesAPI, sessionsAPI } from '../utils/api';
+import { couponsAPI, invoicesAPI, servicesAPI } from '../utils/api';
 import toast from 'react-hot-toast';
-
-// أيقونات المساحات
-const SPACE_ICONS = { cowork: '🖥️', meeting: '🤝', lessons: '📚' };
 
 function formatTime(isoString) {
   if (!isoString) return '—';
@@ -26,9 +23,8 @@ export default function InvoicePage() {
 
   const [servicesList,  setServicesList]  = useState([]);
   const [addedServices, setAddedServices] = useState([]);
-  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [paymentMethod, setPaymentMethod] = useState('cash'); // ✅ الافتراضي كاش
   const [note,          setNote]          = useState('');
-  const [paid,          setPaid]          = useState(false);
   const [saved,         setSaved]         = useState(false);
 
   useEffect(() => {
@@ -53,11 +49,11 @@ export default function InvoicePage() {
   }
 
   // ✅ بيانات المساحة من الجلسة
-  const spaceKey  = session.spaceKey  || 'cowork';
-  const spaceName = session.spaceName || 'منطقة العمل المشتركة';
-  const spaceIcon = SPACE_ICONS[spaceKey] || '🏢';
-  // ✅ max_hours من الجلسة — كل مساحة لها حدها الأقصى
-  const maxHours  = session.maxHours || 4;
+  const SPACE_ICONS = { cowork: '🖥️', meeting: '🤝', lessons: '📚' };
+  const spaceKey    = session.spaceKey  || 'cowork';
+  const spaceName   = session.spaceName || 'منطقة العمل المشتركة';
+  const spaceIcon   = SPACE_ICONS[spaceKey] || '🏢';
+  const maxHours    = session.maxHours  || 4;
 
   // ── حسابات ────────────────────────────────────────────────────────
   const sessionCost    = parseFloat(session.cost || 0);
@@ -66,7 +62,6 @@ export default function InvoicePage() {
   const discountPct    = couponData ? parseFloat(couponData.discount_pct) : 0;
   const discountAmount = parseFloat(((subtotal * discountPct) / 100).toFixed(2));
   const total          = parseFloat((subtotal - discountAmount).toFixed(2));
-  // ✅ billedHours يستخدم maxHours الصح لكل مساحة
   const billedHours    = getBilledHours(session.durationMin, maxHours);
 
   // ── رصيد العميل ───────────────────────────────────────────────────
@@ -76,11 +71,12 @@ export default function InvoicePage() {
   const walletDebit   = walletPartial ? clientBalance : (walletCovers ? total : 0);
   const cashRemainder = parseFloat((total - walletDebit).toFixed(2));
 
+  // ── طريقة الدفع الفعلية بناءً على اختيار الموظف والرصيد ──────────
   function getEffectiveMethod() {
-    if (paymentMethod === 'cash') return 'cash';
-    if (walletCovers)             return 'wallet';
-    if (walletPartial)            return 'partial';
-    return 'cash';
+    if (paymentMethod === 'cash') return 'cash';       // الموظف اختار كاش → لا خصم
+    if (walletCovers)             return 'wallet';     // محفظة تكفي → خصم كامل
+    if (walletPartial)            return 'partial';    // محفظة جزئية + كاش
+    return 'cash';                                     // رصيد صفر → كاش
   }
 
   const [invoiceNumber] = useState(`INV-${Date.now().toString().slice(-6)}`);
@@ -110,20 +106,6 @@ export default function InvoicePage() {
     catch (err) { console.error('coupon use error:', err); }
   }
 
-  // ✅ الدفع
-  async function processPayment() {
-    if (paid) return;
-    const method = getEffectiveMethod();
-    if (method === 'cash') { setPaid(true); return; }
-    try {
-      await sessionsAPI.pay({ session_id: session.id, user_id: client.id, payment_method: method, cost: total });
-      setPaid(true);
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'خطأ في عملية الدفع');
-      throw err;
-    }
-  }
-
   // ── حفظ الفاتورة ──────────────────────────────────────────────────
   async function saveInvoice() {
     if (saved) return;
@@ -134,8 +116,8 @@ export default function InvoicePage() {
         user_id:         client.id,
         client_name:     client.name,
         client_phone:    client.phone,
-        space_key:       spaceKey,      // ✅
-        space_name:      spaceName,     // ✅
+        space_key:       spaceKey,       // ✅ نوع المساحة
+        space_name:      spaceName,      // ✅ اسم المساحة
         session_cost:    sessionCost,
         duration_min:    session.durationMin,
         price_per_hr:    session.pricePerHr,
@@ -170,12 +152,12 @@ export default function InvoicePage() {
   }
 
   async function handlePrint() {
-    try { await markCouponUsed(); await processPayment(); await saveInvoice(); window.print(); toast.success('تمت طباعة الفاتورة'); }
+    try { await markCouponUsed(); await saveInvoice(); window.print(); toast.success('تمت طباعة الفاتورة'); }
     catch { }
   }
 
   async function handleDone() {
-    try { await markCouponUsed(); await processPayment(); await saveInvoice(); navigate('/scanner'); }
+    try { await markCouponUsed(); await saveInvoice(); navigate('/scanner'); }
     catch { }
   }
 
@@ -264,29 +246,19 @@ export default function InvoicePage() {
             </div>
           </div>
 
-          {/* بيانات العميل */}
           <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px dashed var(--border)' }}>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>بيانات العميل</div>
             <div style={{ fontWeight: 700, fontSize: 15 }}>{client.name}</div>
             <div style={{ fontSize: 12, color: 'var(--muted)' }}>{client.phone}</div>
           </div>
 
-          {/* ✅ نوع المساحة — badge واضحة قبل تفاصيل الجلسة */}
-          <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 20 }}>{spaceIcon}</span>
-            <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--accent)' }}>{spaceName}</span>
-          </div>
-
-          {/* تفاصيل الجلسة */}
           <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px dashed var(--border)' }}>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>تفاصيل الجلسة</div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 6 }}>
-              {/* ✅ اسم المساحة ديناميكي */}
               <span>{spaceIcon} {spaceName}</span>
               <span style={{ fontWeight: 600 }}>{sessionCost.toFixed(2)} ج</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>
-              {/* ✅ billedHours يستخدم maxHours الصح */}
               <span>المدة: {billedHours} {billedHours === 1 ? 'ساعة' : 'ساعات'}<span style={{ fontSize: 11, marginRight: 4, opacity: 0.7 }}>({session.durationMin} د فعلية)</span></span>
               <span>سعر الساعة: {session.pricePerHr || '—'} ج</span>
             </div>
@@ -348,6 +320,7 @@ export default function InvoicePage() {
             </div>
           </div>
 
+          {/* طريقة الدفع في الفاتورة المطبوعة */}
           <div style={{ textAlign: 'center', fontSize: 13 }}>
             <span style={{ color: 'var(--muted)' }}>طريقة الدفع: </span>
             {effectiveMethod === 'partial' ? (
@@ -409,6 +382,7 @@ export default function InvoicePage() {
             </div>
           )}
 
+          {/* ✅ طريقة الدفع مع عرض حالة الرصيد */}
           <div className="section-title">طريقة الدفع</div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
             {[['cash','💵 كاش'], ['wallet','💳 محفظة']].map(([method, label]) => (
