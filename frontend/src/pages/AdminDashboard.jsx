@@ -102,14 +102,29 @@ function UserModal({ u, isInSession, amounts, getAmount, setAmount, chargeWallet
 }
 
 // ── مودال تفاصيل الفاتورة ─────────────────────────────────────────────
+const SPACE_ICONS = { cowork: '🖥️', meeting: '🤝', lessons: '📚' };
+
 function InvoiceModal({ invoice, onClose }) {
   if (!invoice) return null;
-  const services = typeof invoice.services === 'string' ? JSON.parse(invoice.services) : invoice.services || [];
+  const services   = typeof invoice.services === 'string' ? JSON.parse(invoice.services) : invoice.services || [];
+  const spaceIcon  = SPACE_ICONS[invoice.space_key] || '🏢';
+  const spaceName  = invoice.space_name || 'منطقة العمل المشتركة';
+  const billedHours = invoice.duration_min
+    ? Math.min(Math.max(Math.ceil(invoice.duration_min / 60), 1), 12)
+    : null;
+
+  function formatTime(iso) {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', hour12: true });
+  }
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
       onClick={onClose}>
       <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 20, maxWidth: 420, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}
         onClick={e => e.stopPropagation()}>
+
+        {/* رأس */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div>
             <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--accent)' }}>#{invoice.invoice_number}</div>
@@ -121,21 +136,45 @@ function InvoiceModal({ invoice, onClose }) {
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 22, cursor: 'pointer' }}>✕</button>
         </div>
+
+        {/* العميل */}
         <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px dashed var(--border)' }}>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>العميل</div>
           <div style={{ fontWeight: 700 }}>{invoice.client_name}</div>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>{invoice.client_phone}</div>
         </div>
+
+        {/* نوع المساحة */}
+        <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 20 }}>{spaceIcon}</span>
+          <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--accent)' }}>{spaceName}</span>
+        </div>
+
+        {/* تفاصيل الجلسة */}
         <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px dashed var(--border)' }}>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>تفاصيل الجلسة</div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-            <span>تكلفة الجلسة</span><span style={{ fontWeight: 600 }}>{parseFloat(invoice.session_cost).toFixed(2)} ج</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+            <span>{spaceIcon} {spaceName}</span>
+            <span style={{ fontWeight: 600 }}>{parseFloat(invoice.session_cost).toFixed(2)} ج</span>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-            <span>المدة: {invoice.duration_min} د</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>
+            {billedHours && (
+              <span>
+                المدة: {billedHours} {billedHours === 1 ? 'ساعة' : 'ساعات'}
+                <span style={{ opacity: 0.7, marginRight: 4 }}>({invoice.duration_min} د فعلية)</span>
+              </span>
+            )}
             <span>سعر الساعة: {invoice.price_per_hr} ج</span>
           </div>
+          {(invoice.check_in || invoice.check_out) && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginTop: 4, opacity: 0.8 }}>
+              {invoice.check_in && <span>دخول: {formatTime(invoice.check_in)}</span>}
+              {invoice.check_out && <span>خروج: {formatTime(invoice.check_out)}</span>}
+            </div>
+          )}
         </div>
+
+        {/* الخدمات */}
         {services.length > 0 && (
           <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px dashed var(--border)' }}>
             <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>خدمات إضافية</div>
@@ -146,6 +185,8 @@ function InvoiceModal({ invoice, onClose }) {
             ))}
           </div>
         )}
+
+        {/* كوبون */}
         {invoice.coupon_code && (
           <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px dashed var(--border)' }}>
             <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>كوبون خصم</div>
@@ -155,36 +196,55 @@ function InvoiceModal({ invoice, onClose }) {
             </div>
           </div>
         )}
-        <div style={{ marginBottom: 12 }}>
+
+        {/* الإجمالي */}
+        <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px dashed var(--border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>
+            <span>تكلفة الجلسة</span><span>{parseFloat(invoice.session_cost).toFixed(2)} ج</span>
+          </div>
           {parseFloat(invoice.services_cost) > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)', marginBottom: 4 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>
               <span>الخدمات</span><span>{parseFloat(invoice.services_cost).toFixed(2)} ج</span>
             </div>
           )}
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 700, color: 'var(--accent)', marginTop: 8 }}>
+          {invoice.coupon_code && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--success)', marginBottom: 6 }}>
+              <span>خصم {invoice.discount_pct}%</span><span>− {parseFloat(invoice.discount_amount).toFixed(2)} ج</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 700, color: 'var(--accent)', marginTop: 8 }}>
             <span>الإجمالي</span><span>{parseFloat(invoice.total).toFixed(2)} ج</span>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* عرض تفصيلي: محفظة + كاش أو أحدهما */}
-          {parseFloat(invoice.wallet_paid || 0) > 0 && (
-            <span className="badge badge-info">
-              💳 {parseFloat(invoice.wallet_paid).toFixed(2)} ج محفظة
-            </span>
+
+        {/* طريقة الدفع */}
+        <div style={{ background: 'rgba(0,0,0,0.15)', borderRadius: 10, padding: '10px 14px', marginBottom: 8 }}>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>طريقة الدفع</div>
+          {parseFloat(invoice.wallet_paid || 0) > 0 && parseFloat(invoice.cash_paid || 0) > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--muted)' }}>💳 من المحفظة</span>
+                <span style={{ fontWeight: 700, color: '#3b82f6' }}>{parseFloat(invoice.wallet_paid).toFixed(2)} ج</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--muted)' }}>💵 كاش</span>
+                <span style={{ fontWeight: 700, color: 'var(--warning)' }}>{parseFloat(invoice.cash_paid).toFixed(2)} ج</span>
+              </div>
+            </div>
+          ) : parseFloat(invoice.wallet_paid || 0) > 0 ? (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+              <span style={{ color: 'var(--muted)' }}>💳 محفظة كاملة</span>
+              <span style={{ fontWeight: 700, color: '#3b82f6' }}>{parseFloat(invoice.wallet_paid).toFixed(2)} ج</span>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+              <span style={{ color: 'var(--muted)' }}>💵 كاش</span>
+              <span style={{ fontWeight: 700, color: 'var(--warning)' }}>{parseFloat(invoice.total).toFixed(2)} ج</span>
+            </div>
           )}
-          {parseFloat(invoice.cash_paid || 0) > 0 && (
-            <span className="badge badge-warning">
-              💵 {parseFloat(invoice.cash_paid).toFixed(2)} ج كاش
-            </span>
-          )}
-          {/* fallback للفواتير القديمة قبل التحديث */}
-          {!parseFloat(invoice.wallet_paid || 0) && !parseFloat(invoice.cash_paid || 0) && (
-            <span className={`badge badge-${invoice.payment_method === 'wallet' ? 'info' : 'warning'}`}>
-              {invoice.payment_method === 'wallet' ? '💳 محفظة' : '💵 كاش'}
-            </span>
-          )}
-          {invoice.note && <span style={{ fontSize: 12, color: 'var(--muted)' }}>{invoice.note}</span>}
         </div>
+
+        {invoice.note && <div style={{ fontSize: 12, color: 'var(--muted)', padding: '6px 0' }}>📝 {invoice.note}</div>}
       </div>
     </div>
   );
@@ -214,7 +274,6 @@ export default function AdminDashboard() {
   const [newService,     setNewService]     = useState({ name: '', price: '' });
   const [editingService, setEditingService] = useState(null);
   const [loadingSpaces,  setLoadingSpaces]  = useState(false);
-  const [serviceSearch,  setServiceSearch]  = useState(''); // ✅ بحث في الخدمات
 
   const [allCoupons,         setAllCoupons]         = useState([]);
   const [couponLoading,      setCouponLoading]      = useState(false);
@@ -530,17 +589,9 @@ export default function AdminDashboard() {
                   </div>
                   <button className="btn btn-primary" style={{ width: '100%' }} onClick={addService}>إضافة</button>
                 </div>
-                {/* ✅ شريط بحث في الخدمات */}
-                {services.length > 4 && (
-                  <div style={{ marginBottom: 10 }}>
-                    <input className="input-field" placeholder="🔍 ابحث في الخدمات والمشروبات..." value={serviceSearch} onChange={e => setServiceSearch(e.target.value)} />
-                  </div>
-                )}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {services.length === 0 && <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 20, fontSize: 13 }}>لا توجد خدمات بعد — أضف أول خدمة!</div>}
-                  {services
-                    .filter(s => !serviceSearch || s.name.toLowerCase().includes(serviceSearch.toLowerCase()))
-                    .map(s => (
+                  {services.map(s => (
                     <div key={s.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       {editingService?.id === s.id ? (
                         <><input className="input-field" style={{ flex: 1 }} value={editingService.name} onChange={e => setEditingService(prev => ({ ...prev, name: e.target.value }))} /><input className="input-field" type="number" style={{ width: 80 }} value={editingService.price} onChange={e => setEditingService(prev => ({ ...prev, price: e.target.value }))} /><button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: 12 }} onClick={saveService}>حفظ</button></>
@@ -549,9 +600,6 @@ export default function AdminDashboard() {
                       )}
                     </div>
                   ))}
-                  {serviceSearch && services.filter(s => s.name.toLowerCase().includes(serviceSearch.toLowerCase())).length === 0 && (
-                    <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 16, fontSize: 13 }}>لا توجد نتائج لـ "{serviceSearch}"</div>
-                  )}
                 </div>
               </div>
             )}
