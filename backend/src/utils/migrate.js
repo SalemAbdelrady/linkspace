@@ -1,8 +1,8 @@
 const db = require('../config/db');
- 
+
 async function migrate() {
   console.log('🔄 Running migrations...');
- 
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS users (
       id          SERIAL PRIMARY KEY,
@@ -18,11 +18,9 @@ async function migrate() {
       updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
- 
-  await db.query(`
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS qr_image TEXT;
-  `);
- 
+
+  await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS qr_image TEXT;`);
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS sessions (
       id             SERIAL PRIMARY KEY,
@@ -37,11 +35,14 @@ async function migrate() {
       created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
- 
+
   await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS space_key  VARCHAR(30) NOT NULL DEFAULT 'cowork';`);
   await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS space_name VARCHAR(100) NOT NULL DEFAULT 'منطقة العمل المشتركة';`);
   await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS max_hours  INTEGER NOT NULL DEFAULT 4;`);
- 
+  // ✅ هل الجلسة مغطاة باشتراك؟ — لو نعم التكلفة صفر
+  await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS subscription_id INTEGER REFERENCES user_subscriptions(id) ON DELETE SET NULL;`);
+  await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS is_subscription_session BOOLEAN NOT NULL DEFAULT false;`);
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS coupons (
       id           SERIAL PRIMARY KEY,
@@ -54,7 +55,7 @@ async function migrate() {
     );
   `);
   await db.query(`ALTER TABLE coupons ALTER COLUMN user_id DROP NOT NULL;`);
- 
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS wallet_transactions (
       id          SERIAL PRIMARY KEY,
@@ -65,7 +66,7 @@ async function migrate() {
       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
- 
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS price_settings (
       id           SERIAL PRIMARY KEY,
@@ -76,7 +77,7 @@ async function migrate() {
       updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
- 
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS space_settings (
       id         SERIAL PRIMARY KEY,
@@ -88,7 +89,7 @@ async function migrate() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
- 
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS services (
       id         SERIAL PRIMARY KEY,
@@ -99,7 +100,7 @@ async function migrate() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
- 
+
   await db.query(`
     DO $$
     BEGIN
@@ -109,8 +110,7 @@ async function migrate() {
       END IF;
     END $$;
   `);
- 
-  // ✅ subscription_plans مع UNIQUE على name منعاً للتكرار عند كل restart
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS subscription_plans (
       id             SERIAL PRIMARY KEY,
@@ -118,25 +118,45 @@ async function migrate() {
       price          NUMERIC(10,2) NOT NULL,
       features       TEXT,
       discount_rooms INTEGER NOT NULL DEFAULT 0,
+      covers_cowork  BOOLEAN NOT NULL DEFAULT true,
       is_active      BOOLEAN NOT NULL DEFAULT true,
       created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
- 
-  // ✅ يضيف الـ constraint على قواعد البيانات القديمة التي لا تحتوي عليه
+
+  // ✅ إضافة عمود covers_cowork لو مش موجود
+  await db.query(`ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS covers_cowork BOOLEAN NOT NULL DEFAULT true;`);
+
   await db.query(`
     DO $$
     BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'subscription_plans_name_unique') THEN
-        DELETE FROM subscription_plans
-          WHERE id NOT IN (SELECT MIN(id) FROM subscription_plans GROUP BY name);
-        ALTER TABLE subscription_plans
-          ADD CONSTRAINT subscription_plans_name_unique UNIQUE (name);
+        DELETE FROM subscription_plans WHERE id NOT IN (SELECT MIN(id) FROM subscription_plans GROUP BY name);
+        ALTER TABLE subscription_plans ADD CONSTRAINT subscription_plans_name_unique UNIQUE (name);
       END IF;
     END $$;
   `);
- 
+
+  // ✅ جدول اشتراكات العملاء — القلب الأساسي للنظام
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS user_subscriptions (
+      id             SERIAL PRIMARY KEY,
+      user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      plan_id        INTEGER NOT NULL REFERENCES subscription_plans(id),
+      plan_name      VARCHAR(100) NOT NULL,
+      plan_price     NUMERIC(10,2) NOT NULL,
+      discount_rooms INTEGER NOT NULL DEFAULT 0,
+      covers_cowork  BOOLEAN NOT NULL DEFAULT true,
+      start_date     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      end_date       TIMESTAMPTZ NOT NULL,
+      status         VARCHAR(20) NOT NULL DEFAULT 'active',
+      payment_method VARCHAR(20) NOT NULL DEFAULT 'cash',
+      note           TEXT,
+      created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS invoices (
       id              SERIAL PRIMARY KEY,
@@ -162,17 +182,22 @@ async function migrate() {
       created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
- 
-  await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_key  VARCHAR(30) NOT NULL DEFAULT 'cowork';`);
-  await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_name VARCHAR(100) NOT NULL DEFAULT 'منطقة العمل المشتركة';`);
- 
+
+  await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_key   VARCHAR(30)   NOT NULL DEFAULT 'cowork';`);
+  await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_name  VARCHAR(100)  NOT NULL DEFAULT 'منطقة العمل المشتركة';`);
+  await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS wallet_paid NUMERIC(10,2) NOT NULL DEFAULT 0;`);
+  await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS cash_paid   NUMERIC(10,2) NOT NULL DEFAULT 0;`);
+  // ✅ نوع الفاتورة: session | subscription
+  await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_type VARCHAR(20) NOT NULL DEFAULT 'session';`);
+  await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS subscription_id INTEGER REFERENCES user_subscriptions(id) ON DELETE SET NULL;`);
+
   // ── Default data ──────────────────────────────────────────────────
   await db.query(`
     INSERT INTO price_settings (period_name, start_hour, end_hour, price_per_hr)
     VALUES ('morning',6,14,10), ('evening',14,22,15), ('night',22,6,12)
     ON CONFLICT DO NOTHING;
   `);
- 
+
   await db.query(`
     INSERT INTO space_settings (space_key, name, first_hour, extra_hour, max_hours)
     VALUES
@@ -181,34 +206,35 @@ async function migrate() {
       ('lessons', 'غرفة الدروس',           200, 100, 12)
     ON CONFLICT (space_key) DO NOTHING;
   `);
- 
+
   await db.query(`
     INSERT INTO services (name, price)
     VALUES ('قهوة',15),('شاي',10),('مياه',5),('عصير',20),('طباعة (ورقة)',3),('سكانر',5)
     ON CONFLICT (name) DO NOTHING;
   `);
- 
-  // ✅ ON CONFLICT (name) آمن الآن لوجود الـ UNIQUE constraint
+
   await db.query(`
-    INSERT INTO subscription_plans (name, price, features, discount_rooms)
+    INSERT INTO subscription_plans (name, price, features, discount_rooms, covers_cowork)
     VALUES
-      ('باقة أساسية', 500, 'دخول غير محدود لمنطقة العمل', 0),
-      ('باقة بريميوم', 900, 'دخول غير محدود + غرف اجتماعات', 20),
-      ('باقة VIP', 1400, 'دخول غير محدود + جميع الغرف + خدمات', 40)
+      ('باقة أساسية',  500,  'دخول غير محدود لمنطقة العمل المشتركة', 0,  true),
+      ('باقة بريميوم', 900,  'دخول غير محدود + خصم 20% على الغرف',   20, true),
+      ('باقة VIP',     1400, 'دخول غير محدود + جميع الغرف + خدمات',   40, true)
     ON CONFLICT (name) DO NOTHING;
   `);
- 
+
   // ── Indexes ───────────────────────────────────────────────────────
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_sessions_user_id  ON sessions(user_id);`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_sessions_status   ON sessions(status);`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_coupons_user_id   ON coupons(user_id);`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_wallet_user_id    ON wallet_transactions(user_id);`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_users_phone       ON users(phone);`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_invoices_user_id  ON invoices(user_id);`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_invoices_created  ON invoices(created_at DESC);`);
- 
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_sessions_user_id       ON sessions(user_id);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_sessions_status        ON sessions(status);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_coupons_user_id        ON coupons(user_id);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_wallet_user_id         ON wallet_transactions(user_id);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_users_phone            ON users(phone);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_invoices_user_id       ON invoices(user_id);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_invoices_created       ON invoices(created_at DESC);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_user_subs_user_id      ON user_subscriptions(user_id);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_user_subs_status       ON user_subscriptions(status);`);
+
   console.log('✅ Migrations completed!');
 }
- 
+
 module.exports = migrate;
 
