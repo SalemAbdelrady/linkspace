@@ -1,8 +1,8 @@
 const db = require('../config/db');
-
+ 
 async function migrate() {
   console.log('🔄 Running migrations...');
-
+ 
   await db.query(`
     CREATE TABLE IF NOT EXISTS users (
       id          SERIAL PRIMARY KEY,
@@ -18,11 +18,11 @@ async function migrate() {
       updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
-
+ 
   await db.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS qr_image TEXT;
   `);
-
+ 
   await db.query(`
     CREATE TABLE IF NOT EXISTS sessions (
       id             SERIAL PRIMARY KEY,
@@ -37,12 +37,11 @@ async function migrate() {
       created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
-
-  // ✅ إضافة space_key و space_name للجلسات
+ 
   await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS space_key  VARCHAR(30) NOT NULL DEFAULT 'cowork';`);
   await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS space_name VARCHAR(100) NOT NULL DEFAULT 'منطقة العمل المشتركة';`);
   await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS max_hours  INTEGER NOT NULL DEFAULT 4;`);
-
+ 
   await db.query(`
     CREATE TABLE IF NOT EXISTS coupons (
       id           SERIAL PRIMARY KEY,
@@ -55,7 +54,7 @@ async function migrate() {
     );
   `);
   await db.query(`ALTER TABLE coupons ALTER COLUMN user_id DROP NOT NULL;`);
-
+ 
   await db.query(`
     CREATE TABLE IF NOT EXISTS wallet_transactions (
       id          SERIAL PRIMARY KEY,
@@ -66,7 +65,7 @@ async function migrate() {
       created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
-
+ 
   await db.query(`
     CREATE TABLE IF NOT EXISTS price_settings (
       id           SERIAL PRIMARY KEY,
@@ -77,7 +76,7 @@ async function migrate() {
       updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
-
+ 
   await db.query(`
     CREATE TABLE IF NOT EXISTS space_settings (
       id         SERIAL PRIMARY KEY,
@@ -89,7 +88,7 @@ async function migrate() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
-
+ 
   await db.query(`
     CREATE TABLE IF NOT EXISTS services (
       id         SERIAL PRIMARY KEY,
@@ -100,7 +99,7 @@ async function migrate() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
-
+ 
   await db.query(`
     DO $$
     BEGIN
@@ -110,11 +109,12 @@ async function migrate() {
       END IF;
     END $$;
   `);
-
+ 
+  // ✅ subscription_plans مع UNIQUE على name منعاً للتكرار عند كل restart
   await db.query(`
     CREATE TABLE IF NOT EXISTS subscription_plans (
       id             SERIAL PRIMARY KEY,
-      name           VARCHAR(100) NOT NULL,
+      name           VARCHAR(100) NOT NULL UNIQUE,
       price          NUMERIC(10,2) NOT NULL,
       features       TEXT,
       discount_rooms INTEGER NOT NULL DEFAULT 0,
@@ -123,7 +123,20 @@ async function migrate() {
       updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
-
+ 
+  // ✅ يضيف الـ constraint على قواعد البيانات القديمة التي لا تحتوي عليه
+  await db.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'subscription_plans_name_unique') THEN
+        DELETE FROM subscription_plans
+          WHERE id NOT IN (SELECT MIN(id) FROM subscription_plans GROUP BY name);
+        ALTER TABLE subscription_plans
+          ADD CONSTRAINT subscription_plans_name_unique UNIQUE (name);
+      END IF;
+    END $$;
+  `);
+ 
   await db.query(`
     CREATE TABLE IF NOT EXISTS invoices (
       id              SERIAL PRIMARY KEY,
@@ -149,17 +162,17 @@ async function migrate() {
       created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
   `);
-
+ 
   await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_key  VARCHAR(30) NOT NULL DEFAULT 'cowork';`);
   await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_name VARCHAR(100) NOT NULL DEFAULT 'منطقة العمل المشتركة';`);
-
+ 
   // ── Default data ──────────────────────────────────────────────────
   await db.query(`
     INSERT INTO price_settings (period_name, start_hour, end_hour, price_per_hr)
     VALUES ('morning',6,14,10), ('evening',14,22,15), ('night',22,6,12)
     ON CONFLICT DO NOTHING;
   `);
-
+ 
   await db.query(`
     INSERT INTO space_settings (space_key, name, first_hour, extra_hour, max_hours)
     VALUES
@@ -168,23 +181,23 @@ async function migrate() {
       ('lessons', 'غرفة الدروس',           200, 100, 12)
     ON CONFLICT (space_key) DO NOTHING;
   `);
-
+ 
   await db.query(`
     INSERT INTO services (name, price)
     VALUES ('قهوة',15),('شاي',10),('مياه',5),('عصير',20),('طباعة (ورقة)',3),('سكانر',5)
     ON CONFLICT (name) DO NOTHING;
   `);
-
-// في migrate.js — INSERT الاشتراكات
-await db.query(`
-  INSERT INTO subscription_plans (name, price, features, discount_rooms)
-  VALUES
-    ('باقة أساسية', 500, '...', 0),
-    ('باقة بريميوم', 900, '...', 20),
-    ('باقة VIP', 1400, '...', 40)
-  ON CONFLICT (name) DO NOTHING;  -- ← غيّر من DO NOTHING لـ ON CONFLICT (name)
-`);
-
+ 
+  // ✅ ON CONFLICT (name) آمن الآن لوجود الـ UNIQUE constraint
+  await db.query(`
+    INSERT INTO subscription_plans (name, price, features, discount_rooms)
+    VALUES
+      ('باقة أساسية', 500, 'دخول غير محدود لمنطقة العمل', 0),
+      ('باقة بريميوم', 900, 'دخول غير محدود + غرف اجتماعات', 20),
+      ('باقة VIP', 1400, 'دخول غير محدود + جميع الغرف + خدمات', 40)
+    ON CONFLICT (name) DO NOTHING;
+  `);
+ 
   // ── Indexes ───────────────────────────────────────────────────────
   await db.query(`CREATE INDEX IF NOT EXISTS idx_sessions_user_id  ON sessions(user_id);`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_sessions_status   ON sessions(status);`);
@@ -193,9 +206,9 @@ await db.query(`
   await db.query(`CREATE INDEX IF NOT EXISTS idx_users_phone       ON users(phone);`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_invoices_user_id  ON invoices(user_id);`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_invoices_created  ON invoices(created_at DESC);`);
-
+ 
   console.log('✅ Migrations completed!');
 }
-
+ 
 module.exports = migrate;
 
