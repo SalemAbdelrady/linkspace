@@ -175,14 +175,15 @@ async function migrate() {
     ON CONFLICT (name) DO NOTHING;
   `);
 
-  await db.query(`
-    INSERT INTO subscription_plans (name, price, features, discount_rooms)
-    VALUES
-      ('باقة أساسية', 500,  'دخول غير محدود لمنطقة العمل', 0),
-      ('باقة بريميوم', 900, 'دخول غير محدود + خصم 20% على الغرف', 20),
-      ('باقة VIP', 1400,    'دخول غير محدود + خصم 40% على الغرف', 40)
-    ON CONFLICT DO NOTHING;
-  `);
+// في migrate.js — INSERT الاشتراكات
+await db.query(`
+  INSERT INTO subscription_plans (name, price, features, discount_rooms)
+  VALUES
+    ('باقة أساسية', 500, '...', 0),
+    ('باقة بريميوم', 900, '...', 20),
+    ('باقة VIP', 1400, '...', 40)
+  ON CONFLICT (name) DO NOTHING;  -- ← غيّر من DO NOTHING لـ ON CONFLICT (name)
+`);
 
   // ── Indexes ───────────────────────────────────────────────────────
   await db.query(`CREATE INDEX IF NOT EXISTS idx_sessions_user_id  ON sessions(user_id);`);
