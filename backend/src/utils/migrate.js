@@ -39,9 +39,6 @@ async function migrate() {
   await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS space_key  VARCHAR(30) NOT NULL DEFAULT 'cowork';`);
   await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS space_name VARCHAR(100) NOT NULL DEFAULT 'منطقة العمل المشتركة';`);
   await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS max_hours  INTEGER NOT NULL DEFAULT 4;`);
-  // ✅ هل الجلسة مغطاة باشتراك؟ — لو نعم التكلفة صفر
-  await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS subscription_id INTEGER REFERENCES user_subscriptions(id) ON DELETE SET NULL;`);
-  await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS is_subscription_session BOOLEAN NOT NULL DEFAULT false;`);
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS coupons (
@@ -125,7 +122,6 @@ async function migrate() {
     );
   `);
 
-  // ✅ إضافة عمود covers_cowork لو مش موجود
   await db.query(`ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS covers_cowork BOOLEAN NOT NULL DEFAULT true;`);
 
   await db.query(`
@@ -157,6 +153,10 @@ async function migrate() {
     );
   `);
 
+  // ✅ بعد إنشاء user_subscriptions — نضيف الـ foreign key على sessions بأمان
+  await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS subscription_id INTEGER REFERENCES user_subscriptions(id) ON DELETE SET NULL;`);
+  await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS is_subscription_session BOOLEAN NOT NULL DEFAULT false;`);
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS invoices (
       id              SERIAL PRIMARY KEY,
@@ -183,12 +183,11 @@ async function migrate() {
     );
   `);
 
-  await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_key   VARCHAR(30)   NOT NULL DEFAULT 'cowork';`);
-  await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_name  VARCHAR(100)  NOT NULL DEFAULT 'منطقة العمل المشتركة';`);
-  await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS wallet_paid NUMERIC(10,2) NOT NULL DEFAULT 0;`);
-  await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS cash_paid   NUMERIC(10,2) NOT NULL DEFAULT 0;`);
-  // ✅ نوع الفاتورة: session | subscription
-  await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_type VARCHAR(20) NOT NULL DEFAULT 'session';`);
+  await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_key       VARCHAR(30)   NOT NULL DEFAULT 'cowork';`);
+  await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_name      VARCHAR(100)  NOT NULL DEFAULT 'منطقة العمل المشتركة';`);
+  await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS wallet_paid     NUMERIC(10,2) NOT NULL DEFAULT 0;`);
+  await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS cash_paid       NUMERIC(10,2) NOT NULL DEFAULT 0;`);
+  await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_type    VARCHAR(20)   NOT NULL DEFAULT 'session';`);
   await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS subscription_id INTEGER REFERENCES user_subscriptions(id) ON DELETE SET NULL;`);
 
   // ── Default data ──────────────────────────────────────────────────
