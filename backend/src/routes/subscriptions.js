@@ -9,7 +9,7 @@ const isStaffOrAdmin = [auth, requireRole('staff', 'admin')];
 // PLANS — إدارة الباقات
 // ─────────────────────────────────────────────────────────────────────
 
-// GET /api/subscriptions/plans — كل الباقات [staff/admin + client]
+// GET /api/subscriptions/plans
 router.get('/plans', auth, async (req, res) => {
   try {
     const { rows } = await db.query(
@@ -65,7 +65,7 @@ router.delete('/plans/:id', ...isAdmin, async (req, res) => {
 // USER SUBSCRIPTIONS — اشتراكات العملاء
 // ─────────────────────────────────────────────────────────────────────
 
-// GET /api/subscriptions/my — اشتراكي الحالي [client]
+// GET /api/subscriptions/my
 router.get('/my', auth, async (req, res) => {
   try {
     const { rows } = await db.query(`
@@ -84,7 +84,7 @@ router.get('/my', auth, async (req, res) => {
   }
 });
 
-// GET /api/subscriptions/user/:id — اشتراكات عميل معين [staff/admin]
+// GET /api/subscriptions/user/:id [staff/admin]
 router.get('/user/:id', ...isStaffOrAdmin, async (req, res) => {
   try {
     const { rows } = await db.query(`
@@ -100,7 +100,7 @@ router.get('/user/:id', ...isStaffOrAdmin, async (req, res) => {
   }
 });
 
-// GET /api/subscriptions/all — كل الاشتراكات النشطة [admin]
+// GET /api/subscriptions/all [admin]
 router.get('/all', ...isAdmin, async (req, res) => {
   const page   = parseInt(req.query.page) || 1;
   const limit  = 20;
@@ -120,8 +120,8 @@ router.get('/all', ...isAdmin, async (req, res) => {
   }
 });
 
-// POST /api/subscriptions/subscribe — تسجيل اشتراك عميل [staff/admin]
-//  body: { user_id, plan_id, payment_method, note? }
+// POST /api/subscriptions/subscribe [staff/admin]
+// body: { user_id, plan_id, payment_method, note? }
 router.post('/subscribe', ...isStaffOrAdmin, async (req, res) => {
   const { user_id, plan_id, payment_method = 'cash', note } = req.body;
   if (!user_id || !plan_id) return res.status(400).json({ error: 'user_id و plan_id مطلوبان' });
@@ -135,14 +135,20 @@ router.post('/subscribe', ...isStaffOrAdmin, async (req, res) => {
       'SELECT * FROM subscription_plans WHERE id = $1 AND is_active = true', [plan_id]
     );
     const plan = planRows[0];
-    if (!plan) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'الباقة غير موجودة' }); }
+    if (!plan) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'الباقة غير موجودة' });
+    }
 
     // جيب بيانات العميل
     const { rows: userRows } = await client.query(
       'SELECT id, name, phone, balance FROM users WHERE id = $1 FOR UPDATE', [user_id]
     );
     const user = userRows[0];
-    if (!user) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'العميل غير موجود' }); }
+    if (!user) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'العميل غير موجود' });
+    }
 
     // تحقق من اشتراك نشط مسبق
     const { rows: existingSubs } = await client.query(`
@@ -173,9 +179,9 @@ router.post('/subscribe', ...isStaffOrAdmin, async (req, res) => {
       `, [user_id, walletPaid, `اشتراك ${plan.name}`]);
     }
 
-    // إنشاء الاشتراك — 30 يوم من اليوم
+    // ✅ إنشاء الاشتراك — 29 يوم من اليوم
     const endDate = new Date();
-    endDate.setDate(endDate.getDate() + 30);
+    endDate.setDate(endDate.getDate() + 29);
 
     const { rows: subRows } = await client.query(`
       INSERT INTO user_subscriptions
@@ -212,10 +218,10 @@ router.post('/subscribe', ...isStaffOrAdmin, async (req, res) => {
     await client.query('COMMIT');
 
     res.status(201).json({
-      subscription: sub,
-      invoice_number: invoiceNumber,
-      wallet_paid: walletPaid,
-      cash_paid: cashPaid,
+      subscription   : sub,
+      invoice_number : invoiceNumber,
+      wallet_paid    : walletPaid,
+      cash_paid      : cashPaid,
     });
 
   } catch (err) {
@@ -227,21 +233,76 @@ router.post('/subscribe', ...isStaffOrAdmin, async (req, res) => {
   }
 });
 
-// POST /api/subscriptions/cancel/:id — إلغاء اشتراك [admin]
+// ─────────────────────────────────────────────────────────────────────
+// ✅ POST /api/subscriptions/cancel/:id [admin]
+// الإلغاء الصحيح: يوقف الاشتراك + يغلق أي جلسة نشطة مرتبطة بيه
+// ─────────────────────────────────────────────────────────────────────
 router.post('/cancel/:id', ...isAdmin, async (req, res) => {
+  const client = await db.pool.connect();
   try {
-    const { rows } = await db.query(`
-      UPDATE user_subscriptions SET status = 'cancelled' WHERE id = $1 RETURNING *
-    `, [req.params.id]);
-    if (!rows[0]) return res.status(404).json({ error: 'الاشتراك غير موجود' });
-    res.json({ success: true, subscription: rows[0] });
+    await client.query('BEGIN');
+
+    // 1. جيب بيانات الاشتراك
+    const { rows: subRows } = await client.query(
+      `SELECT * FROM user_subscriptions WHERE id = $1`,
+      [req.params.id]
+    );
+    const sub = subRows[0];
+    if (!sub) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'الاشتراك غير موجود' });
+    }
+
+    // 2. ألغِ الاشتراك
+    await client.query(
+      `UPDATE user_subscriptions SET status = 'cancelled', end_date = NOW() WHERE id = $1`,
+      [req.params.id]
+    );
+
+    // 3. ✅ أغلق أي جلسة نشطة مرتبطة بهذا الاشتراك أو بنفس العميل
+    //    (الجلسة كانت مجانية بسبب الاشتراك — نغلقها بتكلفة صفر)
+    const { rows: activeSessions } = await client.query(`
+      SELECT * FROM sessions
+      WHERE user_id = $1
+        AND status = 'active'
+        AND is_subscription_session = true
+    `, [sub.user_id]);
+
+    for (const session of activeSessions) {
+      const checkOut    = new Date();
+      const checkIn     = new Date(session.check_in);
+      const durationMin = Math.ceil((checkOut - checkIn) / 60000);
+
+      await client.query(`
+        UPDATE sessions SET
+          check_out    = NOW(),
+          duration_min = $1,
+          cost         = 0,
+          status       = 'completed',
+          payment_method = 'subscription'
+        WHERE id = $2
+      `, [durationMin, session.id]);
+    }
+
+    await client.query('COMMIT');
+
+    res.json({
+      success          : true,
+      subscription_id  : req.params.id,
+      sessions_closed  : activeSessions.length,
+      message          : `تم إلغاء الاشتراك وإغلاق ${activeSessions.length} جلسة نشطة`,
+    });
+
   } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
     res.status(500).json({ error: 'خطأ في الخادم' });
+  } finally {
+    client.release();
   }
 });
 
-// ── دالة مساعدة للـ sessions.js ─────────────────────────────────────
-// GET /api/subscriptions/check/:user_id — هل العميل عنده اشتراك نشط؟
+// GET /api/subscriptions/check/:user_id [staff/admin]
 router.get('/check/:user_id', ...isStaffOrAdmin, async (req, res) => {
   try {
     const { rows } = await db.query(`
@@ -260,3 +321,4 @@ router.get('/check/:user_id', ...isStaffOrAdmin, async (req, res) => {
 });
 
 module.exports = router;
+
