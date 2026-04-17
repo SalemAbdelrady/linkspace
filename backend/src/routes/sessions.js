@@ -2,7 +2,6 @@ const router = require('express').Router();
 const db = require('../config/db');
 const { auth, requireRole } = require('../middleware/auth');
 
-// ✅ جيب بيانات المساحة بناءً على space_key
 async function getSpaceSettings(spaceKey = 'cowork') {
   const { rows } = await db.query(
     `SELECT name, first_hour, extra_hour, max_hours
@@ -12,15 +11,27 @@ async function getSpaceSettings(spaceKey = 'cowork') {
   return rows[0] || { name: 'منطقة العمل المشتركة', first_hour: 30, extra_hour: 30, max_hours: 4 };
 }
 
-// ✅ حساب التكلفة بالساعة الكاملة مع max_hours لكل مساحة
 function calculateCost(durationMin, pricePerHr, maxHours = 4) {
   const rawHours    = durationMin / 60;
   const billedHours = Math.min(Math.max(Math.ceil(rawHours), 1), maxHours);
   return parseFloat((billedHours * pricePerHr).toFixed(2));
 }
 
+// ✅ تحقق من اشتراك نشط للعميل
+async function getActiveSubscription(userId) {
+  const { rows } = await db.query(`
+    SELECT us.*, sp.covers_cowork, sp.discount_rooms
+    FROM user_subscriptions us
+    JOIN subscription_plans sp ON sp.id = us.plan_id
+    WHERE us.user_id = $1
+      AND us.status = 'active'
+      AND us.end_date > NOW()
+    LIMIT 1
+  `, [userId]);
+  return rows[0] || null;
+}
+
 // POST /api/sessions/scan
-// body: { qr_code, space_key? }
 router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
   const { qr_code, space_key = 'cowork' } = req.body;
   if (!qr_code) return res.status(400).json({ error: 'QR Code مطلوب' });
@@ -52,11 +63,12 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
       const checkOutISO = checkOut.toISOString();
       const checkIn     = new Date(session.check_in);
       const durationMin = Math.ceil((checkOut - checkIn) / 60000);
+      const maxHours    = parseInt(session.max_hours) || 4;
 
-      // ✅ استخدم max_hours المحفوظ في الجلسة (الخاص بالمساحة المحجوزة)
-      const maxHours     = parseInt(session.max_hours) || 4;
-      const cost         = calculateCost(durationMin, session.price_per_hr, maxHours);
-      const pointsEarned = Math.floor(cost / 10);
+      // ✅ لو جلسة اشتراك → التكلفة صفر والنقاط صفر
+      const isSubSession = session.is_subscription_session || false;
+      const cost         = isSubSession ? 0 : calculateCost(durationMin, session.price_per_hr, maxHours);
+      const pointsEarned = isSubSession ? 0 : Math.floor(cost / 10);
 
       await client.query(`
         UPDATE sessions SET
@@ -80,37 +92,62 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
         action : 'checkout',
         client : { id: user.id, name: user.name, phone: user.phone, balance: parseFloat(user.balance) },
         session: {
-          id          : session.id,
+          id                  : session.id,
           durationMin,
           cost,
           pointsEarned,
-          pricePerHr  : session.price_per_hr,
-          spaceKey    : session.space_key,
-          spaceName   : session.space_name,
-          maxHours,               // ✅ بيجي للـ InvoicePage عشان يحسب billedHours صح
-          checkIn     : session.check_in,
-          checkOut    : checkOutISO,
+          pricePerHr          : session.price_per_hr,
+          spaceKey            : session.space_key,
+          spaceName           : session.space_name,
+          maxHours,
+          checkIn             : session.check_in,
+          checkOut            : checkOutISO,
+          isSubscriptionSession: isSubSession,  // ✅ للـ InvoicePage
+          subscriptionId      : session.subscription_id,
         },
       });
 
     } else {
       // ─── CHECK-IN ─────────────────────────────────────────────────
-      const space = await getSpaceSettings(space_key);
+      const space        = await getSpaceSettings(space_key);
+      const subscription = await getActiveSubscription(user.id);
 
-      await client.query(`
-        INSERT INTO sessions (user_id, price_per_hr, space_key, space_name, max_hours)
-        VALUES ($1, $2, $3, $4, $5)
-      `, [user.id, space.first_hour, space_key, space.name, space.max_hours]);
+      // ✅ لو عنده اشتراك نشط يغطي الـ cowork → سعر صفر
+      const isSubSession  = !!(subscription && subscription.covers_cowork && space_key === 'cowork');
+      const effectivePrice = isSubSession ? 0 : space.first_hour;
+
+      const { rows: newSession } = await client.query(`
+        INSERT INTO sessions
+          (user_id, price_per_hr, space_key, space_name, max_hours,
+           is_subscription_session, subscription_id)
+        VALUES ($1,$2,$3,$4,$5,$6,$7)
+        RETURNING id
+      `, [
+        user.id,
+        effectivePrice,
+        space_key,
+        space.name,
+        space.max_hours,
+        isSubSession,
+        subscription?.id || null,
+      ]);
 
       await client.query('COMMIT');
 
       return res.json({
         action    : 'checkin',
         client    : { name: user.name, phone: user.phone, balance: user.balance },
-        pricePerHr: space.first_hour,
+        pricePerHr: effectivePrice,
         spaceKey  : space_key,
         spaceName : space.name,
         maxHours  : space.max_hours,
+        // ✅ معلومات الاشتراك للـ ScannerPage
+        isSubscriptionSession: isSubSession,
+        subscription: subscription ? {
+          id       : subscription.id,
+          planName : subscription.plan_name,
+          endDate  : subscription.end_date,
+        } : null,
       });
     }
 
@@ -128,6 +165,12 @@ router.post('/pay', auth, requireRole('staff', 'admin'), async (req, res) => {
   const { session_id, user_id, payment_method, cost } = req.body;
   if (!session_id || !user_id || !payment_method || cost === undefined) {
     return res.status(400).json({ error: 'بيانات ناقصة' });
+  }
+
+  // ✅ لو التكلفة صفر (جلسة اشتراك) → مش محتاج تعمل حاجة
+  if (parseFloat(cost) === 0) {
+    await db.query(`UPDATE sessions SET payment_method = 'subscription' WHERE id = $1`, [session_id]);
+    return res.json({ success: true, payment_method: 'subscription', wallet_debit: 0, cash_amount: 0 });
   }
 
   const client = await db.pool.connect();
@@ -154,8 +197,7 @@ router.post('/pay', auth, requireRole('staff', 'admin'), async (req, res) => {
     } else if (payment_method === 'partial') {
       walletDebit = Math.min(balance, totalCost);
     } else {
-      walletDebit = 0;
-      finalMethod = 'cash';
+      walletDebit = 0; finalMethod = 'cash';
     }
 
     if (walletDebit > 0) {
@@ -194,7 +236,8 @@ router.get('/history', auth, async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT id, check_in, check_out, duration_min, cost,
-             payment_method, status, space_key, space_name, max_hours
+             payment_method, status, space_key, space_name, max_hours,
+             is_subscription_session
       FROM sessions WHERE user_id = $1
       ORDER BY check_in DESC LIMIT $2 OFFSET $3
     `, [req.user.id, limit, offset]);
@@ -214,6 +257,7 @@ router.get('/active', auth, requireRole('staff', 'admin'), async (req, res) => {
     const { rows } = await db.query(`
       SELECT s.id, s.check_in, s.price_per_hr,
              s.space_key, s.space_name, s.max_hours,
+             s.is_subscription_session, s.subscription_id,
              u.id as user_id, u.name, u.phone, u.balance,
              EXTRACT(EPOCH FROM (NOW() - s.check_in))/60 AS elapsed_min
       FROM sessions s

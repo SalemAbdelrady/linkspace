@@ -86,6 +86,10 @@ export const subscriptionsAPI = {
   createPlan: (data) => api.post('/subscriptions/plans', data),
   updatePlan: (id, data) => api.put(`/subscriptions/plans/${id}`, data),
   deletePlan: (id) => api.delete(`/subscriptions/plans/${id}`),
+  // في subscriptionsAPI
+subscribe: (body) => api.post('/subscriptions/subscribe', body),
+cancel:    (id)   => api.post(`/subscriptions/cancel/${id}`),
+getAll:    ()     => api.get('/subscriptions/all'),
 };
 
 // invoicesAPI
