@@ -369,8 +369,10 @@ export default function SubscriptionsPage() {
                           </div>
                         )}
                         <div style={{ display: 'flex', gap: 8 }}>
-                          <button onClick={() => { setSelectedPlanForSub(plan); setShowModal(true); }}
-                            className="btn btn-primary" style={{ flex: 1, padding: '7px', fontSize: 12 }}
+                          {/* ✅ الإصلاح: إزالة onClick المكرر و setSelectedPlanForSub غير المعرفة */}
+                          <button
+                            className="btn btn-primary"
+                            style={{ flex: 1, padding: '7px', fontSize: 12 }}
                             onClick={() => setShowModal(true)}>
                             👤 اشترك عميل
                           </button>
@@ -396,7 +398,7 @@ export default function SubscriptionsPage() {
               <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 40, fontSize: 13 }}>لا توجد اشتراكات نشطة</div>
             )}
             {activeSubs.map(sub => {
-              const days     = daysLeft(sub.end_date);
+              const days      = daysLeft(sub.end_date);
               const isExpired = days === 0;
               const isWarning = days <= 5 && days > 0;
               return (
