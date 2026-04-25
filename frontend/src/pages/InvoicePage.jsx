@@ -48,19 +48,16 @@ export default function InvoicePage() {
     );
   }
 
-  // ✅ بيانات المساحة
   const spaceKey  = session.spaceKey  || 'cowork';
   const spaceName = session.spaceName || 'منطقة العمل المشتركة';
   const spaceIcon = SPACE_ICONS[spaceKey] || '🏢';
   const maxHours  = session.maxHours  || 4;
 
-  // ✅ هل جلسة اشتراك؟
   const isSubscription = session.isSubscriptionSession === true || session.cost === 0;
 
   // ── حسابات ────────────────────────────────────────────────────────
   const sessionCost    = isSubscription ? 0 : parseFloat(session.cost || 0);
   const servicesCost   = addedServices.reduce((sum, s) => sum + s.price * s.qty, 0);
-  // ✅ لو اشتراك → الكوبون والخصم لا يطبق على الجلسة (صفر)، يطبق على الخدمات بس
   const subtotal       = sessionCost + servicesCost;
   const discountPct    = couponData ? parseFloat(couponData.discount_pct) : 0;
   const discountAmount = parseFloat(((subtotal * discountPct) / 100).toFixed(2));
@@ -69,16 +66,30 @@ export default function InvoicePage() {
 
   // ── رصيد العميل ───────────────────────────────────────────────────
   const clientBalance = parseFloat(client.balance || 0);
-  const walletCovers  = clientBalance >= total;
-  const walletPartial = clientBalance > 0 && clientBalance < total;
-  const walletDebit   = walletPartial ? clientBalance : (walletCovers ? total : 0);
-  const cashRemainder = parseFloat((total - walletDebit).toFixed(2));
 
+  // ✅ حساب الخصم من المحفظة بناءً على طريقة الدفع المختارة
+  const walletDebit = (() => {
+    if (total === 0) return 0;
+    if (paymentMethod === 'cash') return 0;
+    if (paymentMethod === 'wallet') {
+      return Math.min(clientBalance, total);
+    }
+    return 0;
+  })();
+
+  const cashRemainder  = parseFloat((total - walletDebit).toFixed(2));
+  const walletCovers   = clientBalance >= total && total > 0;
+  const walletPartial  = clientBalance > 0 && clientBalance < total;
+
+  // ✅ الطريقة الفعلية للدفع
   function getEffectiveMethod() {
-    if (isSubscription && total === 0) return 'subscription'; // ✅ جلسة مجانية
+    if (isSubscription && total === 0) return 'subscription';
     if (paymentMethod === 'cash') return 'cash';
-    if (walletCovers)             return 'wallet';
-    if (walletPartial)            return 'partial';
+    if (paymentMethod === 'wallet') {
+      if (clientBalance <= 0) return 'cash';
+      if (walletCovers)       return 'wallet';
+      return 'partial';
+    }
     return 'cash';
   }
 
@@ -109,24 +120,20 @@ export default function InvoicePage() {
     catch (err) { console.error(err); }
   }
 
-  // ✅ الدفع — لو اشتراك وتكلفة صفر → مش محتاج /pay
+  // ✅ الدفع — مش محتاج نعمل pay لو cash أو subscription
+  // الـ backend في invoices.js هو اللي بيخصم المحفظة
   async function processPayment() {
     if (paid) return;
-    if (isSubscription && total === 0) { setPaid(true); return; }
-    const method = getEffectiveMethod();
-    if (method === 'cash') { setPaid(true); return; }
-    try {
-      await sessionsAPI.pay({ session_id: session.id, user_id: client.id, payment_method: method, cost: total });
-      setPaid(true);
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'خطأ في عملية الدفع');
-      throw err;
-    }
+    setPaid(true);
   }
 
   // ── حفظ الفاتورة ──────────────────────────────────────────────────
   async function saveInvoice() {
     if (saved) return;
+    const effectiveMethod = getEffectiveMethod();
+    const finalWalletPaid = walletDebit;
+    const finalCashPaid   = cashRemainder;
+
     try {
       await invoicesAPI.create({
         invoice_number:  invoiceNumber,
@@ -146,7 +153,10 @@ export default function InvoicePage() {
         discount_amount: discountAmount,
         subtotal,
         total,
-        payment_method:  getEffectiveMethod(),
+        payment_method:  effectiveMethod,
+        // ✅ نبعت wallet_paid و cash_paid صراحة للـ backend
+        wallet_paid:     finalWalletPaid,
+        cash_paid:       finalCashPaid,
         note:            note || null,
       });
       setSaved(true);
@@ -183,8 +193,9 @@ export default function InvoicePage() {
 
   // ── WalletStatus ──────────────────────────────────────────────────
   function WalletStatus() {
-    // ✅ لو جلسة اشتراك وتكلفة صفر → ما في حاجة للمحفظة
     if (isSubscription && servicesCost === 0) return null;
+    if (total === 0) return null;
+
     if (paymentMethod === 'cash') {
       return (
         <div style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 8, fontSize: 13, color: 'var(--muted)' }}>
@@ -193,6 +204,7 @@ export default function InvoicePage() {
         </div>
       );
     }
+
     if (clientBalance <= 0) {
       return (
         <div style={{ padding: '10px 14px', background: 'rgba(255,71,87,0.08)', border: '1px solid rgba(255,71,87,0.3)', borderRadius: 10, marginBottom: 8, fontSize: 12, color: '#ff4757' }}>
@@ -200,6 +212,7 @@ export default function InvoicePage() {
         </div>
       );
     }
+
     if (walletCovers) {
       return (
         <div style={{ padding: '10px 14px', background: 'rgba(46,213,115,0.08)', border: '1px solid rgba(46,213,115,0.4)', borderRadius: 10, marginBottom: 8 }}>
@@ -211,6 +224,8 @@ export default function InvoicePage() {
         </div>
       );
     }
+
+    // partial
     return (
       <div style={{ padding: '10px 14px', background: 'rgba(255,165,2,0.08)', border: '1px solid rgba(255,165,2,0.4)', borderRadius: 10, marginBottom: 8 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -219,10 +234,12 @@ export default function InvoicePage() {
         </div>
         <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>⚠️ لا يكفي — سيُدفع جزئياً</div>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '6px 8px', background: 'rgba(0,0,0,0.2)', borderRadius: 8, marginBottom: 4 }}>
-          <span style={{ color: 'var(--muted)' }}>من المحفظة:</span><span style={{ color: 'var(--accent)', fontWeight: 700 }}>{walletDebit.toFixed(2)} ج</span>
+          <span style={{ color: 'var(--muted)' }}>من المحفظة:</span>
+          <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{walletDebit.toFixed(2)} ج</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '6px 8px', background: 'rgba(0,0,0,0.2)', borderRadius: 8 }}>
-          <span style={{ color: 'var(--muted)' }}>المتبقي كاش:</span><span style={{ color: 'var(--warning)', fontWeight: 700 }}>{cashRemainder.toFixed(2)} ج</span>
+          <span style={{ color: 'var(--muted)' }}>المتبقي كاش:</span>
+          <span style={{ color: 'var(--warning)', fontWeight: 700 }}>{cashRemainder.toFixed(2)} ج</span>
         </div>
       </div>
     );
@@ -246,7 +263,6 @@ export default function InvoicePage() {
             style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '6px 12px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>← رجوع</button>
         </div>
 
-        {/* ✅ بادج الاشتراك */}
         {isSubscription && (
           <div style={{ padding: '10px 16px', background: 'rgba(0,212,170,0.1)', border: '1px solid rgba(0,212,170,0.4)', borderRadius: 12, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
             <span style={{ fontSize: 20 }}>📋</span>
@@ -257,7 +273,6 @@ export default function InvoicePage() {
           </div>
         )}
 
-        {/* الفاتورة */}
         <div className="print-area card" style={{ marginBottom: 16 }}>
           <div style={{ textAlign: 'center', marginBottom: 16, paddingBottom: 16, borderBottom: '1px dashed var(--border)' }}>
             <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--accent)' }}>🏢 Link Space</div>
@@ -353,17 +368,37 @@ export default function InvoicePage() {
             </div>
           </div>
 
-          <div style={{ textAlign: 'center', fontSize: 13 }}>
-            <span style={{ color: 'var(--muted)' }}>طريقة الدفع: </span>
-            {effectiveMethod === 'subscription'
-              ? <span className="badge badge-success">📋 اشتراك شهري</span>
-              : effectiveMethod === 'partial'
-              ? <span><span className="badge badge-info" style={{ marginLeft: 4 }}>💳 {walletDebit.toFixed(2)} ج</span><span className="badge badge-warning">💵 {cashRemainder.toFixed(2)} ج</span></span>
-              : effectiveMethod === 'wallet'
-              ? <span className="badge badge-info">💳 محفظة</span>
-              : <span className="badge badge-warning">💵 كاش</span>
-            }
+          {/* ✅ تفاصيل طريقة الدفع — تظهر في الفاتورة بشكل واضح */}
+          <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px dashed var(--border)' }}>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>طريقة الدفع</div>
+            {effectiveMethod === 'subscription' ? (
+              <div style={{ textAlign: 'center' }}>
+                <span className="badge badge-success">📋 اشتراك شهري</span>
+              </div>
+            ) : effectiveMethod === 'partial' ? (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
+                  <span style={{ color: 'var(--muted)' }}>💳 من المحفظة</span>
+                  <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{walletDebit.toFixed(2)} ج</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                  <span style={{ color: 'var(--muted)' }}>💵 كاش</span>
+                  <span style={{ color: 'var(--warning)', fontWeight: 700 }}>{cashRemainder.toFixed(2)} ج</span>
+                </div>
+              </div>
+            ) : effectiveMethod === 'wallet' ? (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--muted)' }}>💳 من المحفظة</span>
+                <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{total.toFixed(2)} ج</span>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--muted)' }}>💵 كاش</span>
+                <span style={{ color: 'var(--warning)', fontWeight: 700 }}>{total.toFixed(2)} ج</span>
+              </div>
+            )}
           </div>
+
           <div style={{ textAlign: 'center', marginTop: 16, fontSize: 12, color: 'var(--muted)' }}>شكراً لزيارتكم 🙏</div>
         </div>
 
@@ -410,7 +445,6 @@ export default function InvoicePage() {
             </div>
           )}
 
-          {/* طريقة الدفع — تخفى لو جلسة اشتراك بدون خدمات */}
           {!(isSubscription && servicesCost === 0) && (
             <>
               <div className="section-title">طريقة الدفع</div>

@@ -23,6 +23,9 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
     coupon_code, discount_pct, discount_amount,
     subtotal, total,
     payment_method, note,
+    // ✅ الـ frontend بيبعتهم صراحة
+    wallet_paid: walletPaidFromFrontend,
+    cash_paid:   cashPaidFromFrontend,
   } = req.body;
 
   if (!invoice_number || !user_id || !client_name) {
@@ -44,23 +47,32 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
     let walletPaid = 0;
     let cashPaid   = 0;
 
-    if (payment_method === 'cash') {
-      walletPaid = 0; cashPaid = totalAmount;
-    } else if (payment_method === 'wallet') {
-      if (currentBalance < totalAmount) {
+    // ✅ لو الـ frontend بعت wallet_paid صراحة → نستخدمه
+    if (walletPaidFromFrontend !== undefined && walletPaidFromFrontend !== null) {
+      walletPaid = parseFloat(walletPaidFromFrontend) || 0;
+      cashPaid   = parseFloat(cashPaidFromFrontend)   || 0;
+    } else {
+      // fallback — نحسب من الـ payment_method
+      if (payment_method === 'cash' || payment_method === 'subscription') {
+        walletPaid = 0; cashPaid = totalAmount;
+      } else if (payment_method === 'wallet') {
+        walletPaid = Math.min(currentBalance, totalAmount);
+        cashPaid   = parseFloat((totalAmount - walletPaid).toFixed(2));
+      } else if (payment_method === 'partial') {
         walletPaid = currentBalance;
         cashPaid   = parseFloat((totalAmount - walletPaid).toFixed(2));
       } else {
-        walletPaid = totalAmount; cashPaid = 0;
+        walletPaid = 0; cashPaid = totalAmount;
       }
-    } else if (payment_method === 'partial') {
-      walletPaid = currentBalance;
-      cashPaid   = parseFloat((totalAmount - walletPaid).toFixed(2));
-    } else {
-      walletPaid = 0; cashPaid = totalAmount;
     }
 
+    // ✅ خصم المحفظة لو فيه
     if (walletPaid > 0) {
+      // تحقق إن الرصيد كافي
+      if (currentBalance < walletPaid) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `الرصيد غير كافٍ — الرصيد الحالي: ${currentBalance.toFixed(2)} ج` });
+      }
       await client.query('UPDATE users SET balance = balance - $1 WHERE id = $2', [walletPaid, user_id]);
       await client.query(`
         INSERT INTO wallet_transactions (user_id, type, amount, description)
@@ -99,7 +111,12 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
     ]);
 
     await client.query('COMMIT');
-    res.status(201).json({ invoice: rows[0], wallet_paid: walletPaid, cash_paid: cashPaid, new_balance: parseFloat((currentBalance - walletPaid).toFixed(2)) });
+    res.status(201).json({
+      invoice     : rows[0],
+      wallet_paid : walletPaid,
+      cash_paid   : cashPaid,
+      new_balance : parseFloat((currentBalance - walletPaid).toFixed(2)),
+    });
 
   } catch (err) {
     await client.query('ROLLBACK');
@@ -110,27 +127,19 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
   }
 });
 
-// ✅ GET /api/invoices/my — فواتير العميل الحالي [client]
-//    العميل يشوف فواتيره بس — مش فواتير الآخرين
+// GET /api/invoices/my — فواتير العميل الحالي [client]
 router.get('/my', auth, async (req, res) => {
   const page   = parseInt(req.query.page) || 1;
   const limit  = 10;
   const offset = (page - 1) * limit;
-
   try {
     const { rows } = await db.query(`
-      SELECT *
-      FROM invoices
-      WHERE user_id = $1
-      ORDER BY created_at DESC
-      LIMIT $2 OFFSET $3
+      SELECT * FROM invoices WHERE user_id = $1
+      ORDER BY created_at DESC LIMIT $2 OFFSET $3
     `, [req.user.id, limit, offset]);
-
     const { rows: countRows } = await db.query(
-      'SELECT COUNT(*) FROM invoices WHERE user_id = $1',
-      [req.user.id]
+      'SELECT COUNT(*) FROM invoices WHERE user_id = $1', [req.user.id]
     );
-
     res.json({ invoices: rows, total: parseInt(countRows[0].count), page, limit });
   } catch (err) {
     console.error(err);
@@ -145,24 +154,20 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
   const offset = (page - 1) * limit;
   const search = req.query.search || '';
   const date   = req.query.date   || '';
-
   try {
     const { rows } = await db.query(`
       SELECT * FROM invoices
       WHERE
         ($1 = '' OR client_name ILIKE '%' || $1 || '%' OR client_phone ILIKE '%' || $1 || '%')
         AND ($2 = '' OR DATE(created_at) = $2::date)
-      ORDER BY created_at DESC
-      LIMIT $3 OFFSET $4
+      ORDER BY created_at DESC LIMIT $3 OFFSET $4
     `, [search, date, limit, offset]);
-
     const { rows: countRows } = await db.query(`
       SELECT COUNT(*) FROM invoices
       WHERE
         ($1 = '' OR client_name ILIKE '%' || $1 || '%' OR client_phone ILIKE '%' || $1 || '%')
         AND ($2 = '' OR DATE(created_at) = $2::date)
     `, [search, date]);
-
     res.json({ invoices: rows, total: parseInt(countRows[0].count), page, limit });
   } catch (err) {
     console.error(err);
@@ -170,7 +175,7 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
   }
 });
 
-// GET /api/invoices/:id — فاتورة واحدة [staff/admin]
+// GET /api/invoices/:id [staff/admin]
 router.get('/:id', auth, requireRole('staff', 'admin'), async (req, res) => {
   try {
     const { rows } = await db.query('SELECT * FROM invoices WHERE id = $1', [req.params.id]);
