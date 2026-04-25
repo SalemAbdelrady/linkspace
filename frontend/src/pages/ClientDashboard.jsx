@@ -52,12 +52,31 @@ function LiveTimer({ checkIn, pricePerHr, maxHours = 4 }) {
 // ── InvoiceDetailModal ────────────────────────────────────────────────
 const SPACE_ICONS = { cowork: '🖥️', meeting: '🤝', lessons: '📚' };
 
+function PaymentBadge({ invoice }) {
+  const walletPaid = parseFloat(invoice.wallet_paid || 0);
+  const cashPaid   = parseFloat(invoice.cash_paid   || 0);
+  const method     = invoice.payment_method;
+
+  if (method === 'subscription') return <span className="badge badge-success" style={{ fontSize: 10 }}>📋 اشتراك</span>;
+  if (walletPaid > 0 && cashPaid > 0) return (
+    <span style={{ display: 'flex', gap: 3 }}>
+      <span className="badge badge-info"    style={{ fontSize: 10 }}>💳 {walletPaid.toFixed(0)} ج</span>
+      <span className="badge badge-warning" style={{ fontSize: 10 }}>💵 {cashPaid.toFixed(0)} ج</span>
+    </span>
+  );
+  if (walletPaid > 0) return <span className="badge badge-info"    style={{ fontSize: 10 }}>💳 محفظة</span>;
+  return               <span className="badge badge-warning" style={{ fontSize: 10 }}>💵 كاش</span>;
+}
+
 function InvoiceDetailModal({ invoice, onClose }) {
   if (!invoice) return null;
   const services    = typeof invoice.services === 'string' ? JSON.parse(invoice.services) : invoice.services || [];
   const spaceIcon   = SPACE_ICONS[invoice.space_key] || '🏢';
   const spaceName   = invoice.space_name || 'منطقة العمل المشتركة';
   const billedHours = invoice.duration_min ? Math.min(Math.max(Math.ceil(invoice.duration_min / 60), 1), 12) : null;
+  const walletPaid  = parseFloat(invoice.wallet_paid || 0);
+  const cashPaid    = parseFloat(invoice.cash_paid   || 0);
+  const method      = invoice.payment_method;
 
   function fmtTime(iso) {
     if (!iso) return '—';
@@ -100,14 +119,8 @@ function InvoiceDetailModal({ invoice, onClose }) {
             {billedHours && (
               <span>المدة: {billedHours} {billedHours === 1 ? 'ساعة' : 'ساعات'}<span style={{ opacity: 0.7, marginRight: 4 }}>({invoice.duration_min} د فعلية)</span></span>
             )}
-            <span>سعر الساعة: {invoice.price_per_hr} ج</span>
+            {invoice.price_per_hr > 0 && <span>سعر الساعة: {invoice.price_per_hr} ج</span>}
           </div>
-          {(invoice.check_in || invoice.check_out) && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginTop: 4, opacity: 0.8 }}>
-              {invoice.check_in && <span>دخول: {fmtTime(invoice.check_in)}</span>}
-              {invoice.check_out && <span>خروج: {fmtTime(invoice.check_out)}</span>}
-            </div>
-          )}
         </div>
 
         {/* الخدمات */}
@@ -136,9 +149,16 @@ function InvoiceDetailModal({ invoice, onClose }) {
 
         {/* الإجمالي */}
         <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px dashed var(--border)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>
-            <span>تكلفة الجلسة</span><span>{parseFloat(invoice.session_cost).toFixed(2)} ج</span>
-          </div>
+          {parseFloat(invoice.session_cost) > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>
+              <span>تكلفة الجلسة</span><span>{parseFloat(invoice.session_cost).toFixed(2)} ج</span>
+            </div>
+          )}
+          {method === 'subscription' && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--success)', marginBottom: 6 }}>
+              <span>📋 اشتراك شهري</span><span>مدفوع مسبقاً</span>
+            </div>
+          )}
           {parseFloat(invoice.services_cost) > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>
               <span>الخدمات</span><span>{parseFloat(invoice.services_cost).toFixed(2)} ج</span>
@@ -150,28 +170,34 @@ function InvoiceDetailModal({ invoice, onClose }) {
             </div>
           )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 700, color: 'var(--accent)', marginTop: 8 }}>
-            <span>الإجمالي</span><span>{parseFloat(invoice.total).toFixed(2)} ج</span>
+            <span>الإجمالي</span>
+            <span>{parseFloat(invoice.total) === 0 ? 'مجاناً ✅' : `${parseFloat(invoice.total).toFixed(2)} ج`}</span>
           </div>
         </div>
 
-        {/* طريقة الدفع */}
+        {/* ✅ طريقة الدفع — تفصيلية وصحيحة */}
         <div style={{ background: 'rgba(0,0,0,0.15)', borderRadius: 10, padding: '10px 14px' }}>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>طريقة الدفع</div>
-          {parseFloat(invoice.wallet_paid || 0) > 0 && parseFloat(invoice.cash_paid || 0) > 0 ? (
+          {method === 'subscription' ? (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+              <span style={{ color: 'var(--muted)' }}>📋 اشتراك شهري</span>
+              <span style={{ fontWeight: 700, color: 'var(--success)' }}>مجاناً</span>
+            </div>
+          ) : walletPaid > 0 && cashPaid > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                 <span style={{ color: 'var(--muted)' }}>💳 من المحفظة</span>
-                <span style={{ fontWeight: 700, color: '#3b82f6' }}>{parseFloat(invoice.wallet_paid).toFixed(2)} ج</span>
+                <span style={{ fontWeight: 700, color: '#3b82f6' }}>{walletPaid.toFixed(2)} ج</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                 <span style={{ color: 'var(--muted)' }}>💵 كاش</span>
-                <span style={{ fontWeight: 700, color: 'var(--warning)' }}>{parseFloat(invoice.cash_paid).toFixed(2)} ج</span>
+                <span style={{ fontWeight: 700, color: 'var(--warning)' }}>{cashPaid.toFixed(2)} ج</span>
               </div>
             </div>
-          ) : parseFloat(invoice.wallet_paid || 0) > 0 ? (
+          ) : walletPaid > 0 ? (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
               <span style={{ color: 'var(--muted)' }}>💳 محفظة كاملة</span>
-              <span style={{ fontWeight: 700, color: '#3b82f6' }}>{parseFloat(invoice.wallet_paid).toFixed(2)} ج</span>
+              <span style={{ fontWeight: 700, color: '#3b82f6' }}>{walletPaid.toFixed(2)} ج</span>
             </div>
           ) : (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
@@ -204,7 +230,11 @@ export default function ClientDashboard() {
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
 
-  useEffect(() => { loadData(); loadCoworkPrice(); }, []);
+  // ✅ فواتير للـ overview (أحدث 8)
+  const [recentInvoices,        setRecentInvoices]        = useState([]);
+  const [loadingRecentInvoices, setLoadingRecentInvoices] = useState(true);
+
+  useEffect(() => { loadData(); loadCoworkPrice(); loadRecentInvoices(); }, []);
   useEffect(() => { if (tab === 'invoices') loadInvoices(); }, [tab, invoicePage]);
 
   async function loadCoworkPrice() {
@@ -228,6 +258,15 @@ export default function ClientDashboard() {
     } finally {
       setLoadingSessions(false);
     }
+  }
+
+  // ✅ تحميل أحدث الفواتير للـ overview
+  async function loadRecentInvoices() {
+    try {
+      const { data } = await invoicesAPI.getClientInvoices({ page: 1 });
+      setRecentInvoices(data.invoices || []);
+    } catch { }
+    finally { setLoadingRecentInvoices(false); }
   }
 
   async function loadInvoices() {
@@ -255,6 +294,59 @@ export default function ClientDashboard() {
 
   const initials = user?.name?.split(' ').slice(0, 2).map(w => w[0]).join('');
   const totalInvoicePages = Math.ceil(invoiceTotal / 10);
+
+  // ✅ مكون بطاقة الفاتورة المصغرة
+  function InvoiceCard({ inv, onClick }) {
+    const services  = typeof inv.services === 'string' ? JSON.parse(inv.services) : inv.services || [];
+    const icon      = SPACE_ICONS[inv.space_key] || '🏢';
+    const name      = inv.space_name || 'منطقة العمل المشتركة';
+    const walletPaid = parseFloat(inv.wallet_paid || 0);
+    const cashPaid   = parseFloat(inv.cash_paid   || 0);
+    const method     = inv.payment_method;
+
+    return (
+      <div className="card" style={{ cursor: 'pointer', marginBottom: 10 }} onClick={onClick}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--accent)', fontWeight: 700 }}>#{inv.invoice_number}</span>
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                {new Date(inv.created_at).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' })}
+                {' '}
+                {new Date(inv.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{icon} {name}</div>
+            {/* ✅ تفاصيل الدفع بشكل واضح */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {method === 'subscription' ? (
+                <span className="badge badge-success" style={{ fontSize: 10 }}>📋 اشتراك شهري</span>
+              ) : walletPaid > 0 && cashPaid > 0 ? (
+                <>
+                  <span className="badge badge-info"    style={{ fontSize: 10 }}>💳 {walletPaid.toFixed(2)} ج محفظة</span>
+                  <span className="badge badge-warning" style={{ fontSize: 10 }}>💵 {cashPaid.toFixed(2)} ج كاش</span>
+                </>
+              ) : walletPaid > 0 ? (
+                <span className="badge badge-info"    style={{ fontSize: 10 }}>💳 {walletPaid.toFixed(2)} ج محفظة</span>
+              ) : (
+                <span className="badge badge-warning" style={{ fontSize: 10 }}>💵 {parseFloat(inv.total).toFixed(2)} ج كاش</span>
+              )}
+              {services.length > 0 && <span style={{ fontSize: 10, color: 'var(--muted)', padding: '2px 6px', background: 'rgba(255,255,255,0.05)', borderRadius: 6 }}>☕ {services.length} خدمة</span>}
+              {inv.coupon_code && <span style={{ fontSize: 10, color: 'var(--success)', padding: '2px 6px', background: 'rgba(46,213,115,0.08)', borderRadius: 6 }}>🎫 {inv.coupon_code}</span>}
+            </div>
+          </div>
+          <div style={{ textAlign: 'left', marginRight: 8 }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--accent)' }}>
+              {parseFloat(inv.total) === 0 ? <span style={{ fontSize: 14, color: 'var(--success)' }}>مجاناً</span> : `${parseFloat(inv.total).toFixed(2)} ج`}
+            </div>
+            {inv.duration_min > 0 && (
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>⏱ {inv.duration_min} د</div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-wrap" style={{ paddingBottom: 40 }}>
@@ -335,30 +427,26 @@ export default function ClientDashboard() {
             </>
           )}
 
-          <div className="section-title">سجل الزيارات</div>
-          <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 12 }}>
-            {loadingSessions ? (
-              <div style={{ padding: 20, textAlign: 'center', color: 'var(--muted)' }}>جارٍ التحميل...</div>
-            ) : sessions.length === 0 ? (
-              <div style={{ padding: 20, textAlign: 'center', color: 'var(--muted)' }}>لا توجد زيارات بعد</div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table className="data-table">
-                  <thead><tr><th>التاريخ</th><th>المدة</th><th>التكلفة</th><th>الحالة</th></tr></thead>
-                  <tbody>
-                    {sessions.slice(0, 8).map(s => (
-                      <tr key={s.id}>
-                        <td>{format(new Date(s.check_in), 'dd MMM', { locale: ar })}</td>
-                        <td>{s.duration_min ? `${Math.min(Math.max(Math.ceil(s.duration_min / 60), 1), 4)} ساعة` : '—'}</td>
-                        <td style={{ color: 'var(--accent)' }}>{s.cost ? `${parseFloat(s.cost).toFixed(2)} ج` : '—'}</td>
-                        <td><span className={`badge badge-${s.payment_method === 'wallet' ? 'info' : 'warning'}`}>{s.payment_method === 'wallet' ? 'محفظة' : 'كاش'}</span></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+          {/* ✅ سجل الفواتير بدل سجل الجلسات */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div className="section-title" style={{ margin: 0 }}>آخر الفواتير</div>
+            <button onClick={() => setTab('invoices')}
+              style={{ fontSize: 11, color: 'var(--accent)', background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+              عرض الكل
+            </button>
           </div>
+
+          {loadingRecentInvoices ? (
+            <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 20, fontSize: 13 }}>جارٍ التحميل...</div>
+          ) : recentInvoices.length === 0 ? (
+            <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', padding: 20, fontSize: 13, marginBottom: 12 }}>لا توجد فواتير بعد</div>
+          ) : (
+            <div style={{ marginBottom: 12 }}>
+              {recentInvoices.slice(0, 5).map(inv => (
+                <InvoiceCard key={inv.id} inv={inv} onClick={() => setSelectedInvoice(inv)} />
+              ))}
+            </div>
+          )}
 
           <div className="section-title">الكوبونات</div>
           {coupons.length === 0 && (
@@ -389,38 +477,10 @@ export default function ClientDashboard() {
           ) : invoices.length === 0 ? (
             <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', padding: 40, fontSize: 13 }}>لا توجد فواتير بعد</div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-              {invoices.map(inv => {
-                const services = typeof inv.services === 'string' ? JSON.parse(inv.services) : inv.services || [];
-                const icon = SPACE_ICONS[inv.space_key] || '🏢';
-                const name = inv.space_name || 'منطقة العمل المشتركة';
-                return (
-                  <div key={inv.id} className="card" style={{ cursor: 'pointer' }} onClick={() => setSelectedInvoice(inv)}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div>
-                        <div style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--accent)', fontWeight: 700 }}>#{inv.invoice_number}</div>
-                        <div style={{ fontSize: 13, fontWeight: 600, marginTop: 2 }}>{icon} {name}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                          {new Date(inv.created_at).toLocaleDateString('ar-EG', { month: 'long', day: 'numeric', year: 'numeric' })}
-                        </div>
-                      </div>
-                      <div style={{ textAlign: 'left' }}>
-                        <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--accent)' }}>{parseFloat(inv.total).toFixed(2)} ج</div>
-                        {parseFloat(inv.wallet_paid || 0) > 0 && parseFloat(inv.cash_paid || 0) > 0
-                          ? <><span className="badge badge-info" style={{ fontSize: 10 }}>💳 {parseFloat(inv.wallet_paid).toFixed(0)} ج</span><span className="badge badge-warning" style={{ fontSize: 10, marginRight: 3 }}>💵 {parseFloat(inv.cash_paid).toFixed(0)} ج</span></>
-                          : <span className={`badge badge-${inv.payment_method === 'wallet' ? 'info' : 'warning'}`} style={{ fontSize: 10 }}>{inv.payment_method === 'wallet' ? '💳 محفظة' : '💵 كاش'}</span>
-                        }
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 11, color: 'var(--muted)' }}>
-                      <span>🕐 {new Date(inv.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</span>
-                      <span>⏱ {inv.duration_min} د</span>
-                      {services.length > 0 && <span>☕ {services.length} خدمة</span>}
-                      {inv.coupon_code && <span>🎫 {inv.coupon_code}</span>}
-                    </div>
-                  </div>
-                );
-              })}
+            <div style={{ marginBottom: 16 }}>
+              {invoices.map(inv => (
+                <InvoiceCard key={inv.id} inv={inv} onClick={() => setSelectedInvoice(inv)} />
+              ))}
             </div>
           )}
           {totalInvoicePages > 1 && (
