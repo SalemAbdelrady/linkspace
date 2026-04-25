@@ -80,6 +80,15 @@ export const servicesAPI = {
   delete: (id) => api.delete(`/services/${id}`),
 };
 
+// Orders (Session Tab)
+export const ordersAPI = {
+  getBySession : (sessionId) => api.get(`/orders/session/${sessionId}`),
+  getMySession : ()           => api.get('/orders/my-session'),
+  add          : (body)       => api.post('/orders/add', body),
+  clientAdd    : (body)       => api.post('/orders/client-add', body),
+  remove       : (id)         => api.delete(`/orders/${id}`),
+};
+
 // Subscription Plans
 export const subscriptionsAPI = {
   getPlans: () => api.get('/subscriptions/plans'),
@@ -100,5 +109,7 @@ export const invoicesAPI = {
   getClientInvoices: (params) => api.get('/invoices/my', { params }),
 };
 
+
 // ✅ export default في الآخر
 export default api;
+

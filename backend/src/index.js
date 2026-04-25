@@ -46,6 +46,7 @@ app.use('/api/spaces',        require('./routes/spaces'));
 app.use('/api/services',      require('./routes/services'));
 app.use('/api/subscriptions', require('./routes/subscriptions'));
 app.use('/api/invoices',      require('./routes/invoices'));
+app.use('/api/orders', require('./routes/orders'));
 
 // Health check
 app.get('/api/health', (_, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
