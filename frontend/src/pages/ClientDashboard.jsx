@@ -17,8 +17,11 @@ function ProgressBar({ value, max }) {
   );
 }
 
+const SPACE_ICONS = { cowork: '🖥️', meeting: '🤝', lessons: '📚' };
+
 // ── LiveTimer ─────────────────────────────────────────────────────────
-function LiveTimer({ checkIn, pricePerHr, maxHours = 4 }) {
+// ✅ إصلاح 2: يأخذ pricePerHr من الجلسة نفسها مش من coworkSpace
+function LiveTimer({ checkIn, pricePerHr, maxHours = 4, spaceName, spaceKey }) {
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     const start = new Date(checkIn);
@@ -39,10 +42,12 @@ function LiveTimer({ checkIn, pricePerHr, maxHours = 4 }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
         <span className="pulse-dot" />
         <span style={{ fontWeight: 700, fontSize: 14 }}>جلسة نشطة</span>
+        {spaceKey && <span style={{ fontSize: 11, color: 'var(--accent)' }}>{SPACE_ICONS[spaceKey] || '🏢'} {spaceName}</span>}
         {isMaxed && <span style={{ fontSize: 11, background: 'rgba(0,212,170,0.15)', color: 'var(--accent)', padding: '2px 8px', borderRadius: 10 }}>وصلت للحد الأقصى</span>}
       </div>
       <div className="stat-row"><span className="stat-label">المدة</span><span className="stat-val" style={{ fontFamily: 'var(--mono)' }}>{fmt}</span></div>
       <div className="stat-row"><span className="stat-label">الساعات المحاسَب عليها</span><span className="stat-val" style={{ color: 'var(--muted)' }}>{billedHours} {billedHours === 1 ? 'ساعة' : 'ساعات'}</span></div>
+      <div className="stat-row"><span className="stat-label">سعر الساعة</span><span className="stat-val" style={{ color: 'var(--muted)' }}>{pricePerHr} ج/س</span></div>
       <div className="stat-row" style={{ border: 'none' }}><span className="stat-label">التكلفة الحالية</span><span className="stat-val" style={{ color: isMaxed ? 'var(--success)' : 'var(--warning)' }}>{cost} ج {isMaxed && '✅'}</span></div>
     </div>
   );
@@ -50,18 +55,23 @@ function LiveTimer({ checkIn, pricePerHr, maxHours = 4 }) {
 
 // ── مودال طلب العميل ─────────────────────────────────────────────────
 function ClientOrderModal({ sessionId, onClose, onOrderAdded }) {
-  const [services,     setServices]     = useState([]);
-  const [myOrders,     setMyOrders]     = useState([]);
-  const [confirmItem,  setConfirmItem]  = useState(null); // الخدمة المراد تأكيدها
-  const [saving,       setSaving]       = useState(false);
+  const [services,    setServices]    = useState([]);
+  const [myOrders,    setMyOrders]    = useState([]);
+  const [confirmItem, setConfirmItem] = useState(null);
+  const [saving,      setSaving]      = useState(false);
+  const [loading,     setLoading]     = useState(true); // ✅ إصلاح 1
 
   useEffect(() => {
-    servicesAPI.getAll()
-      .then(({ data }) => setServices(data.services || []))
-      .catch(() => {});
-    api.get(`/orders/session/${sessionId}`)
-      .then(({ data }) => setMyOrders(data.orders || []))
-      .catch(() => {});
+    // ✅ إصلاح 1: جيب الخدمات صح
+    Promise.all([
+      servicesAPI.getAll(),
+      api.get(`/orders/session/${sessionId}`),
+    ]).then(([svcRes, ordRes]) => {
+      setServices(svcRes.data.services || []);
+      setMyOrders(ordRes.data.orders || []);
+    }).catch(() => {
+      toast.error('خطأ في تحميل البيانات');
+    }).finally(() => setLoading(false));
   }, [sessionId]);
 
   async function confirmAdd(service) {
@@ -84,12 +94,15 @@ function ClientOrderModal({ sessionId, onClose, onOrderAdded }) {
     }
   }
 
-  const myTotal = myOrders.filter(o => o.added_by === 'client').reduce((sum, o) => sum + parseFloat(o.price) * o.qty, 0);
+  // ✅ إصلاح 3: اعرض كل الطلبات (staff + client)
+  const clientOrders = myOrders.filter(o => o.added_by === 'client');
+  const staffOrders  = myOrders.filter(o => o.added_by === 'staff');
+  const myTotal      = clientOrders.reduce((sum, o) => sum + parseFloat(o.price) * o.qty, 0);
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: 16 }}
       onClick={() => !confirmItem && onClose()}>
-      <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 16px 16px', padding: 20, width: '100%', maxWidth: 440, maxHeight: '80vh', overflowY: 'auto' }}
+      <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 16px 16px', padding: 20, width: '100%', maxWidth: 440, maxHeight: '85vh', overflowY: 'auto' }}
         onClick={e => e.stopPropagation()}>
 
         {/* نافذة تأكيد الإضافة */}
@@ -126,11 +139,24 @@ function ClientOrderModal({ sessionId, onClose, onOrderAdded }) {
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 22, cursor: 'pointer' }}>✕</button>
         </div>
 
+        {/* ✅ إصلاح 3: الطلبات المضافة من Staff */}
+        {staffOrders.length > 0 && (
+          <div style={{ marginBottom: 12, padding: '10px 14px', background: 'rgba(255,165,2,0.06)', border: '1px solid rgba(255,165,2,0.2)', borderRadius: 12 }}>
+            <div style={{ fontSize: 12, color: 'var(--warning)', marginBottom: 8, fontWeight: 600 }}>👷 مضاف من الطاقم</div>
+            {staffOrders.map(o => (
+              <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                <span style={{ color: 'var(--text)' }}>{o.service_name} × {o.qty}</span>
+                <span style={{ color: 'var(--warning)', fontWeight: 600 }}>{(parseFloat(o.price) * o.qty).toFixed(2)} ج</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* طلباتي */}
-        {myOrders.filter(o => o.added_by === 'client').length > 0 && (
+        {clientOrders.length > 0 && (
           <div style={{ marginBottom: 16, padding: '10px 14px', background: 'rgba(0,212,170,0.06)', border: '1px solid rgba(0,212,170,0.2)', borderRadius: 12 }}>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8, fontWeight: 600 }}>طلباتي الحالية</div>
-            {myOrders.filter(o => o.added_by === 'client').map(o => (
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8, fontWeight: 600 }}>👤 طلباتي</div>
+            {clientOrders.map(o => (
               <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
                 <span style={{ color: 'var(--text)' }}>{o.service_name} × {o.qty}</span>
                 <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{(parseFloat(o.price) * o.qty).toFixed(2)} ج</span>
@@ -143,18 +169,25 @@ function ClientOrderModal({ sessionId, onClose, onOrderAdded }) {
           </div>
         )}
 
+        {/* ✅ إصلاح 1: الخدمات المتاحة */}
         <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10, fontWeight: 600 }}>اختر ما تريد</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-          {services.map(s => (
-            <button key={s.id} onClick={() => setConfirmItem(s)}
-              style={{ padding: '14px 8px', borderRadius: 12, border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'rgba(0,212,170,0.06)'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'transparent'; }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>{s.name}</div>
-              <div style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 700 }}>{s.price} ج</div>
-            </button>
-          ))}
-        </div>
+        {loading ? (
+          <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 20 }}>جارٍ التحميل...</div>
+        ) : services.length === 0 ? (
+          <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 20 }}>لا توجد خدمات متاحة</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+            {services.map(s => (
+              <button key={s.id} onClick={() => setConfirmItem(s)}
+                style={{ padding: '14px 8px', borderRadius: 12, border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'rgba(0,212,170,0.06)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'transparent'; }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>{s.name}</div>
+                <div style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 700 }}>{s.price} ج</div>
+              </button>
+            ))}
+          </div>
+        )}
 
         <div style={{ marginTop: 16, padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>
           💡 الطلبات ستُضاف تلقائياً لفاتورتك عند تسجيل الخروج
@@ -165,23 +198,6 @@ function ClientOrderModal({ sessionId, onClose, onOrderAdded }) {
 }
 
 // ── InvoiceDetailModal ────────────────────────────────────────────────
-const SPACE_ICONS = { cowork: '🖥️', meeting: '🤝', lessons: '📚' };
-
-function PaymentBadge({ invoice }) {
-  const walletPaid = parseFloat(invoice.wallet_paid || 0);
-  const cashPaid   = parseFloat(invoice.cash_paid   || 0);
-  const method     = invoice.payment_method;
-  if (method === 'subscription') return <span className="badge badge-success" style={{ fontSize: 10 }}>📋 اشتراك</span>;
-  if (walletPaid > 0 && cashPaid > 0) return (
-    <span style={{ display: 'flex', gap: 3 }}>
-      <span className="badge badge-info"    style={{ fontSize: 10 }}>💳 {walletPaid.toFixed(0)} ج</span>
-      <span className="badge badge-warning" style={{ fontSize: 10 }}>💵 {cashPaid.toFixed(0)} ج</span>
-    </span>
-  );
-  if (walletPaid > 0) return <span className="badge badge-info"    style={{ fontSize: 10 }}>💳 محفظة</span>;
-  return               <span className="badge badge-warning" style={{ fontSize: 10 }}>💵 كاش</span>;
-}
-
 function InvoiceDetailModal({ invoice, onClose }) {
   if (!invoice) return null;
   const services   = typeof invoice.services === 'string' ? JSON.parse(invoice.services) : invoice.services || [];
@@ -222,6 +238,9 @@ function InvoiceDetailModal({ invoice, onClose }) {
             <div style={{ fontSize: 12, color: 'var(--muted)' }}>
               المدة: {billedHours} {billedHours === 1 ? 'ساعة' : 'ساعات'} ({invoice.duration_min} د فعلية)
             </div>
+          )}
+          {invoice.price_per_hr > 0 && (
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>سعر الساعة: {invoice.price_per_hr} ج</div>
           )}
         </div>
         {services.length > 0 && (
@@ -300,7 +319,7 @@ export default function ClientDashboard() {
   const [coupons,         setCoupons]         = useState([]);
   const [activeSession,   setActiveSession]   = useState(null);
   const [loadingSessions, setLoadingSessions] = useState(true);
-  const [coworkSpace,     setCoworkSpace]     = useState({ first_hour: 30, max_hours: 4 });
+  const [spaces,          setSpaces]          = useState([]); // ✅ إصلاح 2
 
   const [invoices,        setInvoices]        = useState([]);
   const [invoiceTotal,    setInvoiceTotal]    = useState(0);
@@ -311,26 +330,25 @@ export default function ClientDashboard() {
   const [recentInvoices,        setRecentInvoices]        = useState([]);
   const [loadingRecentInvoices, setLoadingRecentInvoices] = useState(true);
 
-  // ✅ مودال طلب العميل
   const [showOrderModal, setShowOrderModal] = useState(false);
-  const [myOrdersCount,  setMyOrdersCount]  = useState(0);
+  const [allOrdersCount, setAllOrdersCount] = useState(0); // ✅ إصلاح 3: كل الطلبات
 
-  useEffect(() => { loadData(); loadCoworkPrice(); loadRecentInvoices(); }, []);
+  useEffect(() => { loadData(); loadSpaces(); loadRecentInvoices(); }, []);
   useEffect(() => { if (tab === 'invoices') loadInvoices(); }, [tab, invoicePage]);
 
-  // ✅ جيب طلبات الجلسة النشطة
+  // ✅ إصلاح 3: جيب كل الطلبات مش بس client
   useEffect(() => {
     if (!activeSession) return;
     api.get(`/orders/session/${activeSession.id}`)
-      .then(({ data }) => setMyOrdersCount(data.orders?.filter(o => o.added_by === 'client').length || 0))
+      .then(({ data }) => setAllOrdersCount(data.orders?.length || 0))
       .catch(() => {});
   }, [activeSession]);
 
-  async function loadCoworkPrice() {
+  // ✅ إصلاح 2: جيب كل المساحات
+  async function loadSpaces() {
     try {
       const { data } = await spacesAPI.getAll();
-      const cowork = data.spaces.find(s => s.space_key === 'cowork');
-      if (cowork) setCoworkSpace(cowork);
+      setSpaces(data.spaces || []);
     } catch { }
   }
 
@@ -383,9 +401,15 @@ export default function ClientDashboard() {
   function refreshOrdersCount() {
     if (!activeSession) return;
     api.get(`/orders/session/${activeSession.id}`)
-      .then(({ data }) => setMyOrdersCount(data.orders?.filter(o => o.added_by === 'client').length || 0))
+      .then(({ data }) => setAllOrdersCount(data.orders?.length || 0))
       .catch(() => {});
   }
+
+  // ✅ إصلاح 2: جيب سعر المساحة من الجلسة نفسها
+  const activeSpaceKey   = activeSession?.space_key   || 'cowork';
+  const activeSpaceName  = activeSession?.space_name  || 'منطقة العمل المشتركة';
+  const activePricePerHr = parseFloat(activeSession?.price_per_hr || 30);
+  const activeMaxHours   = parseInt(activeSession?.max_hours || 4);
 
   const initials = user?.name?.split(' ').slice(0, 2).map(w => w[0]).join('');
   const totalInvoicePages = Math.ceil(invoiceTotal / 10);
@@ -443,7 +467,6 @@ export default function ClientDashboard() {
 
       {selectedInvoice && <InvoiceDetailModal invoice={selectedInvoice} onClose={() => setSelectedInvoice(null)} />}
 
-      {/* ✅ مودال طلب العميل */}
       {showOrderModal && activeSession && (
         <ClientOrderModal
           sessionId={activeSession.id}
@@ -521,18 +544,25 @@ export default function ClientDashboard() {
             <>
               <div className="section-title">الجلسة الحالية</div>
               <div style={{ marginBottom: 12 }}>
-                <LiveTimer checkIn={activeSession.check_in} pricePerHr={parseFloat(coworkSpace.first_hour)} maxHours={parseInt(coworkSpace.max_hours) || 4} />
+                {/* ✅ إصلاح 2: بيمرر السعر الصح من الجلسة */}
+                <LiveTimer
+                  checkIn={activeSession.check_in}
+                  pricePerHr={activePricePerHr}
+                  maxHours={activeMaxHours}
+                  spaceName={activeSpaceName}
+                  spaceKey={activeSpaceKey}
+                />
 
-                {/* ✅ زرار طلب الخدمات */}
+                {/* ✅ إصلاح 3: عداد يظهر كل الطلبات */}
                 <button
                   onClick={() => setShowOrderModal(true)}
                   style={{ width: '100%', marginTop: 10, padding: '12px', borderRadius: 12, border: '1px solid var(--accent)', background: 'rgba(0,212,170,0.08)', color: 'var(--accent)', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all 0.2s' }}
                   onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,212,170,0.15)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,212,170,0.08)'}>
                   ☕ أضف مشروب أو خدمة
-                  {myOrdersCount > 0 && (
+                  {allOrdersCount > 0 && (
                     <span style={{ background: 'var(--accent)', color: '#000', borderRadius: 10, padding: '1px 8px', fontSize: 12, fontWeight: 800 }}>
-                      {myOrdersCount}
+                      {allOrdersCount}
                     </span>
                   )}
                 </button>
