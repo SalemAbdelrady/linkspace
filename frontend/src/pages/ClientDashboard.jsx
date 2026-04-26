@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { sessionsAPI, couponsAPI, spacesAPI, invoicesAPI } from '../utils/api';
+import { sessionsAPI, couponsAPI, spacesAPI, invoicesAPI, servicesAPI } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
+import api from '../utils/api';
 
 // ── ProgressBar ───────────────────────────────────────────────────────
 function ProgressBar({ value, max }) {
@@ -26,7 +27,6 @@ function LiveTimer({ checkIn, pricePerHr, maxHours = 4 }) {
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [checkIn]);
-
   const h = Math.floor(elapsed / 3600);
   const m = Math.floor((elapsed % 3600) / 60);
   const s = elapsed % 60;
@@ -34,7 +34,6 @@ function LiveTimer({ checkIn, pricePerHr, maxHours = 4 }) {
   const billedHours = Math.min(Math.max(Math.ceil(elapsed / 3600), 1), maxHours);
   const cost = (billedHours * pricePerHr).toFixed(2);
   const isMaxed = billedHours >= maxHours;
-
   return (
     <div style={{ background: 'rgba(46,213,115,0.07)', border: '1px solid rgba(46,213,115,0.3)', borderRadius: 'var(--radius)', padding: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -49,6 +48,122 @@ function LiveTimer({ checkIn, pricePerHr, maxHours = 4 }) {
   );
 }
 
+// ── مودال طلب العميل ─────────────────────────────────────────────────
+function ClientOrderModal({ sessionId, onClose, onOrderAdded }) {
+  const [services,     setServices]     = useState([]);
+  const [myOrders,     setMyOrders]     = useState([]);
+  const [confirmItem,  setConfirmItem]  = useState(null); // الخدمة المراد تأكيدها
+  const [saving,       setSaving]       = useState(false);
+
+  useEffect(() => {
+    servicesAPI.getAll()
+      .then(({ data }) => setServices(data.services || []))
+      .catch(() => {});
+    api.get(`/orders/session/${sessionId}`)
+      .then(({ data }) => setMyOrders(data.orders || []))
+      .catch(() => {});
+  }, [sessionId]);
+
+  async function confirmAdd(service) {
+    setSaving(true);
+    try {
+      const { data } = await api.post('/orders/client-add', {
+        service_id:   service.id,
+        service_name: service.name,
+        price:        service.price,
+        qty:          1,
+      });
+      setMyOrders(prev => [...prev, data.order]);
+      setConfirmItem(null);
+      toast.success(`✅ تم إضافة ${service.name} على فاتورتك`);
+      onOrderAdded && onOrderAdded();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'خطأ في الإضافة');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const myTotal = myOrders.filter(o => o.added_by === 'client').reduce((sum, o) => sum + parseFloat(o.price) * o.qty, 0);
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: 16 }}
+      onClick={() => !confirmItem && onClose()}>
+      <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 16px 16px', padding: 20, width: '100%', maxWidth: 440, maxHeight: '80vh', overflowY: 'auto' }}
+        onClick={e => e.stopPropagation()}>
+
+        {/* نافذة تأكيد الإضافة */}
+        {confirmItem && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+            <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 24, maxWidth: 320, width: '100%', textAlign: 'center' }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>☕</div>
+              <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 8 }}>تأكيد الطلب</div>
+              <div style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 4 }}>سيتم إضافة</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>{confirmItem.name}</div>
+              <div style={{ fontSize: 14, color: 'var(--warning)', fontWeight: 600, marginBottom: 16 }}>{confirmItem.price} ج</div>
+              <div style={{ padding: '10px 14px', background: 'rgba(255,165,2,0.08)', border: '1px solid rgba(255,165,2,0.3)', borderRadius: 10, fontSize: 12, color: 'var(--muted)', marginBottom: 20 }}>
+                ⚠️ بعد الإضافة لا يمكنك حذف الطلب — تواصل مع أحد العاملين لأي تعديل
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => setConfirmItem(null)}
+                  style={{ flex: 1, padding: '10px', borderRadius: 10, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', fontSize: 13, cursor: 'pointer' }}>
+                  إلغاء
+                </button>
+                <button onClick={() => confirmAdd(confirmItem)} disabled={saving}
+                  className="btn btn-primary" style={{ flex: 2 }}>
+                  {saving ? 'جارٍ الإضافة...' : '✅ تأكيد الإضافة'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 16 }}>☕ أضف طلبك</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>سيظهر في فاتورتك النهائية</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 22, cursor: 'pointer' }}>✕</button>
+        </div>
+
+        {/* طلباتي */}
+        {myOrders.filter(o => o.added_by === 'client').length > 0 && (
+          <div style={{ marginBottom: 16, padding: '10px 14px', background: 'rgba(0,212,170,0.06)', border: '1px solid rgba(0,212,170,0.2)', borderRadius: 12 }}>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8, fontWeight: 600 }}>طلباتي الحالية</div>
+            {myOrders.filter(o => o.added_by === 'client').map(o => (
+              <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                <span style={{ color: 'var(--text)' }}>{o.service_name} × {o.qty}</span>
+                <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{(parseFloat(o.price) * o.qty).toFixed(2)} ج</span>
+              </div>
+            ))}
+            <div style={{ borderTop: '1px dashed var(--border)', paddingTop: 8, marginTop: 8, display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 14, color: 'var(--accent)' }}>
+              <span>مجموع طلباتي</span>
+              <span>{myTotal.toFixed(2)} ج</span>
+            </div>
+          </div>
+        )}
+
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10, fontWeight: 600 }}>اختر ما تريد</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+          {services.map(s => (
+            <button key={s.id} onClick={() => setConfirmItem(s)}
+              style={{ padding: '14px 8px', borderRadius: 12, border: '1px solid var(--border)', background: 'transparent', cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'rgba(0,212,170,0.06)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'transparent'; }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>{s.name}</div>
+              <div style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 700 }}>{s.price} ج</div>
+            </button>
+          ))}
+        </div>
+
+        <div style={{ marginTop: 16, padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>
+          💡 الطلبات ستُضاف تلقائياً لفاتورتك عند تسجيل الخروج
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── InvoiceDetailModal ────────────────────────────────────────────────
 const SPACE_ICONS = { cowork: '🖥️', meeting: '🤝', lessons: '📚' };
 
@@ -56,7 +171,6 @@ function PaymentBadge({ invoice }) {
   const walletPaid = parseFloat(invoice.wallet_paid || 0);
   const cashPaid   = parseFloat(invoice.cash_paid   || 0);
   const method     = invoice.payment_method;
-
   if (method === 'subscription') return <span className="badge badge-success" style={{ fontSize: 10 }}>📋 اشتراك</span>;
   if (walletPaid > 0 && cashPaid > 0) return (
     <span style={{ display: 'flex', gap: 3 }}>
@@ -70,26 +184,19 @@ function PaymentBadge({ invoice }) {
 
 function InvoiceDetailModal({ invoice, onClose }) {
   if (!invoice) return null;
-  const services    = typeof invoice.services === 'string' ? JSON.parse(invoice.services) : invoice.services || [];
-  const spaceIcon   = SPACE_ICONS[invoice.space_key] || '🏢';
-  const spaceName   = invoice.space_name || 'منطقة العمل المشتركة';
+  const services   = typeof invoice.services === 'string' ? JSON.parse(invoice.services) : invoice.services || [];
+  const spaceIcon  = SPACE_ICONS[invoice.space_key] || '🏢';
+  const spaceName  = invoice.space_name || 'منطقة العمل المشتركة';
   const billedHours = invoice.duration_min ? Math.min(Math.max(Math.ceil(invoice.duration_min / 60), 1), 12) : null;
-  const walletPaid  = parseFloat(invoice.wallet_paid || 0);
-  const cashPaid    = parseFloat(invoice.cash_paid   || 0);
-  const method      = invoice.payment_method;
-
-  function fmtTime(iso) {
-    if (!iso) return '—';
-    return new Date(iso).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', hour12: true });
-  }
+  const walletPaid = parseFloat(invoice.wallet_paid || 0);
+  const cashPaid   = parseFloat(invoice.cash_paid   || 0);
+  const method     = invoice.payment_method;
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
       onClick={onClose}>
       <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 20, maxWidth: 420, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}
         onClick={e => e.stopPropagation()}>
-
-        {/* رأس */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div>
             <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--accent)' }}>#{invoice.invoice_number}</div>
@@ -101,29 +208,22 @@ function InvoiceDetailModal({ invoice, onClose }) {
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 22, cursor: 'pointer' }}>✕</button>
         </div>
-
-        {/* نوع المساحة */}
         <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 20 }}>{spaceIcon}</span>
           <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--accent)' }}>{spaceName}</span>
         </div>
-
-        {/* تفاصيل الجلسة */}
         <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px dashed var(--border)' }}>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>تفاصيل الجلسة</div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
             <span>{spaceIcon} {spaceName}</span>
             <span style={{ fontWeight: 600 }}>{parseFloat(invoice.session_cost).toFixed(2)} ج</span>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>
-            {billedHours && (
-              <span>المدة: {billedHours} {billedHours === 1 ? 'ساعة' : 'ساعات'}<span style={{ opacity: 0.7, marginRight: 4 }}>({invoice.duration_min} د فعلية)</span></span>
-            )}
-            {invoice.price_per_hr > 0 && <span>سعر الساعة: {invoice.price_per_hr} ج</span>}
-          </div>
+          {billedHours && (
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+              المدة: {billedHours} {billedHours === 1 ? 'ساعة' : 'ساعات'} ({invoice.duration_min} د فعلية)
+            </div>
+          )}
         </div>
-
-        {/* الخدمات */}
         {services.length > 0 && (
           <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px dashed var(--border)' }}>
             <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>خدمات إضافية</div>
@@ -135,8 +235,6 @@ function InvoiceDetailModal({ invoice, onClose }) {
             ))}
           </div>
         )}
-
-        {/* كوبون */}
         {invoice.coupon_code && (
           <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px dashed var(--border)' }}>
             <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>كوبون خصم</div>
@@ -146,27 +244,10 @@ function InvoiceDetailModal({ invoice, onClose }) {
             </div>
           </div>
         )}
-
-        {/* الإجمالي */}
         <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px dashed var(--border)' }}>
-          {parseFloat(invoice.session_cost) > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>
-              <span>تكلفة الجلسة</span><span>{parseFloat(invoice.session_cost).toFixed(2)} ج</span>
-            </div>
-          )}
-          {method === 'subscription' && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--success)', marginBottom: 6 }}>
-              <span>📋 اشتراك شهري</span><span>مدفوع مسبقاً</span>
-            </div>
-          )}
           {parseFloat(invoice.services_cost) > 0 && (
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>
               <span>الخدمات</span><span>{parseFloat(invoice.services_cost).toFixed(2)} ج</span>
-            </div>
-          )}
-          {invoice.coupon_code && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--success)', marginBottom: 6 }}>
-              <span>خصم {invoice.discount_pct}%</span><span>− {parseFloat(invoice.discount_amount).toFixed(2)} ج</span>
             </div>
           )}
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 700, color: 'var(--accent)', marginTop: 8 }}>
@@ -174,8 +255,6 @@ function InvoiceDetailModal({ invoice, onClose }) {
             <span>{parseFloat(invoice.total) === 0 ? 'مجاناً ✅' : `${parseFloat(invoice.total).toFixed(2)} ج`}</span>
           </div>
         </div>
-
-        {/* ✅ طريقة الدفع — تفصيلية وصحيحة */}
         <div style={{ background: 'rgba(0,0,0,0.15)', borderRadius: 10, padding: '10px 14px' }}>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>طريقة الدفع</div>
           {method === 'subscription' ? (
@@ -206,7 +285,6 @@ function InvoiceDetailModal({ invoice, onClose }) {
             </div>
           )}
         </div>
-
         {invoice.note && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>📝 {invoice.note}</div>}
       </div>
     </div>
@@ -230,12 +308,23 @@ export default function ClientDashboard() {
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
 
-  // ✅ فواتير للـ overview (أحدث 8)
   const [recentInvoices,        setRecentInvoices]        = useState([]);
   const [loadingRecentInvoices, setLoadingRecentInvoices] = useState(true);
 
+  // ✅ مودال طلب العميل
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [myOrdersCount,  setMyOrdersCount]  = useState(0);
+
   useEffect(() => { loadData(); loadCoworkPrice(); loadRecentInvoices(); }, []);
   useEffect(() => { if (tab === 'invoices') loadInvoices(); }, [tab, invoicePage]);
+
+  // ✅ جيب طلبات الجلسة النشطة
+  useEffect(() => {
+    if (!activeSession) return;
+    api.get(`/orders/session/${activeSession.id}`)
+      .then(({ data }) => setMyOrdersCount(data.orders?.filter(o => o.added_by === 'client').length || 0))
+      .catch(() => {});
+  }, [activeSession]);
 
   async function loadCoworkPrice() {
     try {
@@ -260,7 +349,6 @@ export default function ClientDashboard() {
     }
   }
 
-  // ✅ تحميل أحدث الفواتير للـ overview
   async function loadRecentInvoices() {
     try {
       const { data } = await invoicesAPI.getClientInvoices({ page: 1 });
@@ -292,18 +380,23 @@ export default function ClientDashboard() {
     }
   }
 
+  function refreshOrdersCount() {
+    if (!activeSession) return;
+    api.get(`/orders/session/${activeSession.id}`)
+      .then(({ data }) => setMyOrdersCount(data.orders?.filter(o => o.added_by === 'client').length || 0))
+      .catch(() => {});
+  }
+
   const initials = user?.name?.split(' ').slice(0, 2).map(w => w[0]).join('');
   const totalInvoicePages = Math.ceil(invoiceTotal / 10);
 
-  // ✅ مكون بطاقة الفاتورة المصغرة
   function InvoiceCard({ inv, onClick }) {
-    const services  = typeof inv.services === 'string' ? JSON.parse(inv.services) : inv.services || [];
-    const icon      = SPACE_ICONS[inv.space_key] || '🏢';
-    const name      = inv.space_name || 'منطقة العمل المشتركة';
+    const services   = typeof inv.services === 'string' ? JSON.parse(inv.services) : inv.services || [];
+    const icon       = SPACE_ICONS[inv.space_key] || '🏢';
+    const name       = inv.space_name || 'منطقة العمل المشتركة';
     const walletPaid = parseFloat(inv.wallet_paid || 0);
     const cashPaid   = parseFloat(inv.cash_paid   || 0);
     const method     = inv.payment_method;
-
     return (
       <div className="card" style={{ cursor: 'pointer', marginBottom: 10 }} onClick={onClick}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -317,7 +410,6 @@ export default function ClientDashboard() {
               </span>
             </div>
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{icon} {name}</div>
-            {/* ✅ تفاصيل الدفع بشكل واضح */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {method === 'subscription' ? (
                 <span className="badge badge-success" style={{ fontSize: 10 }}>📋 اشتراك شهري</span>
@@ -339,9 +431,7 @@ export default function ClientDashboard() {
             <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--accent)' }}>
               {parseFloat(inv.total) === 0 ? <span style={{ fontSize: 14, color: 'var(--success)' }}>مجاناً</span> : `${parseFloat(inv.total).toFixed(2)} ج`}
             </div>
-            {inv.duration_min > 0 && (
-              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>⏱ {inv.duration_min} د</div>
-            )}
+            {inv.duration_min > 0 && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>⏱ {inv.duration_min} د</div>}
           </div>
         </div>
       </div>
@@ -352,6 +442,15 @@ export default function ClientDashboard() {
     <div className="page-wrap" style={{ paddingBottom: 40 }}>
 
       {selectedInvoice && <InvoiceDetailModal invoice={selectedInvoice} onClose={() => setSelectedInvoice(null)} />}
+
+      {/* ✅ مودال طلب العميل */}
+      {showOrderModal && activeSession && (
+        <ClientOrderModal
+          sessionId={activeSession.id}
+          onClose={() => setShowOrderModal(false)}
+          onOrderAdded={refreshOrdersCount}
+        />
+      )}
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingTop: 8 }}>
@@ -423,11 +522,24 @@ export default function ClientDashboard() {
               <div className="section-title">الجلسة الحالية</div>
               <div style={{ marginBottom: 12 }}>
                 <LiveTimer checkIn={activeSession.check_in} pricePerHr={parseFloat(coworkSpace.first_hour)} maxHours={parseInt(coworkSpace.max_hours) || 4} />
+
+                {/* ✅ زرار طلب الخدمات */}
+                <button
+                  onClick={() => setShowOrderModal(true)}
+                  style={{ width: '100%', marginTop: 10, padding: '12px', borderRadius: 12, border: '1px solid var(--accent)', background: 'rgba(0,212,170,0.08)', color: 'var(--accent)', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all 0.2s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,212,170,0.15)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(0,212,170,0.08)'}>
+                  ☕ أضف مشروب أو خدمة
+                  {myOrdersCount > 0 && (
+                    <span style={{ background: 'var(--accent)', color: '#000', borderRadius: 10, padding: '1px 8px', fontSize: 12, fontWeight: 800 }}>
+                      {myOrdersCount}
+                    </span>
+                  )}
+                </button>
               </div>
             </>
           )}
 
-          {/* ✅ سجل الفواتير بدل سجل الجلسات */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <div className="section-title" style={{ margin: 0 }}>آخر الفواتير</div>
             <button onClick={() => setTab('invoices')}
@@ -494,7 +606,6 @@ export default function ClientDashboard() {
           )}
         </div>
       )}
-
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { couponsAPI, invoicesAPI, servicesAPI, sessionsAPI } from '../utils/api';
 import toast from 'react-hot-toast';
+import api from '../utils/api';
 
 const SPACE_ICONS = { cowork: '🖥️', meeting: '🤝', lessons: '📚' };
 
@@ -26,12 +27,46 @@ export default function InvoicePage() {
   const [note,          setNote]          = useState('');
   const [paid,          setPaid]          = useState(false);
   const [saved,         setSaved]         = useState(false);
+  const [ordersLoaded,  setOrdersLoaded]  = useState(false);
 
   useEffect(() => {
     servicesAPI.getAll()
       .then(({ data }) => setServicesList(data.services || []))
       .catch(() => toast.error('خطأ في تحميل الخدمات'));
   }, []);
+
+  // ✅ جيب الطلبات المضافة مسبقاً من session_orders
+  useEffect(() => {
+    if (!session?.id || ordersLoaded) return;
+    api.get(`/orders/session/${session.id}`)
+      .then(({ data }) => {
+        if (data.orders && data.orders.length > 0) {
+          const converted = [];
+          data.orders.forEach(order => {
+            const existing = converted.find(s => s.name === order.service_name);
+            if (existing) {
+              existing.qty += order.qty;
+            } else {
+              converted.push({
+                id:         order.service_id || `order_${order.id}`,
+                name:       order.service_name,
+                price:      parseFloat(order.price),
+                qty:        order.qty,
+                from_order: true,
+                order_id:   order.id,
+                added_by:   order.added_by,
+              });
+            }
+          });
+          setAddedServices(converted);
+          if (converted.length > 0) {
+            toast.success(`✅ تم تحميل ${data.orders.length} طلب مضاف مسبقاً`);
+          }
+        }
+        setOrdersLoaded(true);
+      })
+      .catch(() => setOrdersLoaded(true));
+  }, [session?.id, ordersLoaded]);
 
   const [couponCode,    setCouponCode]    = useState('');
   const [couponData,    setCouponData]    = useState(null);
@@ -52,10 +87,8 @@ export default function InvoicePage() {
   const spaceName = session.spaceName || 'منطقة العمل المشتركة';
   const spaceIcon = SPACE_ICONS[spaceKey] || '🏢';
   const maxHours  = session.maxHours  || 4;
-
   const isSubscription = session.isSubscriptionSession === true || session.cost === 0;
 
-  // ── حسابات ────────────────────────────────────────────────────────
   const sessionCost    = isSubscription ? 0 : parseFloat(session.cost || 0);
   const servicesCost   = addedServices.reduce((sum, s) => sum + s.price * s.qty, 0);
   const subtotal       = sessionCost + servicesCost;
@@ -63,25 +96,19 @@ export default function InvoicePage() {
   const discountAmount = parseFloat(((subtotal * discountPct) / 100).toFixed(2));
   const total          = parseFloat((subtotal - discountAmount).toFixed(2));
   const billedHours    = getBilledHours(session.durationMin, maxHours);
+  const clientBalance  = parseFloat(client.balance || 0);
 
-  // ── رصيد العميل ───────────────────────────────────────────────────
-  const clientBalance = parseFloat(client.balance || 0);
-
-  // ✅ حساب الخصم من المحفظة بناءً على طريقة الدفع المختارة
   const walletDebit = (() => {
     if (total === 0) return 0;
     if (paymentMethod === 'cash') return 0;
-    if (paymentMethod === 'wallet') {
-      return Math.min(clientBalance, total);
-    }
+    if (paymentMethod === 'wallet') return Math.min(clientBalance, total);
     return 0;
   })();
 
-  const cashRemainder  = parseFloat((total - walletDebit).toFixed(2));
-  const walletCovers   = clientBalance >= total && total > 0;
-  const walletPartial  = clientBalance > 0 && clientBalance < total;
+  const cashRemainder = parseFloat((total - walletDebit).toFixed(2));
+  const walletCovers  = clientBalance >= total && total > 0;
+  const walletPartial = clientBalance > 0 && clientBalance < total;
 
-  // ✅ الطريقة الفعلية للدفع
   function getEffectiveMethod() {
     if (isSubscription && total === 0) return 'subscription';
     if (paymentMethod === 'cash') return 'cash';
@@ -98,7 +125,6 @@ export default function InvoicePage() {
   const dateStr = now.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
   const timeStr = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
 
-  // ── كوبون ─────────────────────────────────────────────────────────
   async function validateCoupon() {
     const code = couponCode.trim().toUpperCase();
     if (!code) return toast.error('أدخل كود الكوبون');
@@ -120,20 +146,14 @@ export default function InvoicePage() {
     catch (err) { console.error(err); }
   }
 
-  // ✅ الدفع — مش محتاج نعمل pay لو cash أو subscription
-  // الـ backend في invoices.js هو اللي بيخصم المحفظة
   async function processPayment() {
     if (paid) return;
     setPaid(true);
   }
 
-  // ── حفظ الفاتورة ──────────────────────────────────────────────────
   async function saveInvoice() {
     if (saved) return;
     const effectiveMethod = getEffectiveMethod();
-    const finalWalletPaid = walletDebit;
-    const finalCashPaid   = cashRemainder;
-
     try {
       await invoicesAPI.create({
         invoice_number:  invoiceNumber,
@@ -154,9 +174,8 @@ export default function InvoicePage() {
         subtotal,
         total,
         payment_method:  effectiveMethod,
-        // ✅ نبعت wallet_paid و cash_paid صراحة للـ backend
-        wallet_paid:     finalWalletPaid,
-        cash_paid:       finalCashPaid,
+        wallet_paid:     walletDebit,
+        cash_paid:       cashRemainder,
         note:            note || null,
       });
       setSaved(true);
@@ -191,11 +210,9 @@ export default function InvoicePage() {
 
   const effectiveMethod = getEffectiveMethod();
 
-  // ── WalletStatus ──────────────────────────────────────────────────
   function WalletStatus() {
     if (isSubscription && servicesCost === 0) return null;
     if (total === 0) return null;
-
     if (paymentMethod === 'cash') {
       return (
         <div style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 8, fontSize: 13, color: 'var(--muted)' }}>
@@ -204,7 +221,6 @@ export default function InvoicePage() {
         </div>
       );
     }
-
     if (clientBalance <= 0) {
       return (
         <div style={{ padding: '10px 14px', background: 'rgba(255,71,87,0.08)', border: '1px solid rgba(255,71,87,0.3)', borderRadius: 10, marginBottom: 8, fontSize: 12, color: '#ff4757' }}>
@@ -212,7 +228,6 @@ export default function InvoicePage() {
         </div>
       );
     }
-
     if (walletCovers) {
       return (
         <div style={{ padding: '10px 14px', background: 'rgba(46,213,115,0.08)', border: '1px solid rgba(46,213,115,0.4)', borderRadius: 10, marginBottom: 8 }}>
@@ -224,8 +239,6 @@ export default function InvoicePage() {
         </div>
       );
     }
-
-    // partial
     return (
       <div style={{ padding: '10px 14px', background: 'rgba(255,165,2,0.08)', border: '1px solid rgba(255,165,2,0.4)', borderRadius: 10, marginBottom: 8 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -310,15 +323,24 @@ export default function InvoicePage() {
             )}
           </div>
 
+          {/* ✅ الخدمات مع تمييز المضافة مسبقاً */}
           {addedServices.length > 0 && (
             <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px dashed var(--border)' }}>
               <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>خدمات إضافية</div>
               {addedServices.map(s => (
                 <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 6, alignItems: 'center' }}>
-                  <span>{s.name} × {s.qty}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span>{s.name} × {s.qty}</span>
+                    {s.from_order && (
+                      <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 4, background: s.added_by === 'client' ? 'rgba(0,212,170,0.15)' : 'rgba(255,165,2,0.15)', color: s.added_by === 'client' ? 'var(--accent)' : 'var(--warning)' }}>
+                        {s.added_by === 'client' ? '👤' : '👷'}
+                      </span>
+                    )}
+                  </div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <span style={{ fontWeight: 600 }}>{(s.price * s.qty).toFixed(2)} ج</span>
-                    <button className="no-print" onClick={() => removeService(s.id)} style={{ background: 'transparent', border: 'none', color: '#ff4757', cursor: 'pointer', fontSize: 16 }}>−</button>
+                    <button className="no-print" onClick={() => removeService(s.id)}
+                      style={{ background: 'transparent', border: 'none', color: '#ff4757', cursor: 'pointer', fontSize: 16 }}>−</button>
                   </div>
                 </div>
               ))}
@@ -368,13 +390,10 @@ export default function InvoicePage() {
             </div>
           </div>
 
-          {/* ✅ تفاصيل طريقة الدفع — تظهر في الفاتورة بشكل واضح */}
           <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px dashed var(--border)' }}>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>طريقة الدفع</div>
             {effectiveMethod === 'subscription' ? (
-              <div style={{ textAlign: 'center' }}>
-                <span className="badge badge-success">📋 اشتراك شهري</span>
-              </div>
+              <div style={{ textAlign: 'center' }}><span className="badge badge-success">📋 اشتراك شهري</span></div>
             ) : effectiveMethod === 'partial' ? (
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
@@ -404,6 +423,17 @@ export default function InvoicePage() {
 
         {/* أدوات */}
         <div className="no-print">
+
+          {/* ✅ إشعار الطلبات المضافة مسبقاً */}
+          {addedServices.filter(s => s.from_order).length > 0 && (
+            <div style={{ padding: '10px 14px', background: 'rgba(0,212,170,0.08)', border: '1px solid rgba(0,212,170,0.3)', borderRadius: 10, marginBottom: 16, fontSize: 13 }}>
+              <div style={{ fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>☕ طلبات مضافة خلال الجلسة</div>
+              <div style={{ color: 'var(--muted)', fontSize: 12 }}>
+                تم تحميل {addedServices.filter(s => s.from_order).length} طلب تلقائياً — يمكنك إضافة المزيد أو تعديل الكميات
+              </div>
+            </div>
+          )}
+
           <div className="section-title">إضافة خدمات / مشروبات</div>
           {servicesList.length === 0 ? (
             <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 16, fontSize: 13, marginBottom: 16 }}>جارٍ تحميل الخدمات...</div>
@@ -414,7 +444,9 @@ export default function InvoicePage() {
                   style={{ padding: '10px 8px', borderRadius: 10, border: '1px solid', background: addedServices.find(x => x.id === s.id) ? 'rgba(0,212,170,0.1)' : 'transparent', borderColor: addedServices.find(x => x.id === s.id) ? 'var(--accent)' : 'var(--border)', cursor: 'pointer', textAlign: 'center' }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{s.name}</div>
                   <div style={{ fontSize: 11, color: 'var(--accent)' }}>{s.price} ج</div>
-                  {addedServices.find(x => x.id === s.id) && <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 2 }}>×{addedServices.find(x => x.id === s.id).qty}</div>}
+                  {addedServices.find(x => x.id === s.id) && (
+                    <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 2 }}>×{addedServices.find(x => x.id === s.id).qty}</div>
+                  )}
                 </button>
               ))}
             </div>
