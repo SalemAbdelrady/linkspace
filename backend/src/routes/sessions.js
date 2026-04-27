@@ -17,7 +17,6 @@ function calculateCost(durationMin, pricePerHr, maxHours = 4) {
   return parseFloat((billedHours * pricePerHr).toFixed(2));
 }
 
-// ✅ تحقق من اشتراك نشط للعميل
 async function getActiveSubscription(userId) {
   const { rows } = await db.query(`
     SELECT us.*, sp.covers_cowork, sp.discount_rooms
@@ -65,7 +64,6 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
       const durationMin = Math.ceil((checkOut - checkIn) / 60000);
       const maxHours    = parseInt(session.max_hours) || 4;
 
-      // ✅ لو جلسة اشتراك → التكلفة صفر والنقاط صفر
       const isSubSession = session.is_subscription_session || false;
       const cost         = isSubSession ? 0 : calculateCost(durationMin, session.price_per_hr, maxHours);
       const pointsEarned = isSubSession ? 0 : Math.floor(cost / 10);
@@ -92,18 +90,18 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
         action : 'checkout',
         client : { id: user.id, name: user.name, phone: user.phone, balance: parseFloat(user.balance) },
         session: {
-          id                  : session.id,
+          id                   : session.id,
           durationMin,
           cost,
           pointsEarned,
-          pricePerHr          : session.price_per_hr,
-          spaceKey            : session.space_key,
-          spaceName           : session.space_name,
+          pricePerHr           : session.price_per_hr,
+          spaceKey             : session.space_key,
+          spaceName            : session.space_name,
           maxHours,
-          checkIn             : session.check_in,
-          checkOut            : checkOutISO,
-          isSubscriptionSession: isSubSession,  // ✅ للـ InvoicePage
-          subscriptionId      : session.subscription_id,
+          checkIn              : session.check_in,
+          checkOut             : checkOutISO,
+          isSubscriptionSession: isSubSession,
+          subscriptionId       : session.subscription_id,
         },
       });
 
@@ -112,8 +110,7 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
       const space        = await getSpaceSettings(space_key);
       const subscription = await getActiveSubscription(user.id);
 
-      // ✅ لو عنده اشتراك نشط يغطي الـ cowork → سعر صفر
-      const isSubSession  = !!(subscription && subscription.covers_cowork && space_key === 'cowork');
+      const isSubSession   = !!(subscription && subscription.covers_cowork && space_key === 'cowork');
       const effectivePrice = isSubSession ? 0 : space.first_hour;
 
       const { rows: newSession } = await client.query(`
@@ -141,7 +138,6 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
         spaceKey  : space_key,
         spaceName : space.name,
         maxHours  : space.max_hours,
-        // ✅ معلومات الاشتراك للـ ScannerPage
         isSubscriptionSession: isSubSession,
         subscription: subscription ? {
           id       : subscription.id,
@@ -167,7 +163,6 @@ router.post('/pay', auth, requireRole('staff', 'admin'), async (req, res) => {
     return res.status(400).json({ error: 'بيانات ناقصة' });
   }
 
-  // ✅ لو التكلفة صفر (جلسة اشتراك) → مش محتاج تعمل حاجة
   if (parseFloat(cost) === 0) {
     await db.query(`UPDATE sessions SET payment_method = 'subscription' WHERE id = $1`, [session_id]);
     return res.json({ success: true, payment_method: 'subscription', wallet_debit: 0, cash_amount: 0 });
@@ -228,7 +223,7 @@ router.post('/pay', auth, requireRole('staff', 'admin'), async (req, res) => {
   }
 });
 
-// GET /api/sessions/history
+// ✅ GET /api/sessions/history — أضفنا price_per_hr
 router.get('/history', auth, async (req, res) => {
   const page   = parseInt(req.query.page) || 1;
   const limit  = 10;
@@ -237,7 +232,8 @@ router.get('/history', auth, async (req, res) => {
     const { rows } = await db.query(`
       SELECT id, check_in, check_out, duration_min, cost,
              payment_method, status, space_key, space_name, max_hours,
-             is_subscription_session
+             is_subscription_session,
+             price_per_hr
       FROM sessions WHERE user_id = $1
       ORDER BY check_in DESC LIMIT $2 OFFSET $3
     `, [req.user.id, limit, offset]);
