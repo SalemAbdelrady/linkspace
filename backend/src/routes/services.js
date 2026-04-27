@@ -3,10 +3,10 @@ const db = require('../config/db');
 const { auth, requireRole } = require('../middleware/auth');
 
 const isStaffOrAdmin = [auth, requireRole('staff', 'admin')];
-const isAdmin = [auth, requireRole('admin')];
+const isAdmin        = [auth, requireRole('admin')];
 
-// GET /api/services
-router.get('/', ...isStaffOrAdmin, async (req, res) => {
+// ✅ GET /api/services — متاح لكل المستخدمين المسجلين (client + staff + admin)
+router.get('/', auth, async (req, res) => {
   try {
     const { rows } = await db.query(
       'SELECT * FROM services WHERE is_active = true ORDER BY id'
@@ -17,7 +17,7 @@ router.get('/', ...isStaffOrAdmin, async (req, res) => {
   }
 });
 
-// POST /api/services
+// POST /api/services [admin]
 router.post('/', ...isAdmin, async (req, res) => {
   const { name, price } = req.body;
   if (!name || !price) return res.status(400).json({ error: 'الاسم والسعر مطلوبان' });
@@ -32,7 +32,7 @@ router.post('/', ...isAdmin, async (req, res) => {
   }
 });
 
-// PUT /api/services/:id
+// PUT /api/services/:id [admin]
 router.put('/:id', ...isAdmin, async (req, res) => {
   const { name, price } = req.body;
   try {
@@ -46,7 +46,7 @@ router.put('/:id', ...isAdmin, async (req, res) => {
   }
 });
 
-// DELETE /api/services/:id
+// DELETE /api/services/:id [admin]
 router.delete('/:id', ...isAdmin, async (req, res) => {
   try {
     await db.query(
