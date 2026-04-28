@@ -51,6 +51,14 @@ export default function LoginPage() {
           ))}
         </div>
 
+        <div style={{ textAlign: 'center', marginTop: 12 }}>
+           <button
+             onClick={() => navigate('/forgot-password')}
+             style={{ background: 'transparent', border: 'none', color: 'var(--accent)', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}>
+               نسيت كلمة السر؟
+           </button>
+        </div>
+
         <form onSubmit={submit}>
           {mode === 'register' && (
             <div className="input-wrap">

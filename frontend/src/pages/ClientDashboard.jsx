@@ -476,10 +476,19 @@ export default function ClientDashboard() {
       )}
 
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingTop: 8 }}>
-        <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--accent)' }}>Link Space</div>
-        <button onClick={logout} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '6px 12px', borderRadius: 8, fontSize: 12 }}>خروج</button>
-      </div>
+<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingTop: 8 }}>
+  <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--accent)' }}>Link Space</div>
+  <div style={{ display: 'flex', gap: 8 }}>
+    <button
+      onClick={() => navigate('/settings')}
+      style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '6px 10px', borderRadius: 8, fontSize: 16, cursor: 'pointer' }}>
+      ⚙️
+    </button>
+    <button onClick={logout} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '6px 12px', borderRadius: 8, fontSize: 12 }}>خروج</button>
+  </div>
+</div>
+ 
+ 
 
       {/* Profile */}
       <div className="card fade-up" style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 14 }}>

@@ -21,6 +21,12 @@ async function migrate() {
 
   await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS qr_image TEXT;`);
 
+  // ✅ إضافة الإيميل وبيانات reset password
+  await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(150) UNIQUE;`);
+  await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false;`);
+  await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_otp VARCHAR(6);`);
+  await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_otp_expires TIMESTAMPTZ;`);
+
   await db.query(`
     CREATE TABLE IF NOT EXISTS sessions (
       id             SERIAL PRIMARY KEY,
@@ -134,7 +140,6 @@ async function migrate() {
     END $$;
   `);
 
-  // ✅ جدول اشتراكات العملاء — القلب الأساسي للنظام
   await db.query(`
     CREATE TABLE IF NOT EXISTS user_subscriptions (
       id             SERIAL PRIMARY KEY,
@@ -153,7 +158,6 @@ async function migrate() {
     );
   `);
 
-  // ✅ بعد إنشاء user_subscriptions — نضيف الـ foreign key على sessions بأمان
   await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS subscription_id INTEGER REFERENCES user_subscriptions(id) ON DELETE SET NULL;`);
   await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS is_subscription_session BOOLEAN NOT NULL DEFAULT false;`);
 
@@ -231,6 +235,7 @@ async function migrate() {
   await db.query(`CREATE INDEX IF NOT EXISTS idx_invoices_created       ON invoices(created_at DESC);`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_user_subs_user_id      ON user_subscriptions(user_id);`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_user_subs_status       ON user_subscriptions(status);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_users_email            ON users(email);`);
 
   console.log('✅ Migrations completed!');
 }

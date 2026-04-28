@@ -9,6 +9,8 @@ import AdminDashboard from './pages/AdminDashboard';
 import SubscriptionsPage from './pages/SubscriptionsPage';
 import InvoicePage from './pages/InvoicePage';
 import './index.css';
+import SettingsPage       from './pages/SettingsPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
 
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();
@@ -58,6 +60,9 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
       <Route path="*" element={<Navigate to="/" replace />} />
+      
+      <Route path="/settings"        element={<SettingsPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />  
     </Routes>
   );
 }
@@ -78,4 +83,13 @@ export default function App() {
       </BrowserRouter>
     </AuthProvider>
   );
+
+  // Settings & Auth extras
+export const settingsAPI = {
+  update         : (data)              => api.patch('/auth/settings', data),
+  changePassword : (data)              => api.patch('/auth/change-password', data),
+  forgotPassword : (email)             => api.post('/auth/forgot-password', { email }),
+  resetPassword  : (email, otp, pass)  => api.post('/auth/reset-password', { email, otp, new_password: pass }),
+};
+
 }
