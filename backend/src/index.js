@@ -12,15 +12,31 @@ const app = express();
 // Trust proxy for Vercel
 app.set('trust proxy', 1);
 
-// CORS أولاً قبل أي حاجة
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+// ✅ CORS config موحد
+const corsOptions = {
+  origin: function(origin, callback) {
+    const allowed = [
+      process.env.FRONTEND_URL,
+      'https://linkspace-topaz.vercel.app',
+      'http://localhost:3000',
+    ].filter(Boolean);
+
+    // السماح لو مفيش origin (مثل Postman أو server-to-server)
+    if (!origin) return callback(null, true);
+
+    if (allowed.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS: ${origin} غير مسموح`));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+};
 
-app.options('*', cors());
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // ✅ نفس الـ config للـ preflight
 
 // Helmet بعد CORS
 app.use(helmet({
@@ -28,7 +44,7 @@ app.use(helmet({
 }));
 
 // Rate limiting
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
+const limiter     = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: 'محاولات كثيرة جداً، انتظر 15 دقيقة' } });
 app.use('/api/auth', authLimiter);
 app.use(limiter);
@@ -46,7 +62,7 @@ app.use('/api/spaces',        require('./routes/spaces'));
 app.use('/api/services',      require('./routes/services'));
 app.use('/api/subscriptions', require('./routes/subscriptions'));
 app.use('/api/invoices',      require('./routes/invoices'));
-app.use('/api/orders', require('./routes/orders'));
+app.use('/api/orders',        require('./routes/orders'));
 
 // Health check
 app.get('/api/health', (_, res) => res.json({ status: 'ok', time: new Date().toISOString() }));
@@ -60,7 +76,7 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'خطأ داخلي في الخادم' });
 });
 
-// ✅ تشغيل migrate و seed مرة وحدة عند أول طلب
+// ✅ initialize مرة واحدة
 let initialized = false;
 async function initialize() {
   if (initialized) return;
@@ -74,16 +90,13 @@ async function initialize() {
   }
 }
 
-// ✅ للـ Vercel — export الـ app مباشرة
+// ✅ Vercel serverless mode
 if (process.env.VERCEL) {
-  // Vercel serverless mode
-  const originalHandler = app;
   module.exports = async (req, res) => {
     await initialize();
-    return originalHandler(req, res);
+    return app(req, res);
   };
 } else {
-  // Local / Railway mode
   const PORT = process.env.PORT || 5000;
   async function startServer() {
     await initialize();
@@ -94,3 +107,4 @@ if (process.env.VERCEL) {
   }
   startServer();
 }
+
