@@ -11,6 +11,7 @@ import InvoicePage from './pages/InvoicePage';
 import './index.css';
 import SettingsPage        from './pages/SettingsPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import api from './utils/api'; // أو المسار الصحيح لملف الإعدادات الخاص بك
 
 // نقلت الـ API للخارج لتصحيح خطأ الـ Syntax
 export const settingsAPI = {
