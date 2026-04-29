@@ -300,7 +300,6 @@ export default function InvoicePage() {
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>بيانات العميل</div>
             <div style={{ fontWeight: 700, fontSize: 15 }}>{client.name}</div>
             <div style={{ fontSize: 12, color: 'var(--muted)' }}>{client.phone}</div>
-            {user?.email && <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 2 }}>✉️ {user.email}</div>}
           </div>
 
           <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px dashed var(--border)' }}>
