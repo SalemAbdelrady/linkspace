@@ -43,7 +43,8 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, refreshUser: loadUser }}>
+    // ✅ أضفنا setUser للـ value عشان SettingsPage تقدر تحدّث بيانات المستخدم
+    <AuthContext.Provider value={{ user, setUser, loading, login, register, logout, refreshUser: loadUser }}>
       {children}
     </AuthContext.Provider>
   );

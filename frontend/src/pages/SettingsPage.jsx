@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 
-// ✅ validation الاسم — حروف فقط
 function isValidName(name) {
   return /^[\u0600-\u06FF\u0750-\u077F a-zA-Z\s'-]{2,100}$/.test(name.trim());
 }
@@ -13,19 +12,24 @@ export default function SettingsPage() {
   const { user, setUser, logout } = useAuth();
   const navigate = useNavigate();
 
-  // ── بيانات الحساب ─────────────────────────────────────────────────
-  const [name,        setName]        = useState(user?.name  || '');
-  const [email,       setEmail]       = useState(user?.email || '');
+  const [name,        setName]        = useState('');
+  const [email,       setEmail]       = useState('');
   const [savingInfo,  setSavingInfo]  = useState(false);
 
-  // ── كلمة السر ─────────────────────────────────────────────────────
   const [currentPass, setCurrentPass] = useState('');
   const [newPass,     setNewPass]     = useState('');
   const [confirmPass, setConfirmPass] = useState('');
   const [savingPass,  setSavingPass]  = useState(false);
   const [showPass,    setShowPass]    = useState(false);
 
-  // ── حفظ بيانات الحساب ─────────────────────────────────────────────
+  // ✅ إصلاح: sync البيانات لما يتحمّل الـ user
+  useEffect(() => {
+    if (user) {
+      setName(user.name  || '');
+      setEmail(user.email || '');
+    }
+  }, [user]);
+
   async function saveInfo() {
     if (!name.trim()) return toast.error('الاسم مطلوب');
     if (!isValidName(name)) return toast.error('الاسم يجب أن يحتوي على حروف فقط وليس أرقاماً');
@@ -33,8 +37,11 @@ export default function SettingsPage() {
 
     setSavingInfo(true);
     try {
-      const { data } = await api.patch('/auth/settings', { name: name.trim(), email: email || null });
-      setUser(data.user);
+      const { data } = await api.patch('/auth/settings', {
+        name:  name.trim(),
+        email: email || null,
+      });
+      setUser(data.user); // ✅ تحديث الـ user في الـ context
       toast.success('✅ تم حفظ البيانات');
     } catch (err) {
       toast.error(err.response?.data?.error || 'خطأ في الحفظ');
@@ -43,7 +50,6 @@ export default function SettingsPage() {
     }
   }
 
-  // ── تغيير كلمة السر ───────────────────────────────────────────────
   async function changePassword() {
     if (!currentPass || !newPass || !confirmPass) return toast.error('أدخل كل الحقول');
     if (newPass !== confirmPass) return toast.error('كلمة السر الجديدة غير متطابقة');
@@ -64,7 +70,13 @@ export default function SettingsPage() {
     }
   }
 
-  const hasChanges = name !== (user?.name || '') || email !== (user?.email || '');
+  // ✅ إصلاح: مقارنة صح مع البيانات الأصلية
+  const hasChanges = (
+    name.trim() !== (user?.name  || '').trim() ||
+    (email || '') !== (user?.email || '')
+  );
+
+  if (!user) return null;
 
   return (
     <div style={{ minHeight: '100vh', maxWidth: 480, margin: '0 auto', padding: '0 0 60px' }}>
@@ -103,27 +115,15 @@ export default function SettingsPage() {
             <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>
               الاسم الكامل <span style={{ color: '#ff4757' }}>*</span>
             </label>
-            <input
-              className="input-field"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="أدخل اسمك الكامل..."
-            />
+            <input className="input-field" value={name} onChange={e => setName(e.target.value)} placeholder="أدخل اسمك الكامل..." />
             {name && !isValidName(name) && (
               <div style={{ fontSize: 11, color: '#ff4757', marginTop: 4 }}>⚠️ الاسم يجب أن يحتوي على حروف فقط</div>
             )}
           </div>
 
           <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>
-              رقم الموبايل
-            </label>
-            <input
-              className="input-field"
-              value={user?.phone || ''}
-              disabled
-              style={{ opacity: 0.5, cursor: 'not-allowed' }}
-            />
+            <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>رقم الموبايل</label>
+            <input className="input-field" value={user?.phone || ''} disabled style={{ opacity: 0.5, cursor: 'not-allowed' }} />
             <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>🔒 رقم الموبايل لا يمكن تعديله</div>
           </div>
 
@@ -148,9 +148,7 @@ export default function SettingsPage() {
             </div>
           )}
 
-          <button
-            onClick={saveInfo}
-            disabled={savingInfo || !hasChanges}
+          <button onClick={saveInfo} disabled={savingInfo || !hasChanges}
             className="btn btn-primary"
             style={{ width: '100%', opacity: hasChanges ? 1 : 0.5 }}>
             {savingInfo ? '⏳ جارٍ الحفظ...' : '💾 حفظ التغييرات'}
@@ -164,14 +162,9 @@ export default function SettingsPage() {
           <div style={{ marginBottom: 12 }}>
             <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>كلمة السر الحالية</label>
             <div style={{ position: 'relative' }}>
-              <input
-                className="input-field"
-                type={showPass ? 'text' : 'password'}
-                value={currentPass}
-                onChange={e => setCurrentPass(e.target.value)}
-                placeholder="أدخل كلمة السر الحالية..."
-                style={{ paddingLeft: 40 }}
-              />
+              <input className="input-field" type={showPass ? 'text' : 'password'} value={currentPass}
+                onChange={e => setCurrentPass(e.target.value)} placeholder="أدخل كلمة السر الحالية..."
+                style={{ paddingLeft: 40 }} />
               <button onClick={() => setShowPass(p => !p)}
                 style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 14 }}>
                 {showPass ? '🙈' : '👁️'}
@@ -181,13 +174,8 @@ export default function SettingsPage() {
 
           <div style={{ marginBottom: 12 }}>
             <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>كلمة السر الجديدة</label>
-            <input
-              className="input-field"
-              type={showPass ? 'text' : 'password'}
-              value={newPass}
-              onChange={e => setNewPass(e.target.value)}
-              placeholder="6 أحرف على الأقل..."
-            />
+            <input className="input-field" type={showPass ? 'text' : 'password'} value={newPass}
+              onChange={e => setNewPass(e.target.value)} placeholder="6 أحرف على الأقل..." />
             {newPass && newPass.length < 6 && (
               <div style={{ fontSize: 11, color: '#ff4757', marginTop: 4 }}>⚠️ 6 أحرف على الأقل</div>
             )}
@@ -195,13 +183,8 @@ export default function SettingsPage() {
 
           <div style={{ marginBottom: 16 }}>
             <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 6 }}>تأكيد كلمة السر الجديدة</label>
-            <input
-              className="input-field"
-              type={showPass ? 'text' : 'password'}
-              value={confirmPass}
-              onChange={e => setConfirmPass(e.target.value)}
-              placeholder="أعد كتابة كلمة السر..."
-            />
+            <input className="input-field" type={showPass ? 'text' : 'password'} value={confirmPass}
+              onChange={e => setConfirmPass(e.target.value)} placeholder="أعد كتابة كلمة السر..." />
             {confirmPass && newPass !== confirmPass && (
               <div style={{ fontSize: 11, color: '#ff4757', marginTop: 4 }}>⚠️ كلمة السر غير متطابقة</div>
             )}
@@ -210,18 +193,15 @@ export default function SettingsPage() {
             )}
           </div>
 
-          <button
-            onClick={changePassword}
+          <button onClick={changePassword}
             disabled={savingPass || !currentPass || !newPass || !confirmPass || newPass !== confirmPass || newPass.length < 6}
-            className="btn btn-primary"
-            style={{ width: '100%' }}>
+            className="btn btn-primary" style={{ width: '100%' }}>
             {savingPass ? '⏳ جارٍ التغيير...' : '🔑 تغيير كلمة السر'}
           </button>
         </div>
 
         {/* ── تسجيل الخروج ── */}
-        <button
-          onClick={logout}
+        <button onClick={logout}
           style={{ width: '100%', padding: '12px', borderRadius: 12, border: '1px solid rgba(255,71,87,0.3)', background: 'rgba(255,71,87,0.06)', color: '#ff4757', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
           🚪 تسجيل الخروج
         </button>
