@@ -11,7 +11,7 @@ const { Resend } = require('resend');
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 const APP_NAME  = 'Link Space';
-const FROM_EMAIL = 'noreply@linkspace.com'; // غيّره لو عندك دومين مخصص
+const FROM_EMAIL = 'onboarding@resend.dev'; // غيّره لو عندك دومين مخصص
 
 // ── Helpers ───────────────────────────────────────────────────────────
 function generateQrCode() {
