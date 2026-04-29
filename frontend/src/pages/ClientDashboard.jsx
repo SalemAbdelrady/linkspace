@@ -314,6 +314,7 @@ function InvoiceDetailModal({ invoice, onClose }) {
 // ── ClientDashboard ───────────────────────────────────────────────────
 export default function ClientDashboard() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [tab, setTab] = useState('overview');
 
   const [sessions,        setSessions]        = useState([]);
