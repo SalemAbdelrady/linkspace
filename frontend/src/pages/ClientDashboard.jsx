@@ -498,6 +498,7 @@ export default function ClientDashboard() {
         <div>
           <div style={{ fontWeight: 700, fontSize: 16 }}>{user?.name}</div>
           <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{user?.phone}</div>
+          {user?.email && <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 2 }}>✉️ {user.email}</div>}
         </div>
       </div>
 
