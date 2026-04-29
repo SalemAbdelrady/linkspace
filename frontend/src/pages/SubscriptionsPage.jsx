@@ -407,6 +407,7 @@ export default function SubscriptionsPage() {
                     <div>
                       <div style={{ fontWeight: 700, fontSize: 15 }}>{sub.client_name}</div>
                       <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{sub.client_phone}</div>
+                      {user?.email && <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 2 }}>✉️ {user.email}</div>}
                     </div>
                     <div style={{ textAlign: 'left' }}>
                       <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--accent)' }}>{sub.plan_name}</div>

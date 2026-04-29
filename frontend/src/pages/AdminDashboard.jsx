@@ -142,6 +142,8 @@ function InvoiceModal({ invoice, onClose }) {
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>العميل</div>
           <div style={{ fontWeight: 700 }}>{invoice.client_name}</div>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>{invoice.client_phone}</div>
+          {user?.email && <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 2 }}>✉️ {user.email}</div>}
+
         </div>
 
         {/* نوع المساحة */}
@@ -510,6 +512,7 @@ export default function AdminDashboard() {
                       <div>
                         <div style={{ fontWeight: 700 }}>{u.name}</div>
                         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{u.phone}</div>
+                        {user?.email && <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 2 }}>✉️ {user.email}</div>}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span className={`badge badge-${isInSession ? 'success' : 'danger'}`}>{isInSession ? 'نشط' : 'غير نشط'}</span>
