@@ -1,15 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { couponsAPI, invoicesAPI, servicesAPI, sessionsAPI } from '../utils/api';
-import toast from 'react-hot-toast';
-import api from '../utils/api';
+import React, { useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import {
+  couponsAPI,
+  invoicesAPI,
+  servicesAPI,
+  sessionsAPI,
+} from "../utils/api";
+import toast from "react-hot-toast";
+import api from "../utils/api";
 
-const SPACE_ICONS = { cowork: '🖥️', meeting: '🤝', lessons: '📚' };
+const SPACE_ICONS = { cowork: "🖥️", meeting: "🤝", lessons: "📚" };
 
 function formatTime(isoString) {
-  if (!isoString) return '—';
-  return new Date(isoString).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', hour12: true });
+  if (!isoString) return "—";
+  return new Date(isoString).toLocaleTimeString("ar-EG", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
 }
 
 function getBilledHours(durationMin, maxHours = 4) {
@@ -21,40 +30,44 @@ export default function InvoicePage() {
   const location = useLocation();
   const { session, client } = location.state || {};
 
-  const [servicesList,  setServicesList]  = useState([]);
+  const [servicesList, setServicesList] = useState([]);
   const [addedServices, setAddedServices] = useState([]);
-  const [paymentMethod, setPaymentMethod] = useState('cash');
-  const [note,          setNote]          = useState('');
-  const [paid,          setPaid]          = useState(false);
-  const [saved,         setSaved]         = useState(false);
-  const [ordersLoaded,  setOrdersLoaded]  = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [note, setNote] = useState("");
+  const [paid, setPaid] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [ordersLoaded, setOrdersLoaded] = useState(false);
 
   useEffect(() => {
-    servicesAPI.getAll()
+    servicesAPI
+      .getAll()
       .then(({ data }) => setServicesList(data.services || []))
-      .catch(() => toast.error('خطأ في تحميل الخدمات'));
+      .catch(() => toast.error("خطأ في تحميل الخدمات"));
   }, []);
 
   // ✅ جيب الطلبات المضافة مسبقاً من session_orders
   useEffect(() => {
     if (!session?.id || ordersLoaded) return;
-    api.get(`/orders/session/${session.id}`)
+    api
+      .get(`/orders/session/${session.id}`)
       .then(({ data }) => {
         if (data.orders && data.orders.length > 0) {
           const converted = [];
-          data.orders.forEach(order => {
-            const existing = converted.find(s => s.name === order.service_name);
+          data.orders.forEach((order) => {
+            const existing = converted.find(
+              (s) => s.name === order.service_name,
+            );
             if (existing) {
               existing.qty += order.qty;
             } else {
               converted.push({
-                id:         order.service_id || `order_${order.id}`,
-                name:       order.service_name,
-                price:      parseFloat(order.price),
-                qty:        order.qty,
+                id: order.service_id || `order_${order.id}`,
+                name: order.service_name,
+                price: parseFloat(order.price),
+                qty: order.qty,
                 from_order: true,
-                order_id:   order.id,
-                added_by:   order.added_by,
+                order_id: order.id,
+                added_by: order.added_by,
               });
             }
           });
@@ -68,82 +81,121 @@ export default function InvoicePage() {
       .catch(() => setOrdersLoaded(true));
   }, [session?.id, ordersLoaded]);
 
-  const [couponCode,    setCouponCode]    = useState('');
-  const [couponData,    setCouponData]    = useState(null);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponData, setCouponData] = useState(null);
   const [couponLoading, setCouponLoading] = useState(false);
-  const [couponUsed,    setCouponUsed]    = useState(false);
+  const [couponUsed, setCouponUsed] = useState(false);
 
   if (!session || !client) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexDirection: "column",
+          gap: 16,
+        }}
+      >
         <div style={{ fontSize: 32 }}>⚠️</div>
-        <div style={{ color: 'var(--muted)' }}>لا توجد بيانات فاتورة</div>
-        <button className="btn btn-primary" onClick={() => navigate('/scanner')}>العودة للسكانر</button>
+        <div style={{ color: "var(--muted)" }}>لا توجد بيانات فاتورة</div>
+        <button
+          className="btn btn-primary"
+          onClick={() => navigate("/scanner")}
+        >
+          العودة للسكانر
+        </button>
       </div>
     );
   }
 
-  const spaceKey  = session.spaceKey  || 'cowork';
-  const spaceName = session.spaceName || 'منطقة العمل المشتركة';
-  const spaceIcon = SPACE_ICONS[spaceKey] || '🏢';
-  const maxHours  = session.maxHours  || 4;
-  const isSubscription = session.isSubscriptionSession === true || session.cost === 0;
+  const spaceKey = session.spaceKey || "cowork";
+  const spaceName = session.spaceName || "منطقة العمل المشتركة";
+  const spaceIcon = SPACE_ICONS[spaceKey] || "🏢";
+  const maxHours = session.maxHours || 4;
+  const isSubscription =
+    session.isSubscriptionSession === true || session.cost === 0;
 
-  const sessionCost    = isSubscription ? 0 : parseFloat(session.cost || 0);
-  const servicesCost   = addedServices.reduce((sum, s) => sum + s.price * s.qty, 0);
-  const subtotal       = sessionCost + servicesCost;
-  const discountPct    = couponData ? parseFloat(couponData.discount_pct) : 0;
-  const discountAmount = parseFloat(((subtotal * discountPct) / 100).toFixed(2));
-  const total          = parseFloat((subtotal - discountAmount).toFixed(2));
-  const billedHours    = getBilledHours(session.durationMin, maxHours);
-  const clientBalance  = parseFloat(client.balance || 0);
+  const sessionCost = isSubscription ? 0 : parseFloat(session.cost || 0);
+  const servicesCost = addedServices.reduce(
+    (sum, s) => sum + s.price * s.qty,
+    0,
+  );
+  const subtotal = sessionCost + servicesCost;
+  const discountPct = couponData ? parseFloat(couponData.discount_pct) : 0;
+  const discountAmount = parseFloat(
+    ((subtotal * discountPct) / 100).toFixed(2),
+  );
+  const total = parseFloat((subtotal - discountAmount).toFixed(2));
+  const billedHours = getBilledHours(session.durationMin, maxHours);
+  const clientBalance = parseFloat(client.balance || 0);
 
   const walletDebit = (() => {
     if (total === 0) return 0;
-    if (paymentMethod === 'cash') return 0;
-    if (paymentMethod === 'wallet') return Math.min(clientBalance, total);
+    if (paymentMethod === "cash") return 0;
+    if (paymentMethod === "wallet") return Math.min(clientBalance, total);
     return 0;
   })();
 
   const cashRemainder = parseFloat((total - walletDebit).toFixed(2));
-  const walletCovers  = clientBalance >= total && total > 0;
+  const walletCovers = clientBalance >= total && total > 0;
   const walletPartial = clientBalance > 0 && clientBalance < total;
 
   function getEffectiveMethod() {
-    if (isSubscription && total === 0) return 'subscription';
-    if (paymentMethod === 'cash') return 'cash';
-    if (paymentMethod === 'wallet') {
-      if (clientBalance <= 0) return 'cash';
-      if (walletCovers)       return 'wallet';
-      return 'partial';
+    if (isSubscription && total === 0) return "subscription";
+    if (paymentMethod === "cash") return "cash";
+    if (paymentMethod === "wallet") {
+      if (clientBalance <= 0) return "cash";
+      if (walletCovers) return "wallet";
+      return "partial";
     }
-    return 'cash';
+    return "cash";
   }
 
   const [invoiceNumber] = useState(`INV-${Date.now().toString().slice(-6)}`);
-  const now     = new Date();
-  const dateStr = now.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
-  const timeStr = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("ar-EG", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  const timeStr = now.toLocaleTimeString("ar-EG", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 
   async function validateCoupon() {
     const code = couponCode.trim().toUpperCase();
-    if (!code) return toast.error('أدخل كود الكوبون');
+    if (!code) return toast.error("أدخل كود الكوبون");
     setCouponLoading(true);
     try {
       const { data } = await couponsAPI.validate({ code, user_id: client.id });
-      if (data.valid) { setCouponData(data.coupon); toast.success(`✅ كوبون صالح — خصم ${data.coupon.discount_pct}%`); }
+      if (data.valid) {
+        setCouponData(data.coupon);
+        toast.success(`✅ كوبون صالح — خصم ${data.coupon.discount_pct}%`);
+      }
     } catch (err) {
       setCouponData(null);
-      toast.error(err.response?.data?.error || 'كوبون غير صالح');
-    } finally { setCouponLoading(false); }
+      toast.error(err.response?.data?.error || "كوبون غير صالح");
+    } finally {
+      setCouponLoading(false);
+    }
   }
 
-  function removeCoupon() { setCouponData(null); setCouponCode(''); }
+  function removeCoupon() {
+    setCouponData(null);
+    setCouponCode("");
+  }
 
   async function markCouponUsed() {
     if (!couponData || couponUsed) return;
-    try { await couponsAPI.use({ code: couponData.code, user_id: client.id }); setCouponUsed(true); }
-    catch (err) { console.error(err); }
+    try {
+      await couponsAPI.use({ code: couponData.code, user_id: client.id });
+      setCouponUsed(true);
+    } catch (err) {
+      console.error(err);
+    }
   }
 
   async function processPayment() {
@@ -156,56 +208,75 @@ export default function InvoicePage() {
     const effectiveMethod = getEffectiveMethod();
     try {
       await invoicesAPI.create({
-        invoice_number:  invoiceNumber,
-        session_id:      session.id    || null,
-        user_id:         client.id,
-        client_name:     client.name,
-        client_phone:    client.phone,
-        space_key:       spaceKey,
-        space_name:      spaceName,
-        session_cost:    sessionCost,
-        duration_min:    session.durationMin,
-        price_per_hr:    isSubscription ? 0 : session.pricePerHr,
-        services:        addedServices.map(s => ({ name: s.name, price: s.price, qty: s.qty })),
-        services_cost:   servicesCost,
-        coupon_code:     couponData?.code  || null,
-        discount_pct:    discountPct,
+        invoice_number: invoiceNumber,
+        session_id: session.id || null,
+        user_id: client.id,
+        client_name: client.name,
+        client_phone: client.phone,
+        client_email: client.email,
+        space_key: spaceKey,
+        space_name: spaceName,
+        session_cost: sessionCost,
+        duration_min: session.durationMin,
+        price_per_hr: isSubscription ? 0 : session.pricePerHr,
+        services: addedServices.map((s) => ({
+          name: s.name,
+          price: s.price,
+          qty: s.qty,
+        })),
+        services_cost: servicesCost,
+        coupon_code: couponData?.code || null,
+        discount_pct: discountPct,
         discount_amount: discountAmount,
         subtotal,
         total,
-        payment_method:  effectiveMethod,
-        wallet_paid:     walletDebit,
-        cash_paid:       cashRemainder,
-        note:            note || null,
+        payment_method: effectiveMethod,
+        wallet_paid: walletDebit,
+        cash_paid: cashRemainder,
+        note: note || null,
       });
       setSaved(true);
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+    }
   }
 
   function addService(service) {
-    setAddedServices(prev => {
-      const existing = prev.find(s => s.id === service.id);
-      if (existing) return prev.map(s => s.id === service.id ? { ...s, qty: s.qty + 1 } : s);
+    setAddedServices((prev) => {
+      const existing = prev.find((s) => s.id === service.id);
+      if (existing)
+        return prev.map((s) =>
+          s.id === service.id ? { ...s, qty: s.qty + 1 } : s,
+        );
       return [...prev, { ...service, qty: 1 }];
     });
   }
 
   function removeService(id) {
-    setAddedServices(prev => {
-      const existing = prev.find(s => s.id === id);
-      if (existing?.qty === 1) return prev.filter(s => s.id !== id);
-      return prev.map(s => s.id === id ? { ...s, qty: s.qty - 1 } : s);
+    setAddedServices((prev) => {
+      const existing = prev.find((s) => s.id === id);
+      if (existing?.qty === 1) return prev.filter((s) => s.id !== id);
+      return prev.map((s) => (s.id === id ? { ...s, qty: s.qty - 1 } : s));
     });
   }
 
   async function handlePrint() {
-    try { await markCouponUsed(); await processPayment(); await saveInvoice(); window.print(); toast.success('تمت طباعة الفاتورة'); }
-    catch { }
+    try {
+      await markCouponUsed();
+      await processPayment();
+      await saveInvoice();
+      window.print();
+      toast.success("تمت طباعة الفاتورة");
+    } catch {}
   }
 
   async function handleDone() {
-    try { await markCouponUsed(); await processPayment(); await saveInvoice(); navigate('/scanner'); }
-    catch { }
+    try {
+      await markCouponUsed();
+      await processPayment();
+      await saveInvoice();
+      navigate("/scanner");
+    } catch {}
   }
 
   const effectiveMethod = getEffectiveMethod();
@@ -213,46 +284,138 @@ export default function InvoicePage() {
   function WalletStatus() {
     if (isSubscription && servicesCost === 0) return null;
     if (total === 0) return null;
-    if (paymentMethod === 'cash') {
+    if (paymentMethod === "cash") {
       return (
-        <div style={{ padding: '10px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 8, fontSize: 13, color: 'var(--muted)' }}>
+        <div
+          style={{
+            padding: "10px 14px",
+            background: "rgba(255,255,255,0.03)",
+            border: "1px solid var(--border)",
+            borderRadius: 10,
+            marginBottom: 8,
+            fontSize: 13,
+            color: "var(--muted)",
+          }}
+        >
           💵 الدفع كاش — لن يُخصم من رصيد العميل
-          {clientBalance > 0 && <span style={{ color: 'var(--accent)', marginRight: 8 }}>(الرصيد: {clientBalance.toFixed(2)} ج محفوظ)</span>}
+          {clientBalance > 0 && (
+            <span style={{ color: "var(--accent)", marginRight: 8 }}>
+              (الرصيد: {clientBalance.toFixed(2)} ج محفوظ)
+            </span>
+          )}
         </div>
       );
     }
     if (clientBalance <= 0) {
       return (
-        <div style={{ padding: '10px 14px', background: 'rgba(255,71,87,0.08)', border: '1px solid rgba(255,71,87,0.3)', borderRadius: 10, marginBottom: 8, fontSize: 12, color: '#ff4757' }}>
+        <div
+          style={{
+            padding: "10px 14px",
+            background: "rgba(255,71,87,0.08)",
+            border: "1px solid rgba(255,71,87,0.3)",
+            borderRadius: 10,
+            marginBottom: 8,
+            fontSize: 12,
+            color: "#ff4757",
+          }}
+        >
           ⚠️ لا يوجد رصيد — سيُحوَّل للدفع كاش
         </div>
       );
     }
     if (walletCovers) {
       return (
-        <div style={{ padding: '10px 14px', background: 'rgba(46,213,115,0.08)', border: '1px solid rgba(46,213,115,0.4)', borderRadius: 10, marginBottom: 8 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 13, color: 'var(--success)', fontWeight: 600 }}>💰 رصيد العميل</span>
-            <span style={{ fontSize: 15, color: 'var(--success)', fontWeight: 700 }}>{clientBalance.toFixed(2)} ج</span>
+        <div
+          style={{
+            padding: "10px 14px",
+            background: "rgba(46,213,115,0.08)",
+            border: "1px solid rgba(46,213,115,0.4)",
+            borderRadius: 10,
+            marginBottom: 8,
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span
+              style={{ fontSize: 13, color: "var(--success)", fontWeight: 600 }}
+            >
+              💰 رصيد العميل
+            </span>
+            <span
+              style={{ fontSize: 15, color: "var(--success)", fontWeight: 700 }}
+            >
+              {clientBalance.toFixed(2)} ج
+            </span>
           </div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>✅ يغطي الفاتورة — سيُخصم <strong style={{ color: 'var(--accent)' }}>{total.toFixed(2)} ج</strong></div>
+          <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 6 }}>
+            ✅ يغطي الفاتورة — سيُخصم{" "}
+            <strong style={{ color: "var(--accent)" }}>
+              {total.toFixed(2)} ج
+            </strong>
+          </div>
         </div>
       );
     }
     return (
-      <div style={{ padding: '10px 14px', background: 'rgba(255,165,2,0.08)', border: '1px solid rgba(255,165,2,0.4)', borderRadius: 10, marginBottom: 8 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-          <span style={{ fontSize: 13, color: 'var(--warning)', fontWeight: 600 }}>💰 رصيد العميل</span>
-          <span style={{ fontSize: 15, color: 'var(--warning)', fontWeight: 700 }}>{clientBalance.toFixed(2)} ج</span>
+      <div
+        style={{
+          padding: "10px 14px",
+          background: "rgba(255,165,2,0.08)",
+          border: "1px solid rgba(255,165,2,0.4)",
+          borderRadius: 10,
+          marginBottom: 8,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            marginBottom: 6,
+          }}
+        >
+          <span
+            style={{ fontSize: 13, color: "var(--warning)", fontWeight: 600 }}
+          >
+            💰 رصيد العميل
+          </span>
+          <span
+            style={{ fontSize: 15, color: "var(--warning)", fontWeight: 700 }}
+          >
+            {clientBalance.toFixed(2)} ج
+          </span>
         </div>
-        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>⚠️ لا يكفي — سيُدفع جزئياً</div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '6px 8px', background: 'rgba(0,0,0,0.2)', borderRadius: 8, marginBottom: 4 }}>
-          <span style={{ color: 'var(--muted)' }}>من المحفظة:</span>
-          <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{walletDebit.toFixed(2)} ج</span>
+        <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>
+          ⚠️ لا يكفي — سيُدفع جزئياً
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '6px 8px', background: 'rgba(0,0,0,0.2)', borderRadius: 8 }}>
-          <span style={{ color: 'var(--muted)' }}>المتبقي كاش:</span>
-          <span style={{ color: 'var(--warning)', fontWeight: 700 }}>{cashRemainder.toFixed(2)} ج</span>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            fontSize: 12,
+            padding: "6px 8px",
+            background: "rgba(0,0,0,0.2)",
+            borderRadius: 8,
+            marginBottom: 4,
+          }}
+        >
+          <span style={{ color: "var(--muted)" }}>من المحفظة:</span>
+          <span style={{ color: "var(--accent)", fontWeight: 700 }}>
+            {walletDebit.toFixed(2)} ج
+          </span>
+        </div>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            fontSize: 12,
+            padding: "6px 8px",
+            background: "rgba(0,0,0,0.2)",
+            borderRadius: 8,
+          }}
+        >
+          <span style={{ color: "var(--muted)" }}>المتبقي كاش:</span>
+          <span style={{ color: "var(--warning)", fontWeight: 700 }}>
+            {cashRemainder.toFixed(2)} ج
+          </span>
         </div>
       </div>
     );
@@ -265,82 +428,288 @@ export default function InvoicePage() {
         @media screen { .print-area { max-width: 480px; margin: 0 auto; } }
       `}</style>
 
-      <div style={{ minHeight: '100vh', padding: 16, maxWidth: 560, margin: '0 auto' }}>
-
-        <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+      <div
+        style={{
+          minHeight: "100vh",
+          padding: 16,
+          maxWidth: 560,
+          margin: "0 auto",
+        }}
+      >
+        <div
+          className="no-print"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: 20,
+          }}
+        >
           <div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent)' }}>Link Space</div>
-            <div style={{ fontSize: 11, color: 'var(--muted)' }}>إصدار فاتورة</div>
+            <div
+              style={{ fontSize: 18, fontWeight: 800, color: "var(--accent)" }}
+            >
+              Link Space
+            </div>
+            <div style={{ fontSize: 11, color: "var(--muted)" }}>
+              إصدار فاتورة
+            </div>
           </div>
-          <button onClick={() => navigate('/scanner')}
-            style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '6px 12px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>← رجوع</button>
+          <button
+            onClick={() => navigate("/scanner")}
+            style={{
+              background: "transparent",
+              border: "1px solid var(--border)",
+              color: "var(--muted)",
+              padding: "6px 12px",
+              borderRadius: 8,
+              fontSize: 12,
+              cursor: "pointer",
+            }}
+          >
+            ← رجوع
+          </button>
         </div>
 
         {isSubscription && (
-          <div style={{ padding: '10px 16px', background: 'rgba(0,212,170,0.1)', border: '1px solid rgba(0,212,170,0.4)', borderRadius: 12, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div
+            style={{
+              padding: "10px 16px",
+              background: "rgba(0,212,170,0.1)",
+              border: "1px solid rgba(0,212,170,0.4)",
+              borderRadius: 12,
+              marginBottom: 16,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+            }}
+          >
             <span style={{ fontSize: 20 }}>📋</span>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--accent)' }}>جلسة مشمولة بالاشتراك الشهري</div>
-              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>تكلفة الجلسة صفر — مدفوع مسبقاً</div>
+              <div
+                style={{
+                  fontWeight: 700,
+                  fontSize: 14,
+                  color: "var(--accent)",
+                }}
+              >
+                جلسة مشمولة بالاشتراك الشهري
+              </div>
+              <div
+                style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}
+              >
+                تكلفة الجلسة صفر — مدفوع مسبقاً
+              </div>
             </div>
           </div>
         )}
 
         <div className="print-area card" style={{ marginBottom: 16 }}>
-          <div style={{ textAlign: 'center', marginBottom: 16, paddingBottom: 16, borderBottom: '1px dashed var(--border)' }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--accent)' }}>🏢 Link Space</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>نظام إدارة مساحة العمل المشتركة</div>
-            <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-              <span style={{ color: 'var(--muted)' }}>#{invoiceNumber}</span>
-              <span style={{ color: 'var(--muted)' }}>{dateStr} — {timeStr}</span>
+          <div
+            style={{
+              textAlign: "center",
+              marginBottom: 16,
+              paddingBottom: 16,
+              borderBottom: "1px dashed var(--border)",
+            }}
+          >
+            <div
+              style={{ fontSize: 22, fontWeight: 800, color: "var(--accent)" }}
+            >
+              🏢 Link Space
+            </div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
+              نظام إدارة مساحة العمل المشتركة
+            </div>
+            <div
+              style={{
+                marginTop: 10,
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: 12,
+              }}
+            >
+              <span style={{ color: "var(--muted)" }}>#{invoiceNumber}</span>
+              <span style={{ color: "var(--muted)" }}>
+                {dateStr} — {timeStr}
+              </span>
             </div>
           </div>
 
-          <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px dashed var(--border)' }}>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>بيانات العميل</div>
+          <div
+            style={{
+              marginBottom: 16,
+              paddingBottom: 16,
+              borderBottom: "1px dashed var(--border)",
+            }}
+          >
+            <div
+              style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}
+            >
+              بيانات العميل
+            </div>
             <div style={{ fontWeight: 700, fontSize: 15 }}>{client.name}</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)' }}>{client.phone}</div>
+            <div style={{ fontSize: 12, color: "var(--muted)" }}>
+              {client.phone}
+            </div>
+            {/* إضافة الإيميل هنا بشكل أنيق */}
+            {client.email && (
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "var(--accent)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  opacity: 0.9,
+                }}
+              >
+                <span>✉️</span>
+                {client.email}
+              </div>
+            )}
           </div>
 
-          <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px dashed var(--border)' }}>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>تفاصيل الجلسة</div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 6 }}>
-              <span>{spaceIcon} {spaceName}</span>
-              {isSubscription
-                ? <span className="badge badge-success">✅ مشمول بالاشتراك</span>
-                : <span style={{ fontWeight: 600 }}>{sessionCost.toFixed(2)} ج</span>
-              }
+          <div
+            style={{
+              marginBottom: 16,
+              paddingBottom: 16,
+              borderBottom: "1px dashed var(--border)",
+            }}
+          >
+            <div
+              style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}
+            >
+              تفاصيل الجلسة
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>
-              <span>المدة: {billedHours} {billedHours === 1 ? 'ساعة' : 'ساعات'}<span style={{ fontSize: 11, marginRight: 4, opacity: 0.7 }}>({session.durationMin} د فعلية)</span></span>
-              {!isSubscription && <span>سعر الساعة: {session.pricePerHr || '—'} ج</span>}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: 14,
+                marginBottom: 6,
+              }}
+            >
+              <span>
+                {spaceIcon} {spaceName}
+              </span>
+              {isSubscription ? (
+                <span className="badge badge-success">✅ مشمول بالاشتراك</span>
+              ) : (
+                <span style={{ fontWeight: 600 }}>
+                  {sessionCost.toFixed(2)} ج
+                </span>
+              )}
+            </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: 12,
+                color: "var(--muted)",
+                marginBottom: 4,
+              }}
+            >
+              <span>
+                المدة: {billedHours} {billedHours === 1 ? "ساعة" : "ساعات"}
+                <span style={{ fontSize: 11, marginRight: 4, opacity: 0.7 }}>
+                  ({session.durationMin} د فعلية)
+                </span>
+              </span>
+              {!isSubscription && (
+                <span>سعر الساعة: {session.pricePerHr || "—"} ج</span>
+              )}
             </div>
             {session.checkIn && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginTop: 4, opacity: 0.8 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 11,
+                  color: "var(--muted)",
+                  marginTop: 4,
+                  opacity: 0.8,
+                }}
+              >
                 <span>دخول: {formatTime(session.checkIn)}</span>
-                <span>خروج: {formatTime(session.checkOut || new Date().toISOString())}</span>
+                <span>
+                  خروج:{" "}
+                  {formatTime(session.checkOut || new Date().toISOString())}
+                </span>
               </div>
             )}
           </div>
 
           {/* ✅ الخدمات مع تمييز المضافة مسبقاً */}
           {addedServices.length > 0 && (
-            <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px dashed var(--border)' }}>
-              <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>خدمات إضافية</div>
-              {addedServices.map(s => (
-                <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 6, alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span>{s.name} × {s.qty}</span>
+            <div
+              style={{
+                marginBottom: 16,
+                paddingBottom: 16,
+                borderBottom: "1px dashed var(--border)",
+              }}
+            >
+              <div
+                style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}
+              >
+                خدمات إضافية
+              </div>
+              {addedServices.map((s) => (
+                <div
+                  key={s.id}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: 14,
+                    marginBottom: 6,
+                    alignItems: "center",
+                  }}
+                >
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 6 }}
+                  >
+                    <span>
+                      {s.name} × {s.qty}
+                    </span>
                     {s.from_order && (
-                      <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 4, background: s.added_by === 'client' ? 'rgba(0,212,170,0.15)' : 'rgba(255,165,2,0.15)', color: s.added_by === 'client' ? 'var(--accent)' : 'var(--warning)' }}>
-                        {s.added_by === 'client' ? '👤' : '👷'}
+                      <span
+                        style={{
+                          fontSize: 9,
+                          padding: "1px 5px",
+                          borderRadius: 4,
+                          background:
+                            s.added_by === "client"
+                              ? "rgba(0,212,170,0.15)"
+                              : "rgba(255,165,2,0.15)",
+                          color:
+                            s.added_by === "client"
+                              ? "var(--accent)"
+                              : "var(--warning)",
+                        }}
+                      >
+                        {s.added_by === "client" ? "👤" : "👷"}
                       </span>
                     )}
                   </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span style={{ fontWeight: 600 }}>{(s.price * s.qty).toFixed(2)} ج</span>
-                    <button className="no-print" onClick={() => removeService(s.id)}
-                      style={{ background: 'transparent', border: 'none', color: '#ff4757', cursor: 'pointer', fontSize: 16 }}>−</button>
+                  <div
+                    style={{ display: "flex", gap: 8, alignItems: "center" }}
+                  >
+                    <span style={{ fontWeight: 600 }}>
+                      {(s.price * s.qty).toFixed(2)} ج
+                    </span>
+                    <button
+                      className="no-print"
+                      onClick={() => removeService(s.id)}
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        color: "#ff4757",
+                        cursor: "pointer",
+                        fontSize: 16,
+                      }}
+                    >
+                      −
+                    </button>
                   </div>
                 </div>
               ))}
@@ -348,104 +717,303 @@ export default function InvoicePage() {
           )}
 
           {couponData && (
-            <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px dashed var(--border)' }}>
-              <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>كوبون خصم</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, color: 'var(--success)' }}>
-                <span>🎫 {couponData.code} (خصم {couponData.discount_pct}%)</span>
+            <div
+              style={{
+                marginBottom: 16,
+                paddingBottom: 16,
+                borderBottom: "1px dashed var(--border)",
+              }}
+            >
+              <div
+                style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}
+              >
+                كوبون خصم
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 14,
+                  color: "var(--success)",
+                }}
+              >
+                <span>
+                  🎫 {couponData.code} (خصم {couponData.discount_pct}%)
+                </span>
                 <span>− {discountAmount.toFixed(2)} ج</span>
               </div>
             </div>
           )}
 
           {note && (
-            <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px dashed var(--border)', fontSize: 13, color: 'var(--muted)' }}>
+            <div
+              style={{
+                marginBottom: 16,
+                paddingBottom: 16,
+                borderBottom: "1px dashed var(--border)",
+                fontSize: 13,
+                color: "var(--muted)",
+              }}
+            >
               ملاحظة: {note}
             </div>
           )}
 
-          <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px dashed var(--border)' }}>
+          <div
+            style={{
+              marginBottom: 16,
+              paddingBottom: 16,
+              borderBottom: "1px dashed var(--border)",
+            }}
+          >
             {!isSubscription && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>
-                <span>تكلفة الجلسة</span><span>{sessionCost.toFixed(2)} ج</span>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 13,
+                  color: "var(--muted)",
+                  marginBottom: 6,
+                }}
+              >
+                <span>تكلفة الجلسة</span>
+                <span>{sessionCost.toFixed(2)} ج</span>
               </div>
             )}
             {isSubscription && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--success)', marginBottom: 6 }}>
-                <span>📋 اشتراك شهري</span><span>مدفوع مسبقاً</span>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 13,
+                  color: "var(--success)",
+                  marginBottom: 6,
+                }}
+              >
+                <span>📋 اشتراك شهري</span>
+                <span>مدفوع مسبقاً</span>
               </div>
             )}
             {servicesCost > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>
-                <span>الخدمات</span><span>{servicesCost.toFixed(2)} ج</span>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 13,
+                  color: "var(--muted)",
+                  marginBottom: 6,
+                }}
+              >
+                <span>الخدمات</span>
+                <span>{servicesCost.toFixed(2)} ج</span>
               </div>
             )}
             {couponData && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--success)', marginBottom: 6 }}>
-                <span>خصم {couponData.discount_pct}%</span><span>− {discountAmount.toFixed(2)} ج</span>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 13,
+                  color: "var(--success)",
+                  marginBottom: 6,
+                }}
+              >
+                <span>خصم {couponData.discount_pct}%</span>
+                <span>− {discountAmount.toFixed(2)} ج</span>
               </div>
             )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 700, color: 'var(--accent)', marginTop: 8 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: 18,
+                fontWeight: 700,
+                color: "var(--accent)",
+                marginTop: 8,
+              }}
+            >
               <span>الإجمالي</span>
-              <span>{total === 0 ? 'مجاناً ✅' : `${total.toFixed(2)} ج`}</span>
+              <span>{total === 0 ? "مجاناً ✅" : `${total.toFixed(2)} ج`}</span>
             </div>
           </div>
 
-          <div style={{ marginBottom: 16, paddingBottom: 16, borderBottom: '1px dashed var(--border)' }}>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>طريقة الدفع</div>
-            {effectiveMethod === 'subscription' ? (
-              <div style={{ textAlign: 'center' }}><span className="badge badge-success">📋 اشتراك شهري</span></div>
-            ) : effectiveMethod === 'partial' ? (
+          <div
+            style={{
+              marginBottom: 16,
+              paddingBottom: 16,
+              borderBottom: "1px dashed var(--border)",
+            }}
+          >
+            <div
+              style={{ fontSize: 12, color: "var(--muted)", marginBottom: 8 }}
+            >
+              طريقة الدفع
+            </div>
+            {effectiveMethod === "subscription" ? (
+              <div style={{ textAlign: "center" }}>
+                <span className="badge badge-success">📋 اشتراك شهري</span>
+              </div>
+            ) : effectiveMethod === "partial" ? (
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
-                  <span style={{ color: 'var(--muted)' }}>💳 من المحفظة</span>
-                  <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{walletDebit.toFixed(2)} ج</span>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: 13,
+                    marginBottom: 6,
+                  }}
+                >
+                  <span style={{ color: "var(--muted)" }}>💳 من المحفظة</span>
+                  <span style={{ color: "var(--accent)", fontWeight: 700 }}>
+                    {walletDebit.toFixed(2)} ج
+                  </span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                  <span style={{ color: 'var(--muted)' }}>💵 كاش</span>
-                  <span style={{ color: 'var(--warning)', fontWeight: 700 }}>{cashRemainder.toFixed(2)} ج</span>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: 13,
+                  }}
+                >
+                  <span style={{ color: "var(--muted)" }}>💵 كاش</span>
+                  <span style={{ color: "var(--warning)", fontWeight: 700 }}>
+                    {cashRemainder.toFixed(2)} ج
+                  </span>
                 </div>
               </div>
-            ) : effectiveMethod === 'wallet' ? (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <span style={{ color: 'var(--muted)' }}>💳 من المحفظة</span>
-                <span style={{ color: 'var(--accent)', fontWeight: 700 }}>{total.toFixed(2)} ج</span>
+            ) : effectiveMethod === "wallet" ? (
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 13,
+                }}
+              >
+                <span style={{ color: "var(--muted)" }}>💳 من المحفظة</span>
+                <span style={{ color: "var(--accent)", fontWeight: 700 }}>
+                  {total.toFixed(2)} ج
+                </span>
               </div>
             ) : (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-                <span style={{ color: 'var(--muted)' }}>💵 كاش</span>
-                <span style={{ color: 'var(--warning)', fontWeight: 700 }}>{total.toFixed(2)} ج</span>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 13,
+                }}
+              >
+                <span style={{ color: "var(--muted)" }}>💵 كاش</span>
+                <span style={{ color: "var(--warning)", fontWeight: 700 }}>
+                  {total.toFixed(2)} ج
+                </span>
               </div>
             )}
           </div>
 
-          <div style={{ textAlign: 'center', marginTop: 16, fontSize: 12, color: 'var(--muted)' }}>شكراً لزيارتكم 🙏</div>
+          <div
+            style={{
+              textAlign: "center",
+              marginTop: 16,
+              fontSize: 12,
+              color: "var(--muted)",
+            }}
+          >
+            شكراً لزيارتكم 🙏
+          </div>
         </div>
 
         {/* أدوات */}
         <div className="no-print">
-
           {/* ✅ إشعار الطلبات المضافة مسبقاً */}
-          {addedServices.filter(s => s.from_order).length > 0 && (
-            <div style={{ padding: '10px 14px', background: 'rgba(0,212,170,0.08)', border: '1px solid rgba(0,212,170,0.3)', borderRadius: 10, marginBottom: 16, fontSize: 13 }}>
-              <div style={{ fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>☕ طلبات مضافة خلال الجلسة</div>
-              <div style={{ color: 'var(--muted)', fontSize: 12 }}>
-                تم تحميل {addedServices.filter(s => s.from_order).length} طلب تلقائياً — يمكنك إضافة المزيد أو تعديل الكميات
+          {addedServices.filter((s) => s.from_order).length > 0 && (
+            <div
+              style={{
+                padding: "10px 14px",
+                background: "rgba(0,212,170,0.08)",
+                border: "1px solid rgba(0,212,170,0.3)",
+                borderRadius: 10,
+                marginBottom: 16,
+                fontSize: 13,
+              }}
+            >
+              <div
+                style={{
+                  fontWeight: 700,
+                  color: "var(--accent)",
+                  marginBottom: 4,
+                }}
+              >
+                ☕ طلبات مضافة خلال الجلسة
+              </div>
+              <div style={{ color: "var(--muted)", fontSize: 12 }}>
+                تم تحميل {addedServices.filter((s) => s.from_order).length} طلب
+                تلقائياً — يمكنك إضافة المزيد أو تعديل الكميات
               </div>
             </div>
           )}
 
           <div className="section-title">إضافة خدمات / مشروبات</div>
           {servicesList.length === 0 ? (
-            <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 16, fontSize: 13, marginBottom: 16 }}>جارٍ تحميل الخدمات...</div>
+            <div
+              style={{
+                textAlign: "center",
+                color: "var(--muted)",
+                padding: 16,
+                fontSize: 13,
+                marginBottom: 16,
+              }}
+            >
+              جارٍ تحميل الخدمات...
+            </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
-              {servicesList.map(s => (
-                <button key={s.id} onClick={() => addService(s)}
-                  style={{ padding: '10px 8px', borderRadius: 10, border: '1px solid', background: addedServices.find(x => x.id === s.id) ? 'rgba(0,212,170,0.1)' : 'transparent', borderColor: addedServices.find(x => x.id === s.id) ? 'var(--accent)' : 'var(--border)', cursor: 'pointer', textAlign: 'center' }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{s.name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--accent)' }}>{s.price} ج</div>
-                  {addedServices.find(x => x.id === s.id) && (
-                    <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 2 }}>×{addedServices.find(x => x.id === s.id).qty}</div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, 1fr)",
+                gap: 8,
+                marginBottom: 16,
+              }}
+            >
+              {servicesList.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => addService(s)}
+                  style={{
+                    padding: "10px 8px",
+                    borderRadius: 10,
+                    border: "1px solid",
+                    background: addedServices.find((x) => x.id === s.id)
+                      ? "rgba(0,212,170,0.1)"
+                      : "transparent",
+                    borderColor: addedServices.find((x) => x.id === s.id)
+                      ? "var(--accent)"
+                      : "var(--border)",
+                    cursor: "pointer",
+                    textAlign: "center",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: "var(--text)",
+                    }}
+                  >
+                    {s.name}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--accent)" }}>
+                    {s.price} ج
+                  </div>
+                  {addedServices.find((x) => x.id === s.id) && (
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: "var(--success)",
+                        marginTop: 2,
+                      }}
+                    >
+                      ×{addedServices.find((x) => x.id === s.id).qty}
+                    </div>
                   )}
                 </button>
               ))}
@@ -454,36 +1022,118 @@ export default function InvoicePage() {
 
           <div className="section-title">كوبون خصم (اختياري)</div>
           {!couponData ? (
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-              <input className="input-field" style={{ flex: 1, textTransform: 'uppercase', letterSpacing: 1 }}
-                placeholder="أدخل كود الكوبون..." value={couponCode}
-                onChange={e => setCouponCode(e.target.value.toUpperCase())}
-                onKeyDown={e => e.key === 'Enter' && validateCoupon()} />
-              <button onClick={validateCoupon} disabled={couponLoading || !couponCode.trim()}
-                style={{ padding: '0 16px', borderRadius: 10, border: '1px solid var(--accent)', background: 'transparent', color: 'var(--accent)', fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-                {couponLoading ? '...' : 'تطبيق'}
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              <input
+                className="input-field"
+                style={{
+                  flex: 1,
+                  textTransform: "uppercase",
+                  letterSpacing: 1,
+                }}
+                placeholder="أدخل كود الكوبون..."
+                value={couponCode}
+                onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === "Enter" && validateCoupon()}
+              />
+              <button
+                onClick={validateCoupon}
+                disabled={couponLoading || !couponCode.trim()}
+                style={{
+                  padding: "0 16px",
+                  borderRadius: 10,
+                  border: "1px solid var(--accent)",
+                  background: "transparent",
+                  color: "var(--accent)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {couponLoading ? "..." : "تطبيق"}
               </button>
             </div>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'rgba(46,213,115,0.08)', border: '1px solid rgba(46,213,115,0.4)', borderRadius: 10, marginBottom: 16 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "10px 14px",
+                background: "rgba(46,213,115,0.08)",
+                border: "1px solid rgba(46,213,115,0.4)",
+                borderRadius: 10,
+                marginBottom: 16,
+              }}
+            >
               <span style={{ fontSize: 20 }}>🎫</span>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--success)', fontFamily: 'var(--mono)' }}>{couponData.code}</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>خصم {couponData.discount_pct}% — توفير {discountAmount.toFixed(2)} ج</div>
+                <div
+                  style={{
+                    fontWeight: 700,
+                    fontSize: 14,
+                    color: "var(--success)",
+                    fontFamily: "var(--mono)",
+                  }}
+                >
+                  {couponData.code}
+                </div>
+                <div
+                  style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}
+                >
+                  خصم {couponData.discount_pct}% — توفير{" "}
+                  {discountAmount.toFixed(2)} ج
+                </div>
               </div>
-              {!couponUsed
-                ? <button onClick={removeCoupon} style={{ background: 'transparent', border: 'none', color: '#ff4757', cursor: 'pointer', fontSize: 18 }}>✕</button>
-                : <span className="badge badge-success">✅ مُطبَّق</span>}
+              {!couponUsed ? (
+                <button
+                  onClick={removeCoupon}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "#ff4757",
+                    cursor: "pointer",
+                    fontSize: 18,
+                  }}
+                >
+                  ✕
+                </button>
+              ) : (
+                <span className="badge badge-success">✅ مُطبَّق</span>
+              )}
             </div>
           )}
 
           {!(isSubscription && servicesCost === 0) && (
             <>
               <div className="section-title">طريقة الدفع</div>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                {[['cash','💵 كاش'], ['wallet','💳 محفظة']].map(([method, label]) => (
-                  <button key={method} onClick={() => setPaymentMethod(method)}
-                    style={{ flex: 1, padding: '10px', borderRadius: 10, border: '1px solid', fontSize: 13, fontWeight: 600, cursor: 'pointer', borderColor: paymentMethod===method?'var(--accent)':'var(--border)', background: paymentMethod===method?'var(--accent)':'transparent', color: paymentMethod===method?'#000':'var(--muted)' }}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                {[
+                  ["cash", "💵 كاش"],
+                  ["wallet", "💳 محفظة"],
+                ].map(([method, label]) => (
+                  <button
+                    key={method}
+                    onClick={() => setPaymentMethod(method)}
+                    style={{
+                      flex: 1,
+                      padding: "10px",
+                      borderRadius: 10,
+                      border: "1px solid",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      borderColor:
+                        paymentMethod === method
+                          ? "var(--accent)"
+                          : "var(--border)",
+                      background:
+                        paymentMethod === method
+                          ? "var(--accent)"
+                          : "transparent",
+                      color: paymentMethod === method ? "#000" : "var(--muted)",
+                    }}
+                  >
                     {label}
                   </button>
                 ))}
@@ -493,13 +1143,36 @@ export default function InvoicePage() {
           )}
 
           <div className="section-title">ملاحظة (اختياري)</div>
-          <input className="input-field" style={{ marginBottom: 16 }} placeholder="أضف ملاحظة للفاتورة..."
-            value={note} onChange={e => setNote(e.target.value)} />
+          <input
+            className="input-field"
+            style={{ marginBottom: 16 }}
+            placeholder="أضف ملاحظة للفاتورة..."
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
 
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-primary" style={{ flex: 1 }} onClick={handlePrint}>🖨️ طباعة الفاتورة</button>
-            <button onClick={handleDone}
-              style={{ flex: 1, padding: '12px', borderRadius: 10, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              className="btn btn-primary"
+              style={{ flex: 1 }}
+              onClick={handlePrint}
+            >
+              🖨️ طباعة الفاتورة
+            </button>
+            <button
+              onClick={handleDone}
+              style={{
+                flex: 1,
+                padding: "12px",
+                borderRadius: 10,
+                border: "1px solid var(--border)",
+                background: "transparent",
+                color: "var(--muted)",
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
               ✅ تم
             </button>
           </div>
@@ -508,4 +1181,3 @@ export default function InvoicePage() {
     </>
   );
 }
-
