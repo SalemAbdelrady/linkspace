@@ -41,6 +41,13 @@ function UserModal({ u, isInSession, amounts, getAmount, setAmount, chargeWallet
           <div>
             <div style={{ fontWeight: 800, fontSize: 18 }}>{u.name}</div>
             <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{u.phone}</div>
+            // داخل UserModal - تحت u.phone
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+               {u.email || 'لا يوجد إيميل'}
+               {u.email && (
+                 <a href={`mailto:${u.email}`} style={{ textDecoration: 'none', fontSize: 16 }}>✉️</a>
+             )}
+            </div>
             <span className={`badge badge-${isInSession ? 'success' : 'danger'}`} style={{ marginTop: 6, display: 'inline-block' }}>
               {isInSession ? '🟢 نشط الآن' : '⚫ غير نشط'}
             </span>
@@ -142,7 +149,11 @@ function InvoiceModal({ invoice, onClose }) {
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>العميل</div>
           <div style={{ fontWeight: 700 }}>{invoice.client_name}</div>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>{invoice.client_phone}</div>
-          
+          // داخل InvoiceModal - تحت invoice.client_phone
+          {invoice.client_email && (
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{invoice.client_email}</div>
+          )}
+
         </div>
 
         {/* نوع المساحة */}
@@ -511,6 +522,10 @@ export default function AdminDashboard() {
                       <div>
                         <div style={{ fontWeight: 700 }}>{u.name}</div>
                         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{u.phone}</div>
+                        // داخل الكارد - تحت u.phone
+                       <div style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                         {u.email}
+                       </div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span className={`badge badge-${isInSession ? 'success' : 'danger'}`}>{isInSession ? 'نشط' : 'غير نشط'}</span>
