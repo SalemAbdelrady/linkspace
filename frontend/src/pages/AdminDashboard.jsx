@@ -524,7 +524,7 @@ export default function AdminDashboard() {
                         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{u.phone}</div>
                         // داخل الكارد - تحت u.phone
                        <div style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                         {u.email}
+                         {u.email ? u.email : "البيانات لا تصل من السيرفر"}
                        </div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
