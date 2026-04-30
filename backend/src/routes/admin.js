@@ -11,10 +11,10 @@ router.get('/users', ...isStaffOrAdmin, async (req, res) => {
   const { search = '', page = 1 } = req.query;
   const limit  = 20;
   const offset = (parseInt(page) - 1) * limit;
-
+   
   try {
     const { rows } = await db.query(`
-      SELECT id, name, phone, role, balance, points,
+      SELECT id, name, phone, email, role, balance, points,
              qr_code,
              is_active, created_at
       FROM users

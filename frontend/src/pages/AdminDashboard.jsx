@@ -41,13 +41,17 @@ function UserModal({ u, isInSession, amounts, getAmount, setAmount, chargeWallet
           <div>
             <div style={{ fontWeight: 800, fontSize: 18 }}>{u.name}</div>
             <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{u.phone}</div>
-            // داخل UserModal - تحت u.phone
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
-               {u.email || 'لا يوجد إيميل'}
-               {u.email && (
-                 <a href={`mailto:${u.email}`} style={{ textDecoration: 'none', fontSize: 16 }}>✉️</a>
-             )}
-            </div>
+            {u.email ? (
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>البريد الإلكتروني</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 14, color: 'var(--accent)', fontWeight: 600 }}>{u.email}</span>
+                  <a href={`mailto:${u.email}`} className="badge badge-info" style={{ textDecoration: 'none' }}>إرسال ✉️</a>
+                </div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--danger)', marginBottom: 12 }}>⚠️ لا يوجد بريد إلكتروني مسجل لهذا العميل</div>
+            )}
             <span className={`badge badge-${isInSession ? 'success' : 'danger'}`} style={{ marginTop: 6, display: 'inline-block' }}>
               {isInSession ? '🟢 نشط الآن' : '⚫ غير نشط'}
             </span>
@@ -522,10 +526,19 @@ export default function AdminDashboard() {
                       <div>
                         <div style={{ fontWeight: 700 }}>{u.name}</div>
                         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{u.phone}</div>
-                        // داخل الكارد - تحت u.phone
-                       <div style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                         {u.email ? u.email : "البيانات لا تصل من السيرفر"}
-                       </div>
+                        {/* تطبيق نفس ستايل صفحة العميل في الأدمن */}
+                        {u.email && (
+                          <div style={{ 
+                             fontSize: 12, 
+                             color: 'var(--accent)', 
+                             marginTop: 4, 
+                             display: 'flex', 
+                             alignItems: 'center', 
+                             gap: 4 
+                          }}>
+                            <span style={{ fontSize: 10 }}>✉️</span> {u.email}
+                          </div>
+                          )}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span className={`badge badge-${isInSession ? 'success' : 'danger'}`}>{isInSession ? 'نشط' : 'غير نشط'}</span>
