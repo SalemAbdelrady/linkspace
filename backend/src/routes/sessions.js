@@ -40,7 +40,7 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
     await client.query('BEGIN');
 
     const { rows: userRows } = await client.query(
-      `SELECT id, name, phone, balance, points
+      `SELECT id, name, phone, email, balance, points
        FROM users WHERE qr_code = $1 AND is_active = true FOR UPDATE`,
       [qr_code]
     );
@@ -88,7 +88,7 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
 
       return res.json({
         action : 'checkout',
-        client : { id: user.id, name: user.name, phone: user.phone, balance: parseFloat(user.balance) },
+        client : { id: user.id, name: user.name, phone: user.phone, email: user.email, balance: parseFloat(user.balance) },
         session: {
           id                   : session.id,
           durationMin,
@@ -133,7 +133,7 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
 
       return res.json({
         action    : 'checkin',
-        client    : { name: user.name, phone: user.phone, balance: user.balance },
+        client    : { name: user.name, phone: user.phone, email: user.email, balance: user.balance },
         pricePerHr: effectivePrice,
         spaceKey  : space_key,
         spaceName : space.name,
@@ -254,7 +254,7 @@ router.get('/active', auth, requireRole('staff', 'admin'), async (req, res) => {
       SELECT s.id, s.check_in, s.price_per_hr,
              s.space_key, s.space_name, s.max_hours,
              s.is_subscription_session, s.subscription_id,
-             u.id as user_id, u.name, u.phone, u.balance,
+             u.id as user_id, u.name, u.phone, u.email, u.balance,
              EXTRACT(EPOCH FROM (NOW() - s.check_in))/60 AS elapsed_min
       FROM sessions s
       JOIN users u ON u.id = s.user_id
