@@ -230,12 +230,11 @@ router.get('/history', auth, async (req, res) => {
   const offset = (page - 1) * limit;
   try {
     const { rows } = await db.query(`
-      SELECT id, check_in, check_out, duration_min, cost,
-             payment_method, status, space_key, space_name, max_hours,
-             is_subscription_session,
-             price_per_hr
-      FROM sessions WHERE user_id = $1
-      ORDER BY check_in DESC LIMIT $2 OFFSET $3
+      SELECT s.*, u.email AS client_email
+          FROM sessions s
+          LEFT JOIN users u ON s.user_id = u.id
+          WHERE s.user_id = $1
+          ORDER BY s.check_in DESC LIMIT $2 OFFSET $3
     `, [req.user.id, limit, offset]);
     const { rows: countRows } = await db.query(
       'SELECT COUNT(*) FROM sessions WHERE user_id = $1', [req.user.id]
