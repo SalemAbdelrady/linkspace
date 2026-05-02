@@ -27,89 +27,97 @@ api.interceptors.response.use(
 
 // Auth
 export const authAPI = {
-  login: (data) => api.post('/auth/login', data),
+  login:    (data) => api.post('/auth/login', data),
   register: (data) => api.post('/auth/register', data),
-  me: () => api.get('/auth/me'),
+  me:       ()     => api.get('/auth/me'),
 };
 
 // Sessions
 export const sessionsAPI = {
-  scan: (qr_code) => api.post('/sessions/scan', { qr_code }),
-  history: (page = 1) => api.get(`/sessions/history?page=${page}`),
-  active: () => api.get('/sessions/active'),
-  pay: (body) => api.post('/sessions/pay', body),
-  scan: (qr_code, space_key = 'cowork') =>
-  api.post('/sessions/scan', { qr_code, space_key }),
+  scan:    (qr_code, space_key = 'cowork') => api.post('/sessions/scan', { qr_code, space_key }),
+  history: (page = 1)                      => api.get(`/sessions/history?page=${page}`),
+  active:  ()                              => api.get('/sessions/active'),
+  pay:     (body)                          => api.post('/sessions/pay', body),
 };
 
 // Coupons
 export const couponsAPI = {
-  redeem: () => api.post('/coupons/redeem'),
-  myCoupons: () => api.get('/coupons/my'),
-  validate: (body) => api.post('/coupons/validate', body),
-  use:      (body) => api.post('/coupons/use', body),
-  // في couponsAPI:
-adminAll:    ()       => api.get('/coupons/admin/all'),
-adminCreate: (body)   => api.post('/coupons/admin/create', body),
-adminRevoke: (id)     => api.post(`/coupons/admin/revoke/${id}`),
+  redeem:       ()     => api.post('/coupons/redeem'),
+  myCoupons:    ()     => api.get('/coupons/my'),
+  validate:     (body) => api.post('/coupons/validate', body),
+  use:          (body) => api.post('/coupons/use', body),
+  adminAll:     ()     => api.get('/coupons/admin/all'),
+  adminCreate:  (body) => api.post('/coupons/admin/create', body),
+  adminRevoke:  (id)   => api.post(`/coupons/admin/revoke/${id}`),
 };
 
 // Admin
 export const adminAPI = {
-  users: (search = '', page = 1) => api.get(`/admin/users?search=${search}&page=${page}`),
-  chargeWallet: (id, amount, note) => api.patch(`/admin/users/${id}/wallet`, { amount, note }),
-  addPoints: (id, points) => api.patch(`/admin/users/${id}/points`, { points }),
-  toggleUser: (id) => api.patch(`/admin/users/${id}/toggle`),
-  dailyReport: (date) => api.get(`/admin/reports/daily?date=${date}`),
-  monthlyReport: (year, month) => api.get(`/admin/reports/monthly?year=${year}&month=${month}`),
-  getPrices: () => api.get('/admin/prices'),
-  updatePrice: (id, price_per_hr) => api.put(`/admin/prices/${id}`, { price_per_hr }),
+  users:         (search = '', page = 1) => api.get(`/admin/users?search=${search}&page=${page}`),
+  chargeWallet:  (id, amount, note)      => api.patch(`/admin/users/${id}/wallet`, { amount, note }),
+  addPoints:     (id, points)            => api.patch(`/admin/users/${id}/points`, { points }),
+  toggleUser:    (id)                    => api.patch(`/admin/users/${id}/toggle`),
+  dailyReport:   (date)                  => api.get(`/admin/reports/daily?date=${date}`),
+  monthlyReport: (year, month)           => api.get(`/admin/reports/monthly?year=${year}&month=${month}`),
+  getPrices:     ()                      => api.get('/admin/prices'),
+  updatePrice:   (id, price_per_hr)      => api.put(`/admin/prices/${id}`, { price_per_hr }),
 };
 
 // Spaces
 export const spacesAPI = {
-  getAll: () => api.get('/spaces'),
+  getAll: ()          => api.get('/spaces'),
   update: (key, data) => api.put(`/spaces/${key}`, data),
 };
 
 // Services
 export const servicesAPI = {
-  getAll: () => api.get('/services'),
-  create: (data) => api.post('/services', data),
-  update: (id, data) => api.put(`/services/${id}`, data),
-  delete: (id) => api.delete(`/services/${id}`),
+  getAll: ()          => api.get('/services'),
+  create: (data)      => api.post('/services', data),
+  update: (id, data)  => api.put(`/services/${id}`, data),
+  delete: (id)        => api.delete(`/services/${id}`),
 };
 
-// Orders (Session Tab)
+// Orders
 export const ordersAPI = {
-  getBySession : (sessionId) => api.get(`/orders/session/${sessionId}`),
-  getMySession : ()           => api.get('/orders/my-session'),
-  add          : (body)       => api.post('/orders/add', body),
-  clientAdd    : (body)       => api.post('/orders/client-add', body),
-  remove       : (id)         => api.delete(`/orders/${id}`),
+  getBySession: (sessionId) => api.get(`/orders/session/${sessionId}`),
+  getMySession: ()          => api.get('/orders/my-session'),
+  add:          (body)      => api.post('/orders/add', body),
+  clientAdd:    (body)      => api.post('/orders/client-add', body),
+  remove:       (id)        => api.delete(`/orders/${id}`),
 };
 
-// Subscription Plans
+// Subscriptions
 export const subscriptionsAPI = {
-  getPlans: () => api.get('/subscriptions/plans'),
-  createPlan: (data) => api.post('/subscriptions/plans', data),
+  getPlans:   ()       => api.get('/subscriptions/plans'),
+  createPlan: (data)   => api.post('/subscriptions/plans', data),
   updatePlan: (id, data) => api.put(`/subscriptions/plans/${id}`, data),
-  deletePlan: (id) => api.delete(`/subscriptions/plans/${id}`),
-  // في subscriptionsAPI
-subscribe: (body) => api.post('/subscriptions/subscribe', body),
-cancel:    (id)   => api.post(`/subscriptions/cancel/${id}`),
-getAll:    ()     => api.get('/subscriptions/all'),
+  deletePlan: (id)     => api.delete(`/subscriptions/plans/${id}`),
+  subscribe:  (body)   => api.post('/subscriptions/subscribe', body),
+  cancel:     (id)     => api.post(`/subscriptions/cancel/${id}`),
+  getAll:     ()       => api.get('/subscriptions/all'),
 };
 
-// invoicesAPI
+// Invoices
 export const invoicesAPI = {
-  create:  (body)   => api.post('/invoices', body),
-  getAll:  (params) => api.get('/invoices', { params }),
-  getOne:  (id)     => api.get(`/invoices/${id}`),
-  getClientInvoices: (params) => api.get('/invoices/my', { params }),
+  create:           (body)   => api.post('/invoices', body),
+  getAll:           (params) => api.get('/invoices', { params }),
+  getOne:           (id)     => api.get(`/invoices/${id}`),
+  getClientInvoices:(params) => api.get('/invoices/my', { params }),
 };
 
+// Staff
+export const staffAPI = {
+  // أدمن — إدارة الموظفين
+  getAll:         ()              => api.get('/staff'),
+  create:         (data)          => api.post('/staff', data),
+  update:         (id, data)      => api.patch(`/staff/${id}`, data),
+  changePassword: (id, password)  => api.patch(`/staff/${id}/password`, { password }),
+  toggle:         (id)            => api.patch(`/staff/${id}/toggle`),
+  // تقارير
+  myStats:        (date)          => api.get(`/staff/me/stats?date=${date || ''}`),
+  staffStats:     (id, year, month) => api.get(`/staff/${id}/stats?year=${year}&month=${month}`),
+  compare:        (year, month)   => api.get(`/staff/compare?year=${year}&month=${month}`),
+};
 
-// ✅ export default في الآخر
 export default api;
 
