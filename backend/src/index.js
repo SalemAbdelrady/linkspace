@@ -18,6 +18,7 @@ const corsOptions = {
     const allowed = [
       process.env.FRONTEND_URL,
       'https://linkspace-topaz.vercel.app',
+      'https://linkspace-vojd.vercel.app', 
       'http://localhost:3000',
     ].filter(Boolean);
 
