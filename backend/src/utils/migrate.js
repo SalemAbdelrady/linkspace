@@ -20,8 +20,6 @@ async function migrate() {
   `);
 
   await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS qr_image TEXT;`);
-
-  // ✅ إضافة الإيميل وبيانات reset password
   await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(150) UNIQUE;`);
   await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_otp VARCHAR(6);`);
@@ -158,8 +156,8 @@ async function migrate() {
     );
   `);
 
-  await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS subscription_id INTEGER REFERENCES user_subscriptions(id) ON DELETE SET NULL;`);
-  await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS is_subscription_session BOOLEAN NOT NULL DEFAULT false;`);
+  await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS subscription_id           INTEGER REFERENCES user_subscriptions(id) ON DELETE SET NULL;`);
+  await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS is_subscription_session   BOOLEAN NOT NULL DEFAULT false;`);
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS invoices (
@@ -226,16 +224,39 @@ async function migrate() {
   `);
 
   // ── Indexes ───────────────────────────────────────────────────────
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_sessions_user_id       ON sessions(user_id);`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_sessions_status        ON sessions(status);`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_coupons_user_id        ON coupons(user_id);`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_wallet_user_id         ON wallet_transactions(user_id);`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_users_phone            ON users(phone);`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_invoices_user_id       ON invoices(user_id);`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_invoices_created       ON invoices(created_at DESC);`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_user_subs_user_id      ON user_subscriptions(user_id);`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_user_subs_status       ON user_subscriptions(status);`);
-  await db.query(`CREATE INDEX IF NOT EXISTS idx_users_email            ON users(email);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_sessions_user_id    ON sessions(user_id);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_sessions_status     ON sessions(status);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_coupons_user_id     ON coupons(user_id);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_wallet_user_id      ON wallet_transactions(user_id);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_users_phone         ON users(phone);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_invoices_user_id    ON invoices(user_id);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_invoices_created    ON invoices(created_at DESC);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_user_subs_user_id   ON user_subscriptions(user_id);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_user_subs_status    ON user_subscriptions(status);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_users_email         ON users(email);`);
+
+  // ── Staff System ──────────────────────────────────────────────────
+  await db.query(`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
+  await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS staff_permissions (
+      id                SERIAL PRIMARY KEY,
+      user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      can_view_all      BOOLEAN NOT NULL DEFAULT false,
+      can_edit_prices   BOOLEAN NOT NULL DEFAULT false,
+      can_charge_wallet BOOLEAN NOT NULL DEFAULT true,
+      can_add_points    BOOLEAN NOT NULL DEFAULT true,
+      notes             TEXT,
+      created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(user_id)
+    );
+  `);
+
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_sessions_created_by ON sessions(created_by);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_invoices_created_by ON invoices(created_by);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_staff_perms_user    ON staff_permissions(user_id);`);
 
   console.log('✅ Migrations completed!');
 }

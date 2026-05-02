@@ -5,10 +5,11 @@ const { auth, requireRole } = require('../middleware/auth');
 // ── migration guard ───────────────────────────────────────────────────
 ;(async () => {
   try {
-    await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS wallet_paid NUMERIC(10,2) NOT NULL DEFAULT 0`);
-    await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS cash_paid   NUMERIC(10,2) NOT NULL DEFAULT 0`);
-    await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_key   VARCHAR(20)   DEFAULT 'cowork'`);
-    await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_name  VARCHAR(100)  DEFAULT 'منطقة العمل المشتركة'`);
+    await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS wallet_paid  NUMERIC(10,2) NOT NULL DEFAULT 0`);
+    await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS cash_paid    NUMERIC(10,2) NOT NULL DEFAULT 0`);
+    await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_key    VARCHAR(20)   DEFAULT 'cowork'`);
+    await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_name   VARCHAR(100)  DEFAULT 'منطقة العمل المشتركة'`);
+    await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL`);
   } catch (e) { /* الأعمدة موجودة مسبقاً */ }
 })();
 
@@ -23,7 +24,6 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
     coupon_code, discount_pct, discount_amount,
     subtotal, total,
     payment_method, note,
-    // ✅ الـ frontend بيبعتهم صراحة
     wallet_paid: walletPaidFromFrontend,
     cash_paid:   cashPaidFromFrontend,
   } = req.body;
@@ -47,12 +47,10 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
     let walletPaid = 0;
     let cashPaid   = 0;
 
-    // ✅ لو الـ frontend بعت wallet_paid صراحة → نستخدمه
     if (walletPaidFromFrontend !== undefined && walletPaidFromFrontend !== null) {
       walletPaid = parseFloat(walletPaidFromFrontend) || 0;
       cashPaid   = parseFloat(cashPaidFromFrontend)   || 0;
     } else {
-      // fallback — نحسب من الـ payment_method
       if (payment_method === 'cash' || payment_method === 'subscription') {
         walletPaid = 0; cashPaid = totalAmount;
       } else if (payment_method === 'wallet') {
@@ -66,9 +64,7 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
       }
     }
 
-    // ✅ خصم المحفظة لو فيه
     if (walletPaid > 0) {
-      // تحقق إن الرصيد كافي
       if (currentBalance < walletPaid) {
         await client.query('ROLLBACK');
         return res.status(400).json({ error: `الرصيد غير كافٍ — الرصيد الحالي: ${currentBalance.toFixed(2)} ج` });
@@ -90,11 +86,13 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
         coupon_code, discount_pct, discount_amount,
         subtotal, total,
         wallet_paid, cash_paid,
-        payment_method, note
+        payment_method, note,
+        created_by
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,
         $8,$9,$10,$11,$12,
-        $13,$14,$15,$16,$17,$18,$19,$20,$21
+        $13,$14,$15,$16,$17,$18,$19,$20,$21,
+        $22
       )
       ON CONFLICT (invoice_number) DO NOTHING
       RETURNING *
@@ -108,6 +106,7 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
       subtotal || 0, totalAmount,
       walletPaid, cashPaid,
       payment_method || 'cash', note || null,
+      req.user.id,
     ]);
 
     await client.query('COMMIT');
@@ -156,17 +155,19 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
   const date   = req.query.date   || '';
   try {
     const { rows } = await db.query(`
-      SELECT * FROM invoices
+      SELECT i.*, u.name AS created_by_name
+      FROM invoices i
+      LEFT JOIN users u ON u.id = i.created_by
       WHERE
-        ($1 = '' OR client_name ILIKE '%' || $1 || '%' OR client_phone ILIKE '%' || $1 || '%')
-        AND ($2 = '' OR DATE(created_at) = $2::date)
-      ORDER BY created_at DESC LIMIT $3 OFFSET $4
+        ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%')
+        AND ($2 = '' OR DATE(i.created_at) = $2::date)
+      ORDER BY i.created_at DESC LIMIT $3 OFFSET $4
     `, [search, date, limit, offset]);
     const { rows: countRows } = await db.query(`
-      SELECT COUNT(*) FROM invoices
+      SELECT COUNT(*) FROM invoices i
       WHERE
-        ($1 = '' OR client_name ILIKE '%' || $1 || '%' OR client_phone ILIKE '%' || $1 || '%')
-        AND ($2 = '' OR DATE(created_at) = $2::date)
+        ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%')
+        AND ($2 = '' OR DATE(i.created_at) = $2::date)
     `, [search, date]);
     res.json({ invoices: rows, total: parseInt(countRows[0].count), page, limit });
   } catch (err) {
@@ -178,7 +179,12 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
 // GET /api/invoices/:id [staff/admin]
 router.get('/:id', auth, requireRole('staff', 'admin'), async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT * FROM invoices WHERE id = $1', [req.params.id]);
+    const { rows } = await db.query(`
+      SELECT i.*, u.name AS created_by_name
+      FROM invoices i
+      LEFT JOIN users u ON u.id = i.created_by
+      WHERE i.id = $1
+    `, [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'فاتورة غير موجودة' });
     res.json({ invoice: rows[0] });
   } catch (err) {

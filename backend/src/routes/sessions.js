@@ -115,9 +115,9 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
 
       const { rows: newSession } = await client.query(`
         INSERT INTO sessions
-          (user_id, price_per_hr, space_key, space_name, max_hours,
+          (user_id, price_per_hr, space_key, space_name, max_hours, created_by,
            is_subscription_session, subscription_id)
-        VALUES ($1,$2,$3,$4,$5,$6,$7)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING id
       `, [
         user.id,
@@ -125,6 +125,7 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
         space_key,
         space.name,
         space.max_hours,
+        req.user.id,
         isSubSession,
         subscription?.id || null,
       ]);
@@ -223,7 +224,7 @@ router.post('/pay', auth, requireRole('staff', 'admin'), async (req, res) => {
   }
 });
 
-// ✅ GET /api/sessions/history — أضفنا price_per_hr
+// GET /api/sessions/history
 router.get('/history', auth, async (req, res) => {
   const page   = parseInt(req.query.page) || 1;
   const limit  = 10;
