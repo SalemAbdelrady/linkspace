@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { staffAPI, invoicesAPI } from '../utils/api';
+import { staffAPI } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
@@ -7,23 +7,25 @@ import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import { ar } from 'date-fns/locale';
 
-// ── InvoiceModal (نفس أدمن) ───────────────────────────────────────────
 const SPACE_ICONS = { cowork: '🖥️', meeting: '🤝', lessons: '📚' };
 
+// ── InvoiceModal (شامل) ───────────────────────────────────────────────
 function InvoiceModal({ invoice, onClose }) {
   if (!invoice) return null;
-  const services = typeof invoice.services === 'string' ? JSON.parse(invoice.services) : invoice.services || [];
-  const spaceIcon = SPACE_ICONS[invoice.space_key] || '🏢';
-  const spaceName = invoice.space_name || 'منطقة العمل المشتركة';
+  const services    = typeof invoice.services === 'string' ? JSON.parse(invoice.services || '[]') : invoice.services || [];
+  const spaceIcon   = SPACE_ICONS[invoice.space_key] || '🏢';
+  const spaceName   = invoice.space_name || 'منطقة العمل المشتركة';
   const billedHours = invoice.duration_min ? Math.min(Math.max(Math.ceil(invoice.duration_min / 60), 1), 12) : null;
-  const walletPaid = parseFloat(invoice.wallet_paid || 0);
-  const cashPaid   = parseFloat(invoice.cash_paid   || 0);
+  const walletPaid  = parseFloat(invoice.wallet_paid || 0);
+  const cashPaid    = parseFloat(invoice.cash_paid   || 0);
+  const method      = invoice.payment_method;
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
       onClick={onClose}>
       <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 20, maxWidth: 420, width: '100%', maxHeight: '90vh', overflowY: 'auto' }}
         onClick={e => e.stopPropagation()}>
+
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div>
             <div style={{ fontWeight: 800, fontSize: 16, color: 'var(--accent)' }}>#{invoice.invoice_number}</div>
@@ -47,16 +49,22 @@ function InvoiceModal({ invoice, onClose }) {
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>{invoice.client_phone}</div>
         </div>
 
-        {billedHours && (
-          <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px dashed var(--border)' }}>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>تفاصيل الجلسة</div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-              <span>المدة: {billedHours} {billedHours === 1 ? 'ساعة' : 'ساعات'} ({invoice.duration_min} د)</span>
-              <span style={{ fontWeight: 600 }}>{parseFloat(invoice.session_cost).toFixed(2)} ج</span>
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--muted)' }}>سعر الساعة: {invoice.price_per_hr} ج</div>
+        <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px dashed var(--border)' }}>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>تفاصيل الجلسة</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+            <span>{spaceIcon} {spaceName}</span>
+            <span style={{ fontWeight: 600 }}>{parseFloat(invoice.session_cost || 0).toFixed(2)} ج</span>
           </div>
-        )}
+          {billedHours && (
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 2 }}>
+              المدة: {billedHours} {billedHours === 1 ? 'ساعة' : 'ساعات'}
+              <span style={{ opacity: 0.7, marginRight: 6 }}>({invoice.duration_min} د فعلية)</span>
+            </div>
+          )}
+          {parseFloat(invoice.price_per_hr || 0) > 0 && (
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>سعر الساعة: {invoice.price_per_hr} ج</div>
+          )}
+        </div>
 
         {services.length > 0 && (
           <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px dashed var(--border)' }}>
@@ -75,19 +83,38 @@ function InvoiceModal({ invoice, onClose }) {
             <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>كوبون خصم</div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--success)' }}>
               <span>🎫 {invoice.coupon_code} (خصم {invoice.discount_pct}%)</span>
-              <span>− {parseFloat(invoice.discount_amount).toFixed(2)} ج</span>
+              <span>− {parseFloat(invoice.discount_amount || 0).toFixed(2)} ج</span>
             </div>
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 700, color: 'var(--accent)', marginBottom: 12 }}>
-          <span>الإجمالي</span>
-          <span>{parseFloat(invoice.total).toFixed(2)} ج</span>
+        <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px dashed var(--border)' }}>
+          {parseFloat(invoice.services_cost || 0) > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>
+              <span>الخدمات</span>
+              <span>{parseFloat(invoice.services_cost).toFixed(2)} ج</span>
+            </div>
+          )}
+          {invoice.coupon_code && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--success)', marginBottom: 6 }}>
+              <span>خصم {invoice.discount_pct}%</span>
+              <span>− {parseFloat(invoice.discount_amount || 0).toFixed(2)} ج</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 18, fontWeight: 700, color: 'var(--accent)', marginTop: 8 }}>
+            <span>الإجمالي</span>
+            <span>{parseFloat(invoice.total) === 0 ? 'مجاناً ✅' : `${parseFloat(invoice.total).toFixed(2)} ج`}</span>
+          </div>
         </div>
 
         <div style={{ background: 'rgba(0,0,0,0.15)', borderRadius: 10, padding: '10px 14px' }}>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>طريقة الدفع</div>
-          {walletPaid > 0 && cashPaid > 0 ? (
+          {method === 'subscription' ? (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+              <span style={{ color: 'var(--muted)' }}>📋 اشتراك شهري</span>
+              <span style={{ fontWeight: 700, color: 'var(--success)' }}>مجاناً</span>
+            </div>
+          ) : walletPaid > 0 && cashPaid > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                 <span style={{ color: 'var(--muted)' }}>💳 من المحفظة</span>
@@ -110,7 +137,10 @@ function InvoiceModal({ invoice, onClose }) {
             </div>
           )}
         </div>
-        {invoice.note && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>📝 {invoice.note}</div>}
+
+        {invoice.note && (
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 10 }}>📝 {invoice.note}</div>
+        )}
       </div>
     </div>
   );
@@ -119,23 +149,21 @@ function InvoiceModal({ invoice, onClose }) {
 // ── StaffDashboard ────────────────────────────────────────────────────
 export default function StaffDashboard() {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const [tab, setTab] = useState('overview');
+  const navigate         = useNavigate();
+  const [tab, setTab]    = useState('overview');
 
-  const [stats,          setStats]          = useState(null);
-  const [loading,        setLoading]        = useState(true);
-  const [selectedInvoice,setSelectedInvoice]= useState(null);
+  const [stats,           setStats]           = useState(null);
+  const [loading,         setLoading]         = useState(true);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
 
-  // فواتيري
-  const [myInvoices,     setMyInvoices]     = useState([]);
-  const [myInvoiceTotal, setMyInvoiceTotal] = useState(0);
-  const [myInvoicePage,  setMyInvoicePage]  = useState(1);
-  const [invoiceSearch,  setInvoiceSearch]  = useState('');
-  const [invoiceDate,    setInvoiceDate]    = useState('');
-  const [loadingInvoices,setLoadingInvoices]= useState(false);
+  const [myInvoices,      setMyInvoices]      = useState([]);
+  const [myInvoiceTotal,  setMyInvoiceTotal]  = useState(0);
+  const [myInvoicePage,   setMyInvoicePage]   = useState(1);
+  const [invoiceSearch,   setInvoiceSearch]   = useState('');
+  const [invoiceDate,     setInvoiceDate]     = useState('');
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
 
-  const today = format(new Date(), 'yyyy-MM-dd');
-  const now   = new Date();
+  const today    = format(new Date(), 'yyyy-MM-dd');
   const initials = user?.name?.split(' ').slice(0, 2).map(w => w[0]).join('');
 
   useEffect(() => { loadStats(); }, []);
@@ -156,7 +184,7 @@ export default function StaffDashboard() {
   async function loadMyInvoices() {
     setLoadingInvoices(true);
     try {
-      const { data } = await invoicesAPI.getAll({
+      const { data } = await staffAPI.myInvoices({
         page:   myInvoicePage,
         search: invoiceSearch,
         date:   invoiceDate,
@@ -171,7 +199,7 @@ export default function StaffDashboard() {
   }
 
   const chartData = stats?.recent?.slice(0, 7).map(inv => ({
-    name: format(new Date(inv.created_at), 'EEE', { locale: ar }),
+    name:  format(new Date(inv.created_at), 'EEE', { locale: ar }),
     total: parseFloat(inv.total),
   })).reverse() || [];
 
@@ -180,7 +208,9 @@ export default function StaffDashboard() {
   return (
     <div style={{ minHeight: '100vh', maxWidth: 680, margin: '0 auto', padding: '0 0 40px' }}>
 
-      {selectedInvoice && <InvoiceModal invoice={selectedInvoice} onClose={() => setSelectedInvoice(null)} />}
+      {selectedInvoice && (
+        <InvoiceModal invoice={selectedInvoice} onClose={() => setSelectedInvoice(null)} />
+      )}
 
       {/* Top Bar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid var(--border)', position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 10 }}>
@@ -202,10 +232,7 @@ export default function StaffDashboard() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, padding: '12px 16px', borderBottom: '1px solid var(--border)', overflowX: 'auto' }}>
-        {[
-          ['overview', 'نظرة عامة'],
-          ['invoices', '🧾 فواتيري'],
-        ].map(([k, label]) => (
+        {[['overview', 'نظرة عامة'], ['invoices', '🧾 فواتيري']].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)}
             style={{ padding: '7px 16px', borderRadius: 20, border: '1px solid', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer', transition: 'all 0.2s', borderColor: tab === k ? 'var(--accent)' : 'var(--border)', background: tab === k ? 'var(--accent)' : 'transparent', color: tab === k ? '#000' : 'var(--muted)' }}>
             {label}
@@ -219,7 +246,6 @@ export default function StaffDashboard() {
         {tab === 'overview' && (
           <div className="fade-up">
 
-            {/* Profile Card */}
             <div className="card" style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 16 }}>
               <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent), var(--accent2))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 18, color: '#fff', flexShrink: 0 }}>
                 {initials}
@@ -227,13 +253,10 @@ export default function StaffDashboard() {
               <div>
                 <div style={{ fontWeight: 700, fontSize: 16 }}>{user?.name}</div>
                 <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{user?.phone}</div>
-                <span style={{ fontSize: 11, background: 'rgba(0,212,170,0.12)', color: 'var(--accent)', padding: '2px 8px', borderRadius: 10, marginTop: 4, display: 'inline-block' }}>
-                  موظف
-                </span>
+                <span style={{ fontSize: 11, background: 'rgba(0,212,170,0.12)', color: 'var(--accent)', padding: '2px 8px', borderRadius: 10, marginTop: 4, display: 'inline-block' }}>موظف</span>
               </div>
             </div>
 
-            {/* إحصائيات اليوم */}
             <div className="section-title">إحصائياتي اليوم</div>
             {loading ? (
               <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 32, fontSize: 13 }}>جارٍ التحميل...</div>
@@ -242,7 +265,7 @@ export default function StaffDashboard() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 10 }}>
                   {[
                     ['إجمالي الإيرادات', `${parseFloat(stats?.today?.total_revenue || 0).toFixed(0)} ج`, 'var(--accent)'],
-                    ['عدد الفواتير',     stats?.today?.invoices_count || 0,                               'var(--text)'],
+                    ['عدد الفواتير',     stats?.today?.invoices_count || 0,                              'var(--text)'],
                   ].map(([label, val, color]) => (
                     <div key={label} className="card" style={{ padding: 12 }}>
                       <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>{label}</div>
@@ -252,8 +275,8 @@ export default function StaffDashboard() {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 16 }}>
                   {[
-                    ['كاش اليوم',    `${parseFloat(stats?.today?.cash_revenue   || 0).toFixed(0)} ج`, 'var(--warning)'],
-                    ['محفظة اليوم',  `${parseFloat(stats?.today?.wallet_revenue || 0).toFixed(0)} ج`, '#3b82f6'],
+                    ['💵 كاش اليوم',   `${parseFloat(stats?.today?.cash_revenue   || 0).toFixed(0)} ج`, 'var(--warning)'],
+                    ['💳 محفظة اليوم', `${parseFloat(stats?.today?.wallet_revenue || 0).toFixed(0)} ج`, '#3b82f6'],
                   ].map(([label, val, color]) => (
                     <div key={label} className="card" style={{ padding: 12 }}>
                       <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>{label}</div>
@@ -262,7 +285,6 @@ export default function StaffDashboard() {
                   ))}
                 </div>
 
-                {/* إجماليات الشهر */}
                 <div className="section-title">إجماليات الشهر الحالي</div>
                 <div className="card" style={{ marginBottom: 16 }}>
                   <div className="stat-row">
@@ -277,8 +299,7 @@ export default function StaffDashboard() {
                   </div>
                 </div>
 
-                {/* آخر الفواتير */}
-                {stats?.recent?.length > 0 && (
+                {stats?.recent?.length > 0 ? (
                   <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <div className="section-title" style={{ margin: 0 }}>آخر الفواتير</div>
@@ -288,18 +309,13 @@ export default function StaffDashboard() {
                       </button>
                     </div>
 
-                    {/* Chart */}
                     {chartData.length > 1 && (
                       <div className="card" style={{ marginBottom: 12 }}>
                         <ResponsiveContainer width="100%" height={120}>
                           <BarChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
                             <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--muted)', fontFamily: 'var(--font)' }} axisLine={false} tickLine={false} />
                             <YAxis tick={{ fontSize: 10, fill: 'var(--muted)' }} axisLine={false} tickLine={false} />
-                            <Tooltip
-                              contentStyle={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'var(--font)', fontSize: 12 }}
-                              cursor={{ fill: 'rgba(0,212,170,0.08)' }}
-                              formatter={v => [`${v} ج`, 'الإيراد']}
-                            />
+                            <Tooltip contentStyle={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'var(--font)', fontSize: 12 }} cursor={{ fill: 'rgba(0,212,170,0.08)' }} formatter={v => [`${v} ج`, 'الإيراد']} />
                             <Bar dataKey="total" fill="var(--accent)" radius={[4, 4, 0, 0]} opacity={0.85} />
                           </BarChart>
                         </ResponsiveContainer>
@@ -308,39 +324,41 @@ export default function StaffDashboard() {
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {stats.recent.map(inv => {
-                        const services = typeof inv.services === 'string' ? JSON.parse(inv.services || '[]') : inv.services || [];
+                        const svcs    = typeof inv.services === 'string' ? JSON.parse(inv.services || '[]') : inv.services || [];
+                        const walletP = parseFloat(inv.wallet_paid || 0);
+                        const cashP   = parseFloat(inv.cash_paid   || 0);
                         return (
                           <div key={inv.id} className="card" style={{ cursor: 'pointer' }} onClick={() => setSelectedInvoice(inv)}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                               <div>
-                                <div style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--accent)', fontWeight: 700 }}>
-                                  #{inv.invoice_number}
-                                </div>
+                                <div style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--accent)', fontWeight: 700 }}>#{inv.invoice_number}</div>
                                 <div style={{ fontWeight: 600, marginTop: 2 }}>{inv.client_name}</div>
-                                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
-                                  {SPACE_ICONS[inv.space_key] || '🏢'} {inv.space_name}
-                                </div>
+                                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{SPACE_ICONS[inv.space_key] || '🏢'} {inv.space_name}</div>
                               </div>
                               <div style={{ textAlign: 'left' }}>
-                                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent)' }}>
-                                  {parseFloat(inv.total).toFixed(2)} ج
-                                </div>
+                                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent)' }}>{parseFloat(inv.total).toFixed(2)} ج</div>
                                 <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
                                   {new Date(inv.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
                                 </div>
+                                {walletP > 0 && cashP > 0 ? (
+                                  <div style={{ display: 'flex', gap: 3, marginTop: 3 }}>
+                                    <span className="badge badge-info" style={{ fontSize: 9 }}>💳{walletP.toFixed(0)}</span>
+                                    <span className="badge badge-warning" style={{ fontSize: 9 }}>💵{cashP.toFixed(0)}</span>
+                                  </div>
+                                ) : (
+                                  <span className={`badge badge-${inv.payment_method === 'wallet' ? 'info' : 'warning'}`} style={{ fontSize: 9, marginTop: 3, display: 'block' }}>
+                                    {inv.payment_method === 'wallet' ? '💳 محفظة' : '💵 كاش'}
+                                  </span>
+                                )}
                               </div>
                             </div>
-                            {services.length > 0 && (
-                              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>☕ {services.length} خدمة</div>
-                            )}
+                            {svcs.length > 0 && <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>☕ {svcs.length} خدمة</div>}
                           </div>
                         );
                       })}
                     </div>
                   </>
-                )}
-
-                {(!stats?.recent || stats.recent.length === 0) && (
+                ) : (
                   <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', padding: 32, fontSize: 13 }}>
                     لا توجد فواتير اليوم بعد
                   </div>
@@ -372,33 +390,27 @@ export default function StaffDashboard() {
             {loadingInvoices ? (
               <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 40 }}>جارٍ التحميل...</div>
             ) : myInvoices.length === 0 ? (
-              <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', padding: 40, fontSize: 13 }}>
-                لا توجد فواتير
-              </div>
+              <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', padding: 40, fontSize: 13 }}>لا توجد فواتير</div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
                 {myInvoices.map(inv => {
-                  const services = typeof inv.services === 'string' ? JSON.parse(inv.services || '[]') : inv.services || [];
-                  const walletPaid = parseFloat(inv.wallet_paid || 0);
-                  const cashPaid   = parseFloat(inv.cash_paid   || 0);
+                  const svcs    = typeof inv.services === 'string' ? JSON.parse(inv.services || '[]') : inv.services || [];
+                  const walletP = parseFloat(inv.wallet_paid || 0);
+                  const cashP   = parseFloat(inv.cash_paid   || 0);
                   return (
                     <div key={inv.id} className="card" style={{ cursor: 'pointer' }} onClick={() => setSelectedInvoice(inv)}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div>
-                          <div style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--accent)', fontWeight: 700 }}>
-                            #{inv.invoice_number}
-                          </div>
+                          <div style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--accent)', fontWeight: 700 }}>#{inv.invoice_number}</div>
                           <div style={{ fontWeight: 600, marginTop: 2 }}>{inv.client_name}</div>
                           <div style={{ fontSize: 12, color: 'var(--muted)' }}>{inv.client_phone}</div>
                         </div>
                         <div style={{ textAlign: 'left' }}>
-                          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent)' }}>
-                            {parseFloat(inv.total).toFixed(2)} ج
-                          </div>
-                          {walletPaid > 0 && cashPaid > 0 ? (
+                          <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent)' }}>{parseFloat(inv.total).toFixed(2)} ج</div>
+                          {walletP > 0 && cashP > 0 ? (
                             <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                              <span className="badge badge-info"    style={{ fontSize: 10 }}>💳 {walletPaid.toFixed(0)} ج</span>
-                              <span className="badge badge-warning" style={{ fontSize: 10 }}>💵 {cashPaid.toFixed(0)} ج</span>
+                              <span className="badge badge-info"    style={{ fontSize: 10 }}>💳 {walletP.toFixed(0)} ج</span>
+                              <span className="badge badge-warning" style={{ fontSize: 10 }}>💵 {cashP.toFixed(0)} ج</span>
                             </div>
                           ) : (
                             <span className={`badge badge-${inv.payment_method === 'wallet' ? 'info' : 'warning'}`} style={{ fontSize: 10, marginTop: 4, display: 'block' }}>
@@ -411,7 +423,7 @@ export default function StaffDashboard() {
                         <span>🕐 {new Date(inv.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}</span>
                         <span>📅 {new Date(inv.created_at).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' })}</span>
                         {SPACE_ICONS[inv.space_key] && <span>{SPACE_ICONS[inv.space_key]} {inv.space_name}</span>}
-                        {services.length > 0 && <span>☕ {services.length} خدمة</span>}
+                        {svcs.length > 0 && <span>☕ {svcs.length} خدمة</span>}
                         {inv.coupon_code && <span>🎫 {inv.coupon_code}</span>}
                       </div>
                     </div>

@@ -872,6 +872,7 @@ export default function AdminDashboard() {
   const [newPwd,       setNewPwd]       = useState('');
   const [compareYear,  setCompareYear]  = useState(new Date().getFullYear());
   const [compareMonth, setCompareMonth] = useState(new Date().getMonth() + 1);
+  const [editingPerms, setEditingPerms] = useState(null); // { id, name, can_view_all, can_edit_prices, can_charge_wallet, can_add_points }
 
   const today = format(new Date(), "yyyy-MM-dd");
   const now = new Date();
@@ -1176,6 +1177,21 @@ export default function AdminDashboard() {
       setNewPwd('');
     } catch {
       toast.error("خطأ في تغيير كلمة السر");
+    }
+  }
+  async function savePermissions() {
+    try {
+      await staffAPI.updatePermissions(editingPerms.id, {
+        can_view_all:      editingPerms.can_view_all,
+        can_edit_prices:   editingPerms.can_edit_prices,
+        can_charge_wallet: editingPerms.can_charge_wallet,
+        can_add_points:    editingPerms.can_add_points,
+      });
+      toast.success("تم تحديث الصلاحيات ✅");
+      setEditingPerms(null);
+      loadStaff();
+    } catch {
+      toast.error("خطأ في تحديث الصلاحيات");
     }
   }
 
@@ -2785,8 +2801,42 @@ export default function AdminDashboard() {
                       style={{ flex: 1, padding: "10px", borderRadius: 10, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", cursor: "pointer" }}>
                       إلغاء
                     </button>
-                    <button onClick={changeStaffPassword} className="btn btn-primary" style={{ flex: 2 }}>
-                      حفظ
+                    <button onClick={changeStaffPassword} className="btn btn-primary" style={{ flex: 2 }}>حفظ</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* مودال تعديل الصلاحيات */}
+            {editingPerms && (
+              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+                onClick={() => setEditingPerms(null)}>
+                <div style={{ background: "var(--surface)", borderRadius: 16, padding: 24, maxWidth: 360, width: "100%" }}
+                  onClick={e => e.stopPropagation()}>
+                  <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>🔐 صلاحيات الموظف</div>
+                  <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 16 }}>{editingPerms.name}</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
+                    {[
+                      ["can_charge_wallet", "💰 شحن محفظة العملاء"],
+                      ["can_add_points",    "⭐ إضافة نقاط للعملاء"],
+                      ["can_view_all",      "👁️ رؤية كل فواتير النظام"],
+                      ["can_edit_prices",   "✏️ تعديل الأسعار"],
+                    ].map(([key, label]) => (
+                      <label key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", fontSize: 14 }}>
+                        <span>{label}</span>
+                        <input type="checkbox" checked={editingPerms[key]}
+                          onChange={e => setEditingPerms(p => ({ ...p, [key]: e.target.checked }))}
+                          style={{ accentColor: "var(--accent)", width: 18, height: 18 }} />
+                      </label>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => setEditingPerms(null)}
+                      style={{ flex: 1, padding: "10px", borderRadius: 10, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", cursor: "pointer" }}>
+                      إلغاء
+                    </button>
+                    <button onClick={savePermissions} className="btn btn-primary" style={{ flex: 2 }}>
+                      💾 حفظ الصلاحيات
                     </button>
                   </div>
                 </div>
@@ -2890,6 +2940,17 @@ export default function AdminDashboard() {
                       <button onClick={() => setStaffPwdId(s.id)}
                         style={{ padding: "5px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 12, cursor: "pointer" }}>
                         🔑 تغيير السر
+                      </button>
+                      <button onClick={() => setEditingPerms({
+                          id:               s.id,
+                          name:             s.name,
+                          can_view_all:     s.can_view_all      ?? false,
+                          can_edit_prices:  s.can_edit_prices   ?? false,
+                          can_charge_wallet:s.can_charge_wallet ?? true,
+                          can_add_points:   s.can_add_points    ?? true,
+                        })}
+                        style={{ padding: "5px 12px", borderRadius: 8, border: "1px solid rgba(0,212,170,0.4)", background: "transparent", color: "var(--accent)", fontSize: 12, cursor: "pointer" }}>
+                        🔐 الصلاحيات
                       </button>
                       <button onClick={() => toggleStaff(s.id)}
                         style={{ padding: "5px 12px", borderRadius: 8, border: `1px solid ${s.is_active ? "rgba(255,71,87,0.4)" : "rgba(0,212,170,0.4)"}`, background: "transparent", color: s.is_active ? "#ff4757" : "var(--accent)", fontSize: 12, cursor: "pointer" }}>

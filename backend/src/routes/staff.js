@@ -5,7 +5,7 @@
 
 const router = require('express').Router();
 const db     = require('../config/db');
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcrypt');
 const { auth, requireRole } = require('../middleware/auth');
 
 const isAdmin        = [auth, requireRole('admin')];
@@ -80,6 +80,31 @@ router.post('/', ...isAdmin, async (req, res) => {
     `, [newStaff.id, can_view_all, can_edit_prices, can_charge_wallet, can_add_points]);
 
     res.status(201).json({ success: true, staff: newStaff });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// PATCH /api/staff/:id/permissions — تعديل صلاحيات موظف (أدمن فقط)
+router.patch('/:id/permissions', ...isAdmin, async (req, res) => {
+  const { can_view_all, can_edit_prices, can_charge_wallet, can_add_points, notes } = req.body;
+  try {
+    await db.query(`
+      INSERT INTO staff_permissions
+        (user_id, can_view_all, can_edit_prices, can_charge_wallet, can_add_points, notes)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (user_id) DO UPDATE SET
+        can_view_all      = $2,
+        can_edit_prices   = $3,
+        can_charge_wallet = $4,
+        can_add_points    = $5,
+        notes             = $6,
+        updated_at        = NOW()
+    `, [req.params.id, can_view_all ?? false, can_edit_prices ?? false,
+        can_charge_wallet ?? true, can_add_points ?? true, notes || null]);
+
+    res.json({ success: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'خطأ في الخادم' });
@@ -174,7 +199,6 @@ router.get('/me/stats', ...isStaffOrAdmin, async (req, res) => {
   const date    = req.query.date || new Date().toISOString().split('T')[0];
 
   try {
-    // إحصائيات اليوم
     const { rows: today } = await db.query(`
       SELECT
         COUNT(*)                     AS invoices_count,
@@ -186,7 +210,6 @@ router.get('/me/stats', ...isStaffOrAdmin, async (req, res) => {
         AND DATE(created_at) = $2
     `, [staffId, date]);
 
-    // إحصائيات الشهر الحالي
     const { rows: monthly } = await db.query(`
       SELECT
         COUNT(*)                AS invoices_count,
@@ -197,23 +220,62 @@ router.get('/me/stats', ...isStaffOrAdmin, async (req, res) => {
         AND EXTRACT(MONTH FROM created_at) = EXTRACT(MONTH FROM NOW())
     `, [staffId]);
 
-    // آخر 10 فواتير
     const { rows: recent } = await db.query(`
       SELECT
-        i.id, i.invoice_number, i.client_name,
+        i.id, i.invoice_number, i.client_name, i.client_phone,
         i.total, i.payment_method, i.invoice_type,
-        i.space_name, i.created_at
+        i.space_key, i.space_name, i.created_at,
+        i.wallet_paid, i.cash_paid, i.coupon_code,
+        i.session_cost, i.services_cost, i.duration_min,
+        i.price_per_hr, i.services, i.discount_pct,
+        i.discount_amount, i.subtotal, i.note
       FROM invoices i
       WHERE i.created_by = $1
       ORDER BY i.created_at DESC
       LIMIT 10
     `, [staffId]);
 
-    res.json({
-      today:   today[0],
-      monthly: monthly[0],
-      recent
-    });
+    res.json({ today: today[0], monthly: monthly[0], recent });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// GET /api/staff/me/invoices — فواتير الموظف نفسه مع بحث وفلترة
+router.get('/me/invoices', ...isStaffOrAdmin, async (req, res) => {
+  const staffId = req.user.id;
+  const page    = parseInt(req.query.page)   || 1;
+  const limit   = 20;
+  const offset  = (page - 1) * limit;
+  const search  = req.query.search || '';
+  const date    = req.query.date   || '';
+
+  try {
+    const { rows } = await db.query(`
+      SELECT
+        i.id, i.invoice_number, i.client_name, i.client_phone,
+        i.total, i.payment_method, i.space_key, i.space_name,
+        i.wallet_paid, i.cash_paid, i.coupon_code, i.created_at,
+        i.session_cost, i.services_cost, i.duration_min,
+        i.price_per_hr, i.services, i.discount_pct,
+        i.discount_amount, i.subtotal, i.note
+      FROM invoices i
+      WHERE i.created_by = $1
+        AND ($2 = '' OR i.client_name ILIKE '%' || $2 || '%' OR i.client_phone ILIKE '%' || $2 || '%')
+        AND ($3 = '' OR DATE(i.created_at) = $3::date)
+      ORDER BY i.created_at DESC
+      LIMIT $4 OFFSET $5
+    `, [staffId, search, date, limit, offset]);
+
+    const { rows: countRows } = await db.query(`
+      SELECT COUNT(*) FROM invoices
+      WHERE created_by = $1
+        AND ($2 = '' OR client_name ILIKE '%' || $2 || '%' OR client_phone ILIKE '%' || $2 || '%')
+        AND ($3 = '' OR DATE(created_at) = $3::date)
+    `, [staffId, search, date]);
+
+    res.json({ invoices: rows, total: parseInt(countRows[0].count), page, limit });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'خطأ في الخادم' });

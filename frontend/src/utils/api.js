@@ -107,17 +107,16 @@ export const invoicesAPI = {
 
 // Staff
 export const staffAPI = {
-  // أدمن — إدارة الموظفين
-  getAll:         ()              => api.get('/staff'),
-  create:         (data)          => api.post('/staff', data),
-  update:         (id, data)      => api.patch(`/staff/${id}`, data),
-  changePassword: (id, password)  => api.patch(`/staff/${id}/password`, { password }),
-  toggle:         (id)            => api.patch(`/staff/${id}/toggle`),
-  // تقارير
-  myStats:        (date)          => api.get(`/staff/me/stats?date=${date || ''}`),
-  staffStats:     (id, year, month) => api.get(`/staff/${id}/stats?year=${year}&month=${month}`),
-  compare:        (year, month)   => api.get(`/staff/compare?year=${year}&month=${month}`),
+  getAll:             ()                    => api.get('/staff'),
+  create:             (data)                => api.post('/staff', data),
+  update:             (id, data)            => api.patch(`/staff/${id}`, data),
+  updatePermissions:  (id, data)            => api.patch(`/staff/${id}/permissions`, data),
+  changePassword:     (id, password)        => api.patch(`/staff/${id}/password`, { password }),
+  toggle:             (id)                  => api.patch(`/staff/${id}/toggle`),
+  myStats:            (date)                => api.get(`/staff/me/stats?date=${date || ''}`),
+  myInvoices:         (params)              => api.get('/staff/me/invoices', { params }),
+  staffStats:         (id, year, month)     => api.get(`/staff/${id}/stats?year=${year}&month=${month}`),
+  compare:            (year, month)         => api.get(`/staff/compare?year=${year}&month=${month}`),
 };
 
 export default api;
-
