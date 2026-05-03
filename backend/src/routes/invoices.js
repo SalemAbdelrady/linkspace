@@ -155,9 +155,10 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
   const date   = req.query.date   || '';
   try {
     const { rows } = await db.query(`
-      SELECT i.*, u.name AS created_by_name
+      SELECT i.*, u.name AS created_by_name, c.email AS client_email
       FROM invoices i
       LEFT JOIN users u ON u.id = i.created_by
+      LEFT JOIN users c ON c.id = i.user_id
       WHERE
         ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%')
         AND ($2 = '' OR DATE(i.created_at) = $2::date)
@@ -180,9 +181,10 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
 router.get('/:id', auth, requireRole('staff', 'admin'), async (req, res) => {
   try {
     const { rows } = await db.query(`
-      SELECT i.*, u.name AS created_by_name
+      SELECT i.*, u.name AS created_by_name, c.email AS client_email
       FROM invoices i
       LEFT JOIN users u ON u.id = i.created_by
+      LEFT JOIN users c ON c.id = i.user_id
       WHERE i.id = $1
     `, [req.params.id]);
     if (!rows[0]) return res.status(404).json({ error: 'فاتورة غير موجودة' });

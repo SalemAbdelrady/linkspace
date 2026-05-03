@@ -499,10 +499,9 @@ function InvoiceModal({ invoice, onClose }) {
           <div style={{ fontSize: 12, color: "var(--muted)" }}>
             {invoice.client_phone}
           </div>
-          {/* هذا الجزء لن يعمل إلا إذا أرسل الـ API حقل client_email */}
           {invoice.client_email && (
-            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
-              {invoice.client_email}
+            <div style={{ fontSize: 12, color: "var(--accent)", marginTop: 2 }}>
+              ✉️ {invoice.client_email}
             </div>
           )}
         </div>
