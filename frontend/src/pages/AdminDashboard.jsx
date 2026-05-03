@@ -6,7 +6,6 @@ import {
   servicesAPI,
   couponsAPI,
   invoicesAPI,
-  staffAPI,
 } from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -499,9 +498,10 @@ function InvoiceModal({ invoice, onClose }) {
           <div style={{ fontSize: 12, color: "var(--muted)" }}>
             {invoice.client_phone}
           </div>
+          {/* هذا الجزء لن يعمل إلا إذا أرسل الـ API حقل client_email */}
           {invoice.client_email && (
-            <div style={{ fontSize: 12, color: "var(--accent)", marginTop: 2 }}>
-              ✉️ {invoice.client_email}
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+              {invoice.client_email}
             </div>
           )}
         </div>
@@ -854,24 +854,8 @@ export default function AdminDashboard() {
   const [invoicePage, setInvoicePage] = useState(1);
   const [invoiceSearch, setInvoiceSearch] = useState("");
   const [invoiceDate, setInvoiceDate] = useState("");
+  const [invoiceStaffId, setInvoiceStaffId] = useState(""); // ← فلتر الموظف
   const [selectedInvoice, setSelectedInvoice] = useState(null);
-
-  // ── Staff state ───────────────────────────────────────────────────
-  const [staffList,    setStaffList]    = useState([]);
-  const [staffLoading, setStaffLoading] = useState(false);
-  const [compareData,  setCompareData]  = useState([]);
-  const [showNewStaff, setShowNewStaff] = useState(false);
-  const [newStaff,     setNewStaff]     = useState({
-    name: '', phone: '', password: '', email: '',
-    can_view_all: false, can_edit_prices: false,
-    can_charge_wallet: true, can_add_points: true,
-  });
-  const [savingStaff,  setSavingStaff]  = useState(false);
-  const [staffPwdId,   setStaffPwdId]   = useState(null);
-  const [newPwd,       setNewPwd]       = useState('');
-  const [compareYear,  setCompareYear]  = useState(new Date().getFullYear());
-  const [compareMonth, setCompareMonth] = useState(new Date().getMonth() + 1);
-  const [editingPerms, setEditingPerms] = useState(null); // { id, name, can_view_all, can_edit_prices, can_charge_wallet, can_add_points }
 
   const today = format(new Date(), "yyyy-MM-dd");
   const now = new Date();
@@ -880,6 +864,7 @@ export default function AdminDashboard() {
     loadOverview();
     loadSpaces();
     loadServices();
+    loadStaff(); // ← نحمل الموظفين من البداية عشان فلتر الفواتير
   }, []);
   useEffect(() => {
     if (tab === "users") {
@@ -896,13 +881,7 @@ export default function AdminDashboard() {
     if (tab === "invoices") {
       loadInvoices();
     }
-  }, [tab, invoicePage, invoiceSearch, invoiceDate]);
-  useEffect(() => {
-    if (tab === "staff") {
-      loadStaff();
-      loadCompare();
-    }
-  }, [tab, compareYear, compareMonth]);
+  }, [tab, invoicePage, invoiceSearch, invoiceDate, invoiceStaffId]);
 
   async function loadOverview() {
     try {
@@ -959,9 +938,10 @@ export default function AdminDashboard() {
   async function loadInvoices() {
     try {
       const { data } = await invoicesAPI.getAll({
-        page: invoicePage,
-        search: invoiceSearch,
-        date: invoiceDate,
+        page:     invoicePage,
+        search:   invoiceSearch,
+        date:     invoiceDate,
+        staff_id: invoiceStaffId || undefined,
       });
       setInvoices(data.invoices);
       setInvoiceTotal(data.total);
@@ -1125,75 +1105,6 @@ export default function AdminDashboard() {
     }
   }
 
-  async function loadStaff() {
-    setStaffLoading(true);
-    try {
-      const { data } = await staffAPI.getAll();
-      setStaffList(data.staff);
-    } catch {
-      toast.error("خطأ في تحميل الموظفين");
-    } finally {
-      setStaffLoading(false);
-    }
-  }
-  async function loadCompare() {
-    try {
-      const { data } = await staffAPI.compare(compareYear, compareMonth);
-      setCompareData(data.staff);
-    } catch {}
-  }
-  async function createStaff() {
-    if (!newStaff.name || !newStaff.phone || !newStaff.password)
-      return toast.error("الاسم والموبايل وكلمة السر مطلوبة");
-    setSavingStaff(true);
-    try {
-      await staffAPI.create(newStaff);
-      toast.success("تم إنشاء حساب الموظف ✅");
-      setShowNewStaff(false);
-      setNewStaff({ name: '', phone: '', password: '', email: '', can_view_all: false, can_edit_prices: false, can_charge_wallet: true, can_add_points: true });
-      loadStaff();
-    } catch (err) {
-      toast.error(err.response?.data?.error || "خطأ في الإنشاء");
-    } finally {
-      setSavingStaff(false);
-    }
-  }
-  async function toggleStaff(id) {
-    try {
-      const { data } = await staffAPI.toggle(id);
-      toast.success(data.is_active ? "تم تفعيل الموظف" : "تم تعطيل الموظف");
-      loadStaff();
-    } catch {
-      toast.error("خطأ");
-    }
-  }
-  async function changeStaffPassword() {
-    if (!newPwd || newPwd.length < 6) return toast.error("كلمة السر يجب أن تكون 6 أحرف على الأقل");
-    try {
-      await staffAPI.changePassword(staffPwdId, newPwd);
-      toast.success("تم تغيير كلمة السر ✅");
-      setStaffPwdId(null);
-      setNewPwd('');
-    } catch {
-      toast.error("خطأ في تغيير كلمة السر");
-    }
-  }
-  async function savePermissions() {
-    try {
-      await staffAPI.updatePermissions(editingPerms.id, {
-        can_view_all:      editingPerms.can_view_all,
-        can_edit_prices:   editingPerms.can_edit_prices,
-        can_charge_wallet: editingPerms.can_charge_wallet,
-        can_add_points:    editingPerms.can_add_points,
-      });
-      toast.success("تم تحديث الصلاحيات ✅");
-      setEditingPerms(null);
-      loadStaff();
-    } catch {
-      toast.error("خطأ في تحديث الصلاحيات");
-    }
-  }
-
   const chartData =
     monthly?.daily?.slice(-7).map((d) => ({
       name: format(new Date(d.day), "EEE", { locale: ar }),
@@ -1308,7 +1219,6 @@ export default function AdminDashboard() {
           ["prices", "الأسعار"],
           ["coupons", "🎫 الكوبونات"],
           ["invoices", "🧾 الفواتير"],
-          ["staff", "👥 فريق العمل"],
         ].map(([k, label]) => (
           <button
             key={k}
@@ -2568,12 +2478,13 @@ export default function AdminDashboard() {
         {/* ══ INVOICES ══ */}
         {tab === "invoices" && (
           <div className="fade-up">
+            {/* صف البحث والتاريخ */}
             <div
               style={{
                 display: "grid",
                 gridTemplateColumns: "1fr auto",
                 gap: 8,
-                marginBottom: 14,
+                marginBottom: 8,
               }}
             >
               <input
@@ -2596,12 +2507,48 @@ export default function AdminDashboard() {
                 }}
               />
             </div>
-            <div
-              style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}
-            >
+
+            {/* فلتر الموظف */}
+            <div style={{ marginBottom: 12, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: "var(--muted)" }}>👤 الموظف:</span>
+              <button
+                onClick={() => { setInvoiceStaffId(""); setInvoicePage(1); }}
+                style={{
+                  padding: "4px 12px", borderRadius: 20, border: "1px solid",
+                  fontSize: 11, fontWeight: 600, cursor: "pointer",
+                  borderColor: invoiceStaffId === "" ? "var(--accent)" : "var(--border)",
+                  background:  invoiceStaffId === "" ? "var(--accent)"  : "transparent",
+                  color:       invoiceStaffId === "" ? "#000"           : "var(--muted)",
+                }}
+              >
+                الكل
+              </button>
+              {staffList.map(s => (
+                <button
+                  key={s.id}
+                  onClick={() => { setInvoiceStaffId(String(s.id)); setInvoicePage(1); }}
+                  style={{
+                    padding: "4px 12px", borderRadius: 20, border: "1px solid",
+                    fontSize: 11, fontWeight: 600, cursor: "pointer",
+                    borderColor: invoiceStaffId === String(s.id) ? "var(--accent)" : "var(--border)",
+                    background:  invoiceStaffId === String(s.id) ? "var(--accent)"  : "transparent",
+                    color:       invoiceStaffId === String(s.id) ? "#000"           : "var(--muted)",
+                    opacity:     s.is_active ? 1 : 0.5,
+                  }}
+                >
+                  {s.name}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>
               {invoiceTotal} فاتورة{" "}
-              {invoiceDate &&
-                `— ${new Date(invoiceDate).toLocaleDateString("ar-EG", { month: "long", day: "numeric" })}`}
+              {invoiceDate && `— ${new Date(invoiceDate).toLocaleDateString("ar-EG", { month: "long", day: "numeric" })}`}
+              {invoiceStaffId && staffList.find(s => String(s.id) === invoiceStaffId) && (
+                <span style={{ marginRight: 6, color: "var(--accent)" }}>
+                  · 👤 {staffList.find(s => String(s.id) === invoiceStaffId)?.name}
+                </span>
+              )}
             </div>
             <div
               style={{
@@ -2705,6 +2652,7 @@ export default function AdminDashboard() {
                         marginTop: 8,
                         fontSize: 11,
                         color: "var(--muted)",
+                        flexWrap: "wrap",
                       }}
                     >
                       <span>
@@ -2725,6 +2673,11 @@ export default function AdminDashboard() {
                         <span>☕ {services.length} خدمة</span>
                       )}
                       {inv.coupon_code && <span>🎫 {inv.coupon_code}</span>}
+                      {inv.created_by_name && (
+                        <span style={{ color: "var(--accent)" }}>
+                          👤 {inv.created_by_name}
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
@@ -2781,246 +2734,6 @@ export default function AdminDashboard() {
             )}
           </div>
         )}
-
-        {/* ══ STAFF ══ */}
-        {tab === "staff" && (
-          <div className="fade-up">
-
-            {/* مودال تغيير كلمة السر */}
-            {staffPwdId && (
-              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
-                onClick={() => { setStaffPwdId(null); setNewPwd(''); }}>
-                <div style={{ background: "var(--surface)", borderRadius: 16, padding: 24, maxWidth: 360, width: "100%" }}
-                  onClick={e => e.stopPropagation()}>
-                  <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 16 }}>🔑 تغيير كلمة السر</div>
-                  <input className="input-field" type="password" placeholder="كلمة السر الجديدة (6 أحرف على الأقل)"
-                    value={newPwd} onChange={e => setNewPwd(e.target.value)} style={{ marginBottom: 12 }} />
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => { setStaffPwdId(null); setNewPwd(''); }}
-                      style={{ flex: 1, padding: "10px", borderRadius: 10, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", cursor: "pointer" }}>
-                      إلغاء
-                    </button>
-                    <button onClick={changeStaffPassword} className="btn btn-primary" style={{ flex: 2 }}>حفظ</button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* مودال تعديل الصلاحيات */}
-            {editingPerms && (
-              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
-                onClick={() => setEditingPerms(null)}>
-                <div style={{ background: "var(--surface)", borderRadius: 16, padding: 24, maxWidth: 360, width: "100%" }}
-                  onClick={e => e.stopPropagation()}>
-                  <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>🔐 صلاحيات الموظف</div>
-                  <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 16 }}>{editingPerms.name}</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
-                    {[
-                      ["can_charge_wallet", "💰 شحن محفظة العملاء"],
-                      ["can_add_points",    "⭐ إضافة نقاط للعملاء"],
-                      ["can_view_all",      "👁️ رؤية كل فواتير النظام"],
-                      ["can_edit_prices",   "✏️ تعديل الأسعار"],
-                    ].map(([key, label]) => (
-                      <label key={key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", fontSize: 14 }}>
-                        <span>{label}</span>
-                        <input type="checkbox" checked={editingPerms[key]}
-                          onChange={e => setEditingPerms(p => ({ ...p, [key]: e.target.checked }))}
-                          style={{ accentColor: "var(--accent)", width: 18, height: 18 }} />
-                      </label>
-                    ))}
-                  </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button onClick={() => setEditingPerms(null)}
-                      style={{ flex: 1, padding: "10px", borderRadius: 10, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", cursor: "pointer" }}>
-                      إلغاء
-                    </button>
-                    <button onClick={savePermissions} className="btn btn-primary" style={{ flex: 2 }}>
-                      💾 حفظ الصلاحيات
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* إضافة موظف جديد */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <div className="section-title" style={{ margin: 0 }}>فريق العمل</div>
-              <button onClick={() => setShowNewStaff(v => !v)}
-                style={{ padding: "7px 14px", borderRadius: 20, border: "1px solid var(--accent)", background: showNewStaff ? "var(--accent)" : "transparent", color: showNewStaff ? "#000" : "var(--accent)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-                {showNewStaff ? "✕ إغلاق" : "➕ موظف جديد"}
-              </button>
-            </div>
-
-            {showNewStaff && (
-              <div className="card" style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14, color: "var(--accent)" }}>بيانات الموظف الجديد</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                  <div>
-                    <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>الاسم الكامل *</div>
-                    <input className="input-field" placeholder="محمد أحمد..." value={newStaff.name}
-                      onChange={e => setNewStaff(p => ({ ...p, name: e.target.value }))} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>رقم الموبايل *</div>
-                    <input className="input-field" placeholder="01XXXXXXXXX" value={newStaff.phone}
-                      onChange={e => setNewStaff(p => ({ ...p, phone: e.target.value }))} />
-                  </div>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                  <div>
-                    <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>كلمة السر *</div>
-                    <input className="input-field" type="password" placeholder="6 أحرف على الأقل" value={newStaff.password}
-                      onChange={e => setNewStaff(p => ({ ...p, password: e.target.value }))} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>البريد الإلكتروني</div>
-                    <input className="input-field" placeholder="اختياري" value={newStaff.email}
-                      onChange={e => setNewStaff(p => ({ ...p, email: e.target.value }))} />
-                  </div>
-                </div>
-                <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 8 }}>الصلاحيات</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
-                  {[
-                    ["can_charge_wallet", "شحن المحفظة"],
-                    ["can_add_points",    "إضافة نقاط"],
-                    ["can_view_all",      "رؤية كل الفواتير"],
-                    ["can_edit_prices",   "تعديل الأسعار"],
-                  ].map(([key, label]) => (
-                    <label key={key} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}>
-                      <input type="checkbox" checked={newStaff[key]}
-                        onChange={e => setNewStaff(p => ({ ...p, [key]: e.target.checked }))}
-                        style={{ accentColor: "var(--accent)", width: 16, height: 16 }} />
-                      {label}
-                    </label>
-                  ))}
-                </div>
-                <button className="btn btn-primary" style={{ width: "100%" }}
-                  disabled={savingStaff} onClick={createStaff}>
-                  {savingStaff ? "جارٍ الإنشاء..." : "✅ إنشاء الحساب"}
-                </button>
-              </div>
-            )}
-
-            {/* قائمة الموظفين */}
-            {staffLoading ? (
-              <div style={{ textAlign: "center", color: "var(--muted)", padding: 32, fontSize: 13 }}>جارٍ التحميل...</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
-                {staffList.length === 0 && (
-                  <div className="card" style={{ textAlign: "center", color: "var(--muted)", padding: 32, fontSize: 13 }}>
-                    لا يوجد موظفون بعد — أضف أول موظف!
-                  </div>
-                )}
-                {staffList.map(s => (
-                  <div key={s.id} className="card" style={{ opacity: s.is_active ? 1 : 0.55 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: 15 }}>{s.name}</div>
-                        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{s.phone}</div>
-                        {s.email && <div style={{ fontSize: 12, color: "var(--accent)", marginTop: 2 }}>✉️ {s.email}</div>}
-                      </div>
-                      <span className={`badge badge-${s.is_active ? "success" : "danger"}`}>
-                        {s.is_active ? "نشط" : "معطّل"}
-                      </span>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
-                      <div style={{ background: "rgba(0,212,170,0.06)", borderRadius: 8, padding: "8px 12px", textAlign: "center" }}>
-                        <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 2 }}>فواتير الشهر</div>
-                        <div style={{ fontSize: 18, fontWeight: 700, color: "var(--accent)" }}>{s.invoices_count || 0}</div>
-                      </div>
-                      <div style={{ background: "rgba(255,165,2,0.06)", borderRadius: 8, padding: "8px 12px", textAlign: "center" }}>
-                        <div style={{ fontSize: 10, color: "var(--muted)", marginBottom: 2 }}>إيرادات الشهر</div>
-                        <div style={{ fontSize: 18, fontWeight: 700, color: "var(--warning)" }}>
-                          {parseFloat(s.total_revenue || 0).toFixed(0)} ج
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <button onClick={() => setStaffPwdId(s.id)}
-                        style={{ padding: "5px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 12, cursor: "pointer" }}>
-                        🔑 تغيير السر
-                      </button>
-                      <button onClick={() => setEditingPerms({
-                          id:               s.id,
-                          name:             s.name,
-                          can_view_all:     s.can_view_all      ?? false,
-                          can_edit_prices:  s.can_edit_prices   ?? false,
-                          can_charge_wallet:s.can_charge_wallet ?? true,
-                          can_add_points:   s.can_add_points    ?? true,
-                        })}
-                        style={{ padding: "5px 12px", borderRadius: 8, border: "1px solid rgba(0,212,170,0.4)", background: "transparent", color: "var(--accent)", fontSize: 12, cursor: "pointer" }}>
-                        🔐 الصلاحيات
-                      </button>
-                      <button onClick={() => toggleStaff(s.id)}
-                        style={{ padding: "5px 12px", borderRadius: 8, border: `1px solid ${s.is_active ? "rgba(255,71,87,0.4)" : "rgba(0,212,170,0.4)"}`, background: "transparent", color: s.is_active ? "#ff4757" : "var(--accent)", fontSize: 12, cursor: "pointer" }}>
-                        {s.is_active ? "⛔ تعطيل" : "✅ تفعيل"}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* مقارنة أداء الموظفين */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <div className="section-title" style={{ margin: 0 }}>مقارنة الأداء</div>
-              <div style={{ display: "flex", gap: 6 }}>
-                <select value={compareMonth} onChange={e => setCompareMonth(parseInt(e.target.value))}
-                  style={{ padding: "4px 8px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12 }}>
-                  {Array.from({ length: 12 }, (_, i) => (
-                    <option key={i+1} value={i+1}>
-                      {new Date(2000, i).toLocaleDateString("ar-EG", { month: "long" })}
-                    </option>
-                  ))}
-                </select>
-                <select value={compareYear} onChange={e => setCompareYear(parseInt(e.target.value))}
-                  style={{ padding: "4px 8px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12 }}>
-                  {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-              </div>
-            </div>
-
-            {compareData.length === 0 ? (
-              <div className="card" style={{ textAlign: "center", color: "var(--muted)", padding: 24, fontSize: 13 }}>
-                لا توجد بيانات لهذا الشهر
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {compareData.map((s, idx) => {
-                  const maxRevenue = Math.max(...compareData.map(x => parseFloat(x.total_revenue || 0)), 1);
-                  const pct = (parseFloat(s.total_revenue || 0) / maxRevenue) * 100;
-                  return (
-                    <div key={s.id} className="card">
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <div style={{ width: 28, height: 28, borderRadius: "50%", background: idx === 0 ? "rgba(0,212,170,0.2)" : "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: idx === 0 ? "var(--accent)" : "var(--muted)" }}>
-                            {idx + 1}
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 600 }}>{s.name}</div>
-                            <div style={{ fontSize: 11, color: "var(--muted)" }}>{s.invoices_count} فاتورة</div>
-                          </div>
-                        </div>
-                        <div style={{ textAlign: "left" }}>
-                          <div style={{ fontSize: 16, fontWeight: 700, color: "var(--accent)" }}>
-                            {parseFloat(s.total_revenue || 0).toFixed(0)} ج
-                          </div>
-                          <div style={{ fontSize: 10, color: "var(--muted)" }}>
-                            💵 {parseFloat(s.cash_revenue || 0).toFixed(0)} | 💳 {parseFloat(s.wallet_revenue || 0).toFixed(0)}
-                          </div>
-                        </div>
-                      </div>
-                      <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 6, height: 6, overflow: "hidden" }}>
-                        <div style={{ width: `${pct}%`, height: "100%", background: "linear-gradient(90deg, var(--accent), #00b4d8)", borderRadius: 6, transition: "width 0.6s ease" }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
       </div>
     </div>
   );

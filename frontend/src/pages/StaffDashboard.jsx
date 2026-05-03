@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { staffAPI } from '../utils/api';
+import { staffAPI, spacesAPI, servicesAPI } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
@@ -167,11 +167,26 @@ export default function StaffDashboard() {
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [canViewAll,      setCanViewAll]      = useState(false);
 
+  const [canEditPrices,   setCanEditPrices]   = useState(false);
+  const [spaces,          setSpaces]          = useState({
+    cowork:  { name: 'منطقة العمل المشتركة', first_hour: 30, extra_hour: 30, max_hours: 4 },
+    meeting: { name: 'غرفة الاجتماعات',      first_hour: 150, extra_hour: 100, max_hours: 12 },
+    lessons: { name: 'غرفة الدروس',           first_hour: 200, extra_hour: 100, max_hours: 12 },
+  });
+  const [services,        setServices]        = useState([]);
+  const [newService,      setNewService]      = useState({ name: '', price: '' });
+  const [editingService,  setEditingService]  = useState(null);
+  const [loadingSpaces,   setLoadingSpaces]   = useState(false);
+  const [priceTab,        setPriceTab]        = useState('cowork');
+
   const today    = format(new Date(), 'yyyy-MM-dd');
   const initials = user?.name?.split(' ').slice(0, 2).map(w => w[0]).join('');
 
-  useEffect(() => { loadStats(); }, []);
+  useEffect(() => { loadStats(); checkPermissions(); }, []);
   useEffect(() => { if (tab === 'invoices') loadMyInvoices(); }, [tab, myInvoicePage, invoiceSearch, invoiceDate]);
+  useEffect(() => { if (tab === 'prices') { loadSpaces(); loadServices(); } }, [tab]);
+
+  // ── Functions ─────────────────────────────────────────────────────
 
   async function loadStats() {
     setLoading(true);
@@ -183,6 +198,14 @@ export default function StaffDashboard() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function checkPermissions() {
+    try {
+      const { data } = await staffAPI.getAll();
+      const me = data.staff?.find(s => s.id === user?.id);
+      if (me) setCanEditPrices(me.can_edit_prices === true);
+    } catch {}
   }
 
   async function loadMyInvoices() {
@@ -203,6 +226,71 @@ export default function StaffDashboard() {
     }
   }
 
+  async function loadSpaces() {
+    try {
+      const { data } = await spacesAPI.getAll();
+      const mapped = {};
+      data.spaces.forEach(s => { mapped[s.space_key] = s; });
+      setSpaces(prev => ({
+        cowork:  { ...prev.cowork,  ...mapped.cowork  },
+        meeting: { ...prev.meeting, ...mapped.meeting },
+        lessons: { ...prev.lessons, ...mapped.lessons },
+      }));
+    } catch {}
+  }
+
+  async function loadServices() {
+    try {
+      const { data } = await servicesAPI.getAll();
+      setServices(data.services);
+    } catch {}
+  }
+
+  async function saveSpace(key) {
+    setLoadingSpaces(true);
+    try {
+      await spacesAPI.update(key, spaces[key]);
+      toast.success('تم حفظ التغييرات ✅');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'ليس لديك صلاحية لتعديل الأسعار');
+    } finally {
+      setLoadingSpaces(false);
+    }
+  }
+
+  async function addService() {
+    if (!newService.name || !newService.price) return toast.error('أدخل الاسم والسعر');
+    try {
+      const { data } = await servicesAPI.create({ name: newService.name, price: parseFloat(newService.price) });
+      setServices(prev => [...prev, data.service]);
+      setNewService({ name: '', price: '' });
+      toast.success('تمت الإضافة ✅');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'خطأ في الإضافة');
+    }
+  }
+
+  async function saveService() {
+    try {
+      await servicesAPI.update(editingService.id, { name: editingService.name, price: parseFloat(editingService.price) });
+      setServices(prev => prev.map(x => x.id === editingService.id ? editingService : x));
+      setEditingService(null);
+      toast.success('تم التعديل ✅');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'خطأ في التعديل');
+    }
+  }
+
+  async function deleteService(id) {
+    try {
+      await servicesAPI.delete(id);
+      setServices(prev => prev.filter(x => x.id !== id));
+      toast.success('تم الحذف');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'خطأ في الحذف');
+    }
+  }
+
   const chartData = stats?.recent?.slice(0, 7).map(inv => ({
     name:  format(new Date(inv.created_at), 'EEE', { locale: ar }),
     total: parseFloat(inv.total),
@@ -210,6 +298,7 @@ export default function StaffDashboard() {
 
   const totalInvoicePages = Math.ceil(myInvoiceTotal / 20);
 
+  // ── Render ────────────────────────────────────────────────────────
   return (
     <div style={{ minHeight: '100vh', maxWidth: 680, margin: '0 auto', padding: '0 0 40px' }}>
 
@@ -237,7 +326,11 @@ export default function StaffDashboard() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, padding: '12px 16px', borderBottom: '1px solid var(--border)', overflowX: 'auto' }}>
-        {[['overview', 'نظرة عامة'], ['invoices', '🧾 فواتيري']].map(([k, label]) => (
+        {[
+          ['overview', 'نظرة عامة'],
+          ['invoices', '🧾 فواتيري'],
+          ...(canEditPrices ? [['prices', '💰 الأسعار']] : []),
+        ].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)}
             style={{ padding: '7px 16px', borderRadius: 20, border: '1px solid', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer', transition: 'all 0.2s', borderColor: tab === k ? 'var(--accent)' : 'var(--border)', background: tab === k ? 'var(--accent)' : 'transparent', color: tab === k ? '#000' : 'var(--muted)' }}>
             {label}
@@ -250,7 +343,6 @@ export default function StaffDashboard() {
         {/* ══ OVERVIEW ══ */}
         {tab === 'overview' && (
           <div className="fade-up">
-
             <div className="card" style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 16 }}>
               <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent), var(--accent2))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 18, color: '#fff', flexShrink: 0 }}>
                 {initials}
@@ -456,6 +548,80 @@ export default function StaffDashboard() {
                   style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: myInvoicePage === totalInvoicePages ? 'var(--muted)' : 'var(--text)', cursor: myInvoicePage === totalInvoicePages ? 'default' : 'pointer' }}>
                   التالي
                 </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ══ PRICES ══ */}
+        {tab === 'prices' && canEditPrices && (
+          <div className="fade-up">
+            <div style={{ display: 'flex', gap: 4, marginBottom: 16, overflowX: 'auto' }}>
+              {[['cowork','🖥️ منطقة العمل'],['meeting','🤝 الاجتماعات'],['lessons','📚 الدروس'],['services','☕ الخدمات']].map(([k, label]) => (
+                <button key={k} onClick={() => setPriceTab(k)}
+                  style={{ padding: '7px 14px', borderRadius: 20, border: '1px solid', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer', borderColor: priceTab === k ? 'var(--accent)' : 'var(--border)', background: priceTab === k ? 'var(--accent)' : 'transparent', color: priceTab === k ? '#000' : 'var(--muted)' }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {['cowork','meeting','lessons'].includes(priceTab) && (
+              <div className="card">
+                <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 6 }}>اسم المساحة</div>
+                <input className="input-field" style={{ marginBottom: 14 }} value={spaces[priceTab]?.name || ''}
+                  onChange={e => setSpaces(p => ({ ...p, [priceTab]: { ...p[priceTab], name: e.target.value } }))} />
+                <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>سعر أول ساعة (ج)</div>
+                <input className="input-field" type="number" style={{ marginBottom: 14 }} value={spaces[priceTab]?.first_hour || 0}
+                  onChange={e => setSpaces(p => ({ ...p, [priceTab]: { ...p[priceTab], first_hour: parseFloat(e.target.value) || 0 } }))} />
+                {priceTab !== 'cowork' && (
+                  <>
+                    <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 8 }}>كل ساعة إضافية (ج)</div>
+                    <input className="input-field" type="number" style={{ marginBottom: 14 }} value={spaces[priceTab]?.extra_hour || 0}
+                      onChange={e => setSpaces(p => ({ ...p, [priceTab]: { ...p[priceTab], extra_hour: parseFloat(e.target.value) || 0 } }))} />
+                  </>
+                )}
+                <button className="btn btn-primary" style={{ width: '100%' }} disabled={loadingSpaces} onClick={() => saveSpace(priceTab)}>
+                  {loadingSpaces ? 'جارٍ الحفظ...' : 'حفظ التغييرات'}
+                </button>
+              </div>
+            )}
+
+            {priceTab === 'services' && (
+              <div>
+                <div className="card" style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>➕ إضافة خدمة</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, marginBottom: 8 }}>
+                    <input className="input-field" placeholder="اسم الخدمة..." value={newService.name}
+                      onChange={e => setNewService(p => ({ ...p, name: e.target.value }))} />
+                    <input className="input-field" type="number" placeholder="السعر" style={{ width: 90 }} value={newService.price}
+                      onChange={e => setNewService(p => ({ ...p, price: e.target.value }))} />
+                  </div>
+                  <button className="btn btn-primary" style={{ width: '100%' }} onClick={addService}>إضافة</button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {services.map(s => (
+                    <div key={s.id} className="card" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      {editingService?.id === s.id ? (
+                        <>
+                          <input className="input-field" style={{ flex: 1 }} value={editingService.name}
+                            onChange={e => setEditingService(p => ({ ...p, name: e.target.value }))} />
+                          <input className="input-field" type="number" style={{ width: 80 }} value={editingService.price}
+                            onChange={e => setEditingService(p => ({ ...p, price: e.target.value }))} />
+                          <button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: 12 }} onClick={saveService}>حفظ</button>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 600, fontSize: 14 }}>{s.name}</div>
+                            <div style={{ fontSize: 12, color: 'var(--accent)' }}>{s.price} ج</div>
+                          </div>
+                          <button onClick={() => setEditingService(s)} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '5px 10px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>✏️</button>
+                          <button onClick={() => deleteService(s.id)} style={{ background: 'transparent', border: '1px solid rgba(255,71,87,0.3)', color: '#ff4757', padding: '5px 10px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>🗑️</button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

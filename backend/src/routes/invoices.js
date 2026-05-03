@@ -148,11 +148,13 @@ router.get('/my', auth, async (req, res) => {
 
 // GET /api/invoices — كل الفواتير [staff/admin]
 router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
-  const page   = parseInt(req.query.page)  || 1;
-  const limit  = 20;
-  const offset = (page - 1) * limit;
-  const search = req.query.search || '';
-  const date   = req.query.date   || '';
+  const page     = parseInt(req.query.page)  || 1;
+  const limit    = 20;
+  const offset   = (page - 1) * limit;
+  const search   = req.query.search   || '';
+  const date     = req.query.date     || '';
+  const staff_id = req.query.staff_id || ''; // ← فلتر الموظف
+
   try {
     const { rows } = await db.query(`
       SELECT i.*, u.name AS created_by_name, c.email AS client_email
@@ -162,14 +164,18 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
       WHERE
         ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%')
         AND ($2 = '' OR DATE(i.created_at) = $2::date)
-      ORDER BY i.created_at DESC LIMIT $3 OFFSET $4
-    `, [search, date, limit, offset]);
+        AND ($3 = '' OR i.created_by = $3::integer)
+      ORDER BY i.created_at DESC LIMIT $4 OFFSET $5
+    `, [search, date, staff_id, limit, offset]);
+
     const { rows: countRows } = await db.query(`
       SELECT COUNT(*) FROM invoices i
       WHERE
         ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%')
         AND ($2 = '' OR DATE(i.created_at) = $2::date)
-    `, [search, date]);
+        AND ($3 = '' OR i.created_by = $3::integer)
+    `, [search, date, staff_id]);
+
     res.json({ invoices: rows, total: parseInt(countRows[0].count), page, limit });
   } catch (err) {
     console.error(err);
@@ -195,4 +201,3 @@ router.get('/:id', auth, requireRole('staff', 'admin'), async (req, res) => {
 });
 
 module.exports = router;
-
