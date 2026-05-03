@@ -1,11 +1,11 @@
 const router = require('express').Router();
-const db = require('../config/db');
+const db     = require('../config/db');
 const { auth, requireRole } = require('../middleware/auth');
+const { requirePermission }  = require('../middleware/permissions');
 
 const isStaffOrAdmin = [auth, requireRole('staff', 'admin')];
-const isAdmin        = [auth, requireRole('admin')];
 
-// ✅ GET /api/services — متاح لكل المستخدمين المسجلين (client + staff + admin)
+// GET /api/services — متاح لكل المستخدمين المسجلين
 router.get('/', auth, async (req, res) => {
   try {
     const { rows } = await db.query(
@@ -17,8 +17,8 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// POST /api/services [admin]
-router.post('/', ...isAdmin, async (req, res) => {
+// POST /api/services — أدمن أو موظف عنده can_edit_prices
+router.post('/', ...isStaffOrAdmin, requirePermission('can_edit_prices'), async (req, res) => {
   const { name, price } = req.body;
   if (!name || !price) return res.status(400).json({ error: 'الاسم والسعر مطلوبان' });
   try {
@@ -32,8 +32,8 @@ router.post('/', ...isAdmin, async (req, res) => {
   }
 });
 
-// PUT /api/services/:id [admin]
-router.put('/:id', ...isAdmin, async (req, res) => {
+// PUT /api/services/:id — أدمن أو موظف عنده can_edit_prices
+router.put('/:id', ...isStaffOrAdmin, requirePermission('can_edit_prices'), async (req, res) => {
   const { name, price } = req.body;
   try {
     const { rows } = await db.query(`
@@ -46,8 +46,8 @@ router.put('/:id', ...isAdmin, async (req, res) => {
   }
 });
 
-// DELETE /api/services/:id [admin]
-router.delete('/:id', ...isAdmin, async (req, res) => {
+// DELETE /api/services/:id — أدمن أو موظف عنده can_edit_prices
+router.delete('/:id', ...isStaffOrAdmin, requirePermission('can_edit_prices'), async (req, res) => {
   try {
     await db.query(
       'UPDATE services SET is_active = false WHERE id = $1',
@@ -60,4 +60,3 @@ router.delete('/:id', ...isAdmin, async (req, res) => {
 });
 
 module.exports = router;
-
