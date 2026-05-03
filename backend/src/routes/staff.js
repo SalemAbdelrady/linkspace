@@ -244,7 +244,7 @@ router.get('/me/stats', ...isStaffOrAdmin, async (req, res) => {
   }
 });
 
-// GET /api/staff/me/invoices — فواتير الموظف نفسه مع بحث وفلترة
+// GET /api/staff/me/invoices — فواتير الموظف مع مراعاة صلاحية can_view_all
 router.get('/me/invoices', ...isStaffOrAdmin, async (req, res) => {
   const staffId = req.user.id;
   const page    = parseInt(req.query.page)   || 1;
@@ -254,6 +254,16 @@ router.get('/me/invoices', ...isStaffOrAdmin, async (req, res) => {
   const date    = req.query.date   || '';
 
   try {
+    // ✅ نتحقق من صلاحية can_view_all
+    const { rows: permRows } = await db.query(
+      'SELECT can_view_all FROM staff_permissions WHERE user_id = $1',
+      [staffId]
+    );
+    const canViewAll = req.user.role === 'admin' || (permRows[0]?.can_view_all === true);
+
+    // ✅ لو can_view_all → يشوف كل الفواتير، لو لأ → فواتيره هو فقط
+    const createdByFilter = canViewAll ? '' : staffId.toString();
+
     const { rows } = await db.query(`
       SELECT
         i.id, i.invoice_number, i.client_name, i.client_phone,
@@ -262,24 +272,34 @@ router.get('/me/invoices', ...isStaffOrAdmin, async (req, res) => {
         i.session_cost, i.services_cost, i.duration_min,
         i.price_per_hr, i.services, i.discount_pct,
         i.discount_amount, i.subtotal, i.note,
-        u.email AS client_email
+        u.email AS client_email,
+        cb.name AS created_by_name
       FROM invoices i
-      LEFT JOIN users u ON u.id = i.user_id
-      WHERE i.created_by = $1
+      LEFT JOIN users u  ON u.id  = i.user_id
+      LEFT JOIN users cb ON cb.id = i.created_by
+      WHERE
+        ($1 = '' OR i.created_by = $1::integer)
         AND ($2 = '' OR i.client_name ILIKE '%' || $2 || '%' OR i.client_phone ILIKE '%' || $2 || '%')
         AND ($3 = '' OR DATE(i.created_at) = $3::date)
       ORDER BY i.created_at DESC
       LIMIT $4 OFFSET $5
-    `, [staffId, search, date, limit, offset]);
+    `, [createdByFilter, search, date, limit, offset]);
 
     const { rows: countRows } = await db.query(`
-      SELECT COUNT(*) FROM invoices
-      WHERE created_by = $1
-        AND ($2 = '' OR client_name ILIKE '%' || $2 || '%' OR client_phone ILIKE '%' || $2 || '%')
-        AND ($3 = '' OR DATE(created_at) = $3::date)
-    `, [staffId, search, date]);
+      SELECT COUNT(*) FROM invoices i
+      WHERE
+        ($1 = '' OR i.created_by = $1::integer)
+        AND ($2 = '' OR i.client_name ILIKE '%' || $2 || '%' OR i.client_phone ILIKE '%' || $2 || '%')
+        AND ($3 = '' OR DATE(i.created_at) = $3::date)
+    `, [createdByFilter, search, date]);
 
-    res.json({ invoices: rows, total: parseInt(countRows[0].count), page, limit });
+    res.json({
+      invoices:    rows,
+      total:       parseInt(countRows[0].count),
+      page,
+      limit,
+      can_view_all: canViewAll,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'خطأ في الخادم' });

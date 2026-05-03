@@ -165,6 +165,7 @@ export default function StaffDashboard() {
   const [invoiceSearch,   setInvoiceSearch]   = useState('');
   const [invoiceDate,     setInvoiceDate]     = useState('');
   const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [canViewAll,      setCanViewAll]      = useState(false);
 
   const today    = format(new Date(), 'yyyy-MM-dd');
   const initials = user?.name?.split(' ').slice(0, 2).map(w => w[0]).join('');
@@ -194,6 +195,7 @@ export default function StaffDashboard() {
       });
       setMyInvoices(data.invoices);
       setMyInvoiceTotal(data.total);
+      setCanViewAll(data.can_view_all || false);
     } catch {
       toast.error('خطأ في تحميل الفواتير');
     } finally {
@@ -388,6 +390,11 @@ export default function StaffDashboard() {
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
               {myInvoiceTotal} فاتورة
               {invoiceDate && ` — ${new Date(invoiceDate).toLocaleDateString('ar-EG', { month: 'long', day: 'numeric' })}`}
+              {canViewAll && (
+                <span style={{ marginRight: 8, fontSize: 11, background: 'rgba(0,212,170,0.1)', color: 'var(--accent)', padding: '1px 8px', borderRadius: 10 }}>
+                  👁️ كل الفواتير
+                </span>
+              )}
             </div>
 
             {loadingInvoices ? (
@@ -428,6 +435,9 @@ export default function StaffDashboard() {
                         {SPACE_ICONS[inv.space_key] && <span>{SPACE_ICONS[inv.space_key]} {inv.space_name}</span>}
                         {svcs.length > 0 && <span>☕ {svcs.length} خدمة</span>}
                         {inv.coupon_code && <span>🎫 {inv.coupon_code}</span>}
+                        {canViewAll && inv.created_by_name && (
+                          <span style={{ color: 'var(--accent)' }}>👤 {inv.created_by_name}</span>
+                        )}
                       </div>
                     </div>
                   );
