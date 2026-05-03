@@ -47,6 +47,9 @@ function InvoiceModal({ invoice, onClose }) {
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>العميل</div>
           <div style={{ fontWeight: 700 }}>{invoice.client_name}</div>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>{invoice.client_phone}</div>
+          {invoice.client_email && (
+            <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 2 }}>✉️ {invoice.client_email}</div>
+          )}
         </div>
 
         <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px dashed var(--border)' }}>

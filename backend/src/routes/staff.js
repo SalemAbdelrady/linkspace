@@ -228,8 +228,10 @@ router.get('/me/stats', ...isStaffOrAdmin, async (req, res) => {
         i.wallet_paid, i.cash_paid, i.coupon_code,
         i.session_cost, i.services_cost, i.duration_min,
         i.price_per_hr, i.services, i.discount_pct,
-        i.discount_amount, i.subtotal, i.note
+        i.discount_amount, i.subtotal, i.note,
+        u.email AS client_email
       FROM invoices i
+      LEFT JOIN users u ON u.id = i.user_id
       WHERE i.created_by = $1
       ORDER BY i.created_at DESC
       LIMIT 10
@@ -259,8 +261,10 @@ router.get('/me/invoices', ...isStaffOrAdmin, async (req, res) => {
         i.wallet_paid, i.cash_paid, i.coupon_code, i.created_at,
         i.session_cost, i.services_cost, i.duration_min,
         i.price_per_hr, i.services, i.discount_pct,
-        i.discount_amount, i.subtotal, i.note
+        i.discount_amount, i.subtotal, i.note,
+        u.email AS client_email
       FROM invoices i
+      LEFT JOIN users u ON u.id = i.user_id
       WHERE i.created_by = $1
         AND ($2 = '' OR i.client_name ILIKE '%' || $2 || '%' OR i.client_phone ILIKE '%' || $2 || '%')
         AND ($3 = '' OR DATE(i.created_at) = $3::date)
