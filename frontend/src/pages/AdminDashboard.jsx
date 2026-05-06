@@ -6,6 +6,7 @@ import {
   servicesAPI,
   couponsAPI,
   invoicesAPI,
+  staffAPI,
 } from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -857,6 +858,13 @@ export default function AdminDashboard() {
   const [invoiceStaffId, setInvoiceStaffId] = useState("");
   const [staffList, setStaffList] = useState([]);
 
+  // ══ state إدارة الموظفين ══
+  const [staffMgmt, setStaffMgmt] = useState([]);
+  const [newStaff, setNewStaff] = useState({ name: "", phone: "", password: "", role: "staff" });
+  const [staffLoading, setStaffLoading] = useState(false);
+  const [editingStaffPerms, setEditingStaffPerms] = useState(null); // { id, perms }
+
+
   const [selectedInvoice, setSelectedInvoice] = useState(null);
 
   const today = format(new Date(), "yyyy-MM-dd");
@@ -877,6 +885,11 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (tab === "coupons") {
       loadAllCoupons();
+    }
+  }, [tab]);
+  useEffect(() => {
+    if (tab === "staff") {
+      loadStaffMgmt();
     }
   }, [tab]);
   useEffect(() => {
@@ -949,10 +962,71 @@ export default function AdminDashboard() {
       const { data } = await adminAPI.staff();
       setStaffList(data.staff || []);
     } catch {
-      // fallback: لو الـ endpoint مش موجود أو 403 — نخلي القائمة فاضية بدون crash
       setStaffList([]);
     }
   }
+
+  // ══ دوال إدارة الموظفين ══
+  async function loadStaffMgmt() {
+    try {
+      const { data } = await adminAPI.staff();
+      setStaffMgmt(data.staff || []);
+    } catch {
+      toast.error("خطأ في تحميل الموظفين");
+    }
+  }
+
+  async function createStaff() {
+    if (!newStaff.name || !newStaff.phone || !newStaff.password)
+      return toast.error("أدخل الاسم والموبايل وكلمة السر");
+    setStaffLoading(true);
+    try {
+      await staffAPI.create(newStaff);
+      toast.success("✅ تم إضافة الموظف");
+      setNewStaff({ name: "", phone: "", password: "", role: "staff" });
+      loadStaffMgmt();
+      loadStaff(); // تحديث قائمة فلتر الفواتير
+    } catch (err) {
+      toast.error(err.response?.data?.error || "خطأ في الإضافة");
+    } finally {
+      setStaffLoading(false);
+    }
+  }
+
+  async function toggleStaffActive(s) {
+    try {
+      await staffAPI.toggle(s.id);
+      toast.success(s.is_active ? "تم تعطيل الحساب" : "تم تفعيل الحساب");
+      loadStaffMgmt();
+      loadStaff();
+    } catch {
+      toast.error("خطأ في تغيير الحالة");
+    }
+  }
+
+  async function saveStaffPerms() {
+    try {
+      await staffAPI.updatePermissions(editingStaffPerms.id, editingStaffPerms.perms);
+      toast.success("✅ تم حفظ الصلاحيات");
+      setEditingStaffPerms(null);
+      loadStaffMgmt();
+    } catch {
+      toast.error("خطأ في حفظ الصلاحيات");
+    }
+  }
+
+  async function deleteStaff(id) {
+    if (!window.confirm("هل أنت متأكد من حذف هذا الموظف؟")) return;
+    try {
+      await staffAPI.delete(id);
+      toast.success("تم الحذف");
+      loadStaffMgmt();
+      loadStaff();
+    } catch {
+      toast.error("خطأ في الحذف");
+    }
+  }
+
 
   async function loadInvoices() {
     try {
@@ -1243,6 +1317,7 @@ export default function AdminDashboard() {
         {[
           ["overview", "نظرة عامة"],
           ["users", "العملاء"],
+          ["staff", "👥 الموظفين"],
           ["prices", "الأسعار"],
           ["coupons", "🎫 الكوبونات"],
           ["invoices", "🧾 الفواتير"],
@@ -1582,6 +1657,318 @@ export default function AdminDashboard() {
                   لا توجد نتائج
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* ══ STAFF ══ */}
+        {tab === "staff" && (
+          <div className="fade-up">
+            {/* ── إضافة موظف جديد ── */}
+            <div className="section-title">إضافة موظف جديد</div>
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>الاسم</div>
+                    <input
+                      className="input-field"
+                      placeholder="اسم الموظف"
+                      value={newStaff.name}
+                      onChange={(e) => setNewStaff((p) => ({ ...p, name: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>الموبايل</div>
+                    <input
+                      className="input-field"
+                      placeholder="01xxxxxxxxx"
+                      value={newStaff.phone}
+                      onChange={(e) => setNewStaff((p) => ({ ...p, phone: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>كلمة السر</div>
+                    <input
+                      className="input-field"
+                      type="password"
+                      placeholder="كلمة سر قوية"
+                      value={newStaff.password}
+                      onChange={(e) => setNewStaff((p) => ({ ...p, password: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>الدور</div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {[["staff", "موظف"], ["admin", "أدمن"]].map(([role, label]) => (
+                        <button
+                          key={role}
+                          onClick={() => setNewStaff((p) => ({ ...p, role }))}
+                          style={{
+                            flex: 1,
+                            padding: "9px 0",
+                            borderRadius: 10,
+                            border: "1px solid",
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            borderColor: newStaff.role === role ? "var(--accent)" : "var(--border)",
+                            background: newStaff.role === role ? "rgba(0,212,170,0.12)" : "transparent",
+                            color: newStaff.role === role ? "var(--accent)" : "var(--muted)",
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  className="btn btn-primary"
+                  style={{ width: "100%" }}
+                  disabled={staffLoading}
+                  onClick={createStaff}
+                >
+                  {staffLoading ? "جارٍ الإضافة..." : "➕ إضافة الموظف"}
+                </button>
+              </div>
+            </div>
+
+            {/* ── قائمة الموظفين ── */}
+            <div className="section-title">الموظفون الحاليون</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {staffMgmt.length === 0 && (
+                <div style={{ textAlign: "center", color: "var(--muted)", padding: 24, fontSize: 13 }}>
+                  لا يوجد موظفون بعد
+                </div>
+              )}
+              {staffMgmt.map((s) => {
+                const isEditingPerms = editingStaffPerms?.id === s.id;
+                const PERMS = [
+                  ["can_charge_wallet",  "💳 شحن المحفظة"],
+                  ["can_add_points",     "⭐ إضافة نقاط"],
+                  ["can_edit_prices",    "🏷️ تعديل الأسعار"],
+                  ["can_create_coupons", "🎫 إنشاء كوبونات"],
+                  ["can_view_reports",   "📊 عرض التقارير"],
+                ];
+                return (
+                  <div
+                    key={s.id}
+                    className="card"
+                    style={{ opacity: s.is_active ? 1 : 0.55 }}
+                  >
+                    {/* رأس الكارد */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 15 }}>{s.name}</div>
+                        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{s.phone}</div>
+                        <span
+                          style={{
+                            display: "inline-block",
+                            marginTop: 4,
+                            padding: "2px 8px",
+                            borderRadius: 20,
+                            fontSize: 10,
+                            fontWeight: 700,
+                            background: s.role === "admin" ? "rgba(139,92,246,0.15)" : "rgba(0,212,170,0.1)",
+                            color: s.role === "admin" ? "#a78bfa" : "var(--accent)",
+                            border: `1px solid ${s.role === "admin" ? "rgba(139,92,246,0.3)" : "rgba(0,212,170,0.3)"}`,
+                          }}
+                        >
+                          {s.role === "admin" ? "👑 أدمن" : "👤 موظف"}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        <button
+                          onClick={() => toggleStaffActive(s)}
+                          style={{
+                            padding: "5px 10px",
+                            borderRadius: 8,
+                            border: `1px solid ${s.is_active ? "rgba(255,71,87,0.3)" : "rgba(0,212,170,0.3)"}`,
+                            background: "transparent",
+                            color: s.is_active ? "#ff4757" : "var(--success)",
+                            fontSize: 11,
+                            cursor: "pointer",
+                            fontWeight: 600,
+                          }}
+                        >
+                          {s.is_active ? "🔒 تعطيل" : "✅ تفعيل"}
+                        </button>
+                        {!isEditingPerms && s.role !== "admin" && (
+                          <button
+                            onClick={() =>
+                              setEditingStaffPerms({
+                                id: s.id,
+                                perms: {
+                                  can_charge_wallet:  s.can_charge_wallet  ?? false,
+                                  can_add_points:     s.can_add_points     ?? false,
+                                  can_edit_prices:    s.can_edit_prices    ?? false,
+                                  can_create_coupons: s.can_create_coupons ?? false,
+                                  can_view_reports:   s.can_view_reports   ?? false,
+                                },
+                              })
+                            }
+                            style={{
+                              padding: "5px 10px",
+                              borderRadius: 8,
+                              border: "1px solid var(--border)",
+                              background: "transparent",
+                              color: "var(--muted)",
+                              fontSize: 11,
+                              cursor: "pointer",
+                            }}
+                          >
+                            🛡️ الصلاحيات
+                          </button>
+                        )}
+                        <button
+                          onClick={() => deleteStaff(s.id)}
+                          style={{
+                            padding: "5px 10px",
+                            borderRadius: 8,
+                            border: "1px solid rgba(255,71,87,0.3)",
+                            background: "transparent",
+                            color: "#ff4757",
+                            fontSize: 11,
+                            cursor: "pointer",
+                          }}
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* تعديل الصلاحيات */}
+                    {isEditingPerms && (
+                      <div
+                        style={{
+                          borderTop: "1px dashed var(--border)",
+                          paddingTop: 12,
+                          marginTop: 4,
+                        }}
+                      >
+                        <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10, fontWeight: 600 }}>
+                          🛡️ صلاحيات {s.name}
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          {PERMS.map(([key, label]) => (
+                            <label
+                              key={key}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                cursor: "pointer",
+                                padding: "6px 10px",
+                                borderRadius: 8,
+                                background: editingStaffPerms.perms[key]
+                                  ? "rgba(0,212,170,0.08)"
+                                  : "rgba(255,255,255,0.03)",
+                                border: `1px solid ${editingStaffPerms.perms[key] ? "rgba(0,212,170,0.25)" : "var(--border)"}`,
+                              }}
+                            >
+                              <span style={{ fontSize: 13 }}>{label}</span>
+                              <div
+                                onClick={() =>
+                                  setEditingStaffPerms((prev) => ({
+                                    ...prev,
+                                    perms: { ...prev.perms, [key]: !prev.perms[key] },
+                                  }))
+                                }
+                                style={{
+                                  width: 36,
+                                  height: 20,
+                                  borderRadius: 10,
+                                  background: editingStaffPerms.perms[key] ? "var(--accent)" : "var(--border)",
+                                  position: "relative",
+                                  cursor: "pointer",
+                                  transition: "background 0.2s",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: 14,
+                                    height: 14,
+                                    borderRadius: "50%",
+                                    background: "#fff",
+                                    position: "absolute",
+                                    top: 3,
+                                    left: editingStaffPerms.perms[key] ? 19 : 3,
+                                    transition: "left 0.2s",
+                                  }}
+                                />
+                              </div>
+                            </label>
+                          ))}
+                        </div>
+                        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                          <button
+                            className="btn btn-primary"
+                            style={{ flex: 1, padding: "8px" }}
+                            onClick={saveStaffPerms}
+                          >
+                            حفظ الصلاحيات
+                          </button>
+                          <button
+                            onClick={() => setEditingStaffPerms(null)}
+                            style={{
+                              padding: "8px 16px",
+                              borderRadius: 10,
+                              border: "1px solid var(--border)",
+                              background: "transparent",
+                              color: "var(--muted)",
+                              cursor: "pointer",
+                              fontSize: 13,
+                            }}
+                          >
+                            إلغاء
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* عرض الصلاحيات بدون تعديل */}
+                    {!isEditingPerms && s.role !== "admin" && (
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                        {[
+                          ["can_charge_wallet",  "💳"],
+                          ["can_add_points",     "⭐"],
+                          ["can_edit_prices",    "🏷️"],
+                          ["can_create_coupons", "🎫"],
+                          ["can_view_reports",   "📊"],
+                        ].map(([key, icon]) =>
+                          s[key] ? (
+                            <span
+                              key={key}
+                              title={key.replace("can_", "").replace(/_/g, " ")}
+                              style={{
+                                padding: "2px 8px",
+                                borderRadius: 20,
+                                fontSize: 12,
+                                background: "rgba(0,212,170,0.1)",
+                                border: "1px solid rgba(0,212,170,0.2)",
+                              }}
+                            >
+                              {icon}
+                            </span>
+                          ) : null
+                        )}
+                        {!s.can_charge_wallet && !s.can_add_points && !s.can_edit_prices && !s.can_create_coupons && !s.can_view_reports && (
+                          <span style={{ fontSize: 11, color: "var(--muted)" }}>لا توجد صلاحيات إضافية</span>
+                        )}
+                      </div>
+                    )}
+                    {s.role === "admin" && (
+                      <div style={{ fontSize: 11, color: "#a78bfa", marginTop: 4 }}>
+                        👑 صلاحيات كاملة (أدمن)
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

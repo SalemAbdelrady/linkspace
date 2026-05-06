@@ -119,4 +119,11 @@ export const staffAPI = {
   compare:            (year, month)         => api.get(`/staff/compare?year=${year}&month=${month}`),
 };
 
+export const staffAPI = {
+  create: (data) => axios.post("/api/admin/staff", data),
+  toggle: (id) => axios.patch(`/api/admin/staff/${id}/toggle`),
+  updatePermissions: (id, perms) => axios.patch(`/api/admin/staff/${id}/permissions`, perms),
+  delete: (id) => axios.delete(`/api/admin/staff/${id}`),
+};
+
 export default api;

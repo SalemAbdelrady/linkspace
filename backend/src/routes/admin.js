@@ -202,4 +202,48 @@ router.get('/staff', ...isStaffOrAdmin, async (req, res) => {
   }
 });
 
+// POST /api/admin/staff — إضافة موظف
+router.post('/staff', ...isAdmin, async (req, res) => {
+  const { name, phone, password, role = 'staff' } = req.body;
+  const bcrypt = require('bcryptjs');
+  const hash = await bcrypt.hash(password, 10);
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO users (name, phone, password, role)
+       VALUES ($1, $2, $3, $4) RETURNING id, name, phone, role, is_active`,
+      [name, phone, hash, role]
+    );
+    res.json({ staff: rows[0] });
+  } catch (err) {
+    res.status(400).json({ error: 'الموبايل مسجل مسبقاً' });
+  }
+});
+
+// PATCH /api/admin/staff/:id/toggle
+router.patch('/staff/:id/toggle', ...isAdmin, async (req, res) => {
+  const { rows } = await db.query(
+    'UPDATE users SET is_active = NOT is_active WHERE id = $1 RETURNING is_active',
+    [req.params.id]
+  );
+  res.json({ is_active: rows[0].is_active });
+});
+
+// PATCH /api/admin/staff/:id/permissions
+router.patch('/staff/:id/permissions', ...isAdmin, async (req, res) => {
+  const { can_charge_wallet, can_add_points, can_edit_prices, can_create_coupons, can_view_reports } = req.body;
+  await db.query(
+    `UPDATE users SET can_charge_wallet=$1, can_add_points=$2,
+     can_edit_prices=$3, can_create_coupons=$4, can_view_reports=$5
+     WHERE id=$6`,
+    [can_charge_wallet, can_add_points, can_edit_prices, can_create_coupons, can_view_reports, req.params.id]
+  );
+  res.json({ success: true });
+});
+
+// DELETE /api/admin/staff/:id
+router.delete('/staff/:id', ...isAdmin, async (req, res) => {
+  await db.query('DELETE FROM users WHERE id=$1 AND role != $2', [req.params.id, 'admin']);
+  res.json({ success: true });
+});
+
 module.exports = router;
