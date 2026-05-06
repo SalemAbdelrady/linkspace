@@ -498,7 +498,6 @@ function InvoiceModal({ invoice, onClose }) {
           <div style={{ fontSize: 12, color: "var(--muted)" }}>
             {invoice.client_phone}
           </div>
-          {/* هذا الجزء لن يعمل إلا إذا أرسل الـ API حقل client_email */}
           {invoice.client_email && (
             <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
               {invoice.client_email}
@@ -807,7 +806,7 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState([]);
   const [activeSessionIds, setActiveSessionIds] = useState(new Set());
   const [search, setSearch] = useState("");
-  const [selectedUser, setSelectedUser] = useState(null); // للمودال
+  const [selectedUser, setSelectedUser] = useState(null);
   const [amounts, setAmounts] = useState({});
 
   const [priceTab, setPriceTab] = useState("cowork");
@@ -854,7 +853,10 @@ export default function AdminDashboard() {
   const [invoicePage, setInvoicePage] = useState(1);
   const [invoiceSearch, setInvoiceSearch] = useState("");
   const [invoiceDate, setInvoiceDate] = useState("");
-  const [invoiceStaffId, setInvoiceStaffId] = useState(""); // ← فلتر الموظف
+  // ✅ إضافة state الموظفين
+  const [invoiceStaffId, setInvoiceStaffId] = useState("");
+  const [staffList, setStaffList] = useState([]);
+
   const [selectedInvoice, setSelectedInvoice] = useState(null);
 
   const today = format(new Date(), "yyyy-MM-dd");
@@ -864,7 +866,7 @@ export default function AdminDashboard() {
     loadOverview();
     loadSpaces();
     loadServices();
-    loadStaff(); // ← نحمل الموظفين من البداية عشان فلتر الفواتير
+    loadStaff();
   }, []);
   useEffect(() => {
     if (tab === "users") {
@@ -895,6 +897,7 @@ export default function AdminDashboard() {
       toast.error("خطأ في تحميل البيانات");
     }
   }
+
   async function loadSpaces() {
     try {
       const { data } = await spacesAPI.getAll();
@@ -909,12 +912,14 @@ export default function AdminDashboard() {
       }));
     } catch {}
   }
+
   async function loadServices() {
     try {
       const { data } = await servicesAPI.getAll();
       setServices(data.services);
     } catch {}
   }
+
   async function loadUsers() {
     try {
       const { data } = await adminAPI.users(search);
@@ -923,24 +928,38 @@ export default function AdminDashboard() {
       toast.error("خطأ في تحميل العملاء");
     }
   }
+
   async function loadActiveSessions() {
     try {
       const { data } = await sessionsAPI.active();
       setActiveSessionIds(new Set(data.sessions.map((s) => s.user_id)));
     } catch {}
   }
+
   async function loadAllCoupons() {
     try {
       const { data } = await couponsAPI.adminAll();
       setAllCoupons(data.coupons);
     } catch {}
   }
+
+  // ✅ دالة loadStaff المُصلحة
+  async function loadStaff() {
+    try {
+      const { data } = await adminAPI.staff();
+      setStaffList(data.staff || []);
+    } catch {
+      // fallback: لو الـ endpoint مش موجود أو 403 — نخلي القائمة فاضية بدون crash
+      setStaffList([]);
+    }
+  }
+
   async function loadInvoices() {
     try {
       const { data } = await invoicesAPI.getAll({
-        page:     invoicePage,
-        search:   invoiceSearch,
-        date:     invoiceDate,
+        page: invoicePage,
+        search: invoiceSearch,
+        date: invoiceDate,
         staff_id: invoiceStaffId || undefined,
       });
       setInvoices(data.invoices);
@@ -961,6 +980,7 @@ export default function AdminDashboard() {
       setLoadingSpaces(false);
     }
   }
+
   async function addService() {
     if (!newService.name || !newService.price)
       return toast.error("أدخل الاسم والسعر");
@@ -976,6 +996,7 @@ export default function AdminDashboard() {
       toast.error("خطأ في الإضافة");
     }
   }
+
   async function saveService() {
     try {
       await servicesAPI.update(editingService.id, {
@@ -983,7 +1004,7 @@ export default function AdminDashboard() {
         price: parseFloat(editingService.price),
       });
       setServices((prev) =>
-        prev.map((x) => (x.id === editingService.id ? editingService : x)),
+        prev.map((x) => (x.id === editingService.id ? editingService : x))
       );
       setEditingService(null);
       toast.success("تم التعديل ✅");
@@ -991,6 +1012,7 @@ export default function AdminDashboard() {
       toast.error("خطأ في التعديل");
     }
   }
+
   async function deleteService(id) {
     try {
       await servicesAPI.delete(id);
@@ -1019,38 +1041,38 @@ export default function AdminDashboard() {
       await adminAPI.chargeWallet(u.id, parseFloat(amount));
       toast.success(`تم شحن ${amount} ج للعميل ${u.name}`);
       setAmount(u.id, "wallet", "");
-      // ✅ تحديث الرصيد في المودال بدون إغلاقه
       setUsers((prev) =>
         prev.map((x) =>
           x.id === u.id
             ? { ...x, balance: parseFloat(x.balance) + parseFloat(amount) }
-            : x,
-        ),
+            : x
+        )
       );
       setSelectedUser((prev) =>
         prev
           ? { ...prev, balance: parseFloat(prev.balance) + parseFloat(amount) }
-          : prev,
+          : prev
       );
     } catch (err) {
       toast.error(err.response?.data?.error || "خطأ");
     }
   }
+
   async function addPoints(u) {
     const points = getAmount(u.id, "points");
-    if (!points || parseInt(points) <= 0) return toast.error("أدخل نقاط صحيحة");
+    if (!points || parseInt(points) <= 0)
+      return toast.error("أدخل نقاط صحيحة");
     try {
       await adminAPI.addPoints(u.id, parseInt(points));
       toast.success(`تم إضافة ${points} نقطة`);
       setAmount(u.id, "points", "");
-      // ✅ تحديث النقاط في المودال بدون إغلاقه
       setUsers((prev) =>
         prev.map((x) =>
-          x.id === u.id ? { ...x, points: x.points + parseInt(points) } : x,
-        ),
+          x.id === u.id ? { ...x, points: x.points + parseInt(points) } : x
+        )
       );
       setSelectedUser((prev) =>
-        prev ? { ...prev, points: prev.points + parseInt(points) } : prev,
+        prev ? { ...prev, points: prev.points + parseInt(points) } : prev
       );
     } catch (err) {
       toast.error(err.response?.data?.error || "خطأ");
@@ -1067,6 +1089,7 @@ export default function AdminDashboard() {
       setCouponUsers(data.users.slice(0, 5));
     } catch {}
   }
+
   async function createCoupon() {
     if (newCoupon.targetType === "user" && !selectedCouponUser)
       return toast.error("اختر عميلاً أولاً");
@@ -1076,7 +1099,8 @@ export default function AdminDashboard() {
         code: newCoupon.code.trim().toUpperCase() || null,
         discount: parseInt(newCoupon.discount),
         days: parseInt(newCoupon.days),
-        user_id: newCoupon.targetType === "user" ? selectedCouponUser.id : null,
+        user_id:
+          newCoupon.targetType === "user" ? selectedCouponUser.id : null,
       });
       toast.success(`✅ تم إنشاء الكوبون: ${data.coupon.code}`);
       setNewCoupon({
@@ -1095,6 +1119,7 @@ export default function AdminDashboard() {
       setCouponLoading(false);
     }
   }
+
   async function revokeCoupon(id) {
     try {
       await couponsAPI.adminRevoke(id);
@@ -1111,12 +1136,14 @@ export default function AdminDashboard() {
       revenue: parseFloat(d.revenue),
       visits: parseInt(d.visits),
     })) || [];
+
   const filteredCoupons = allCoupons.filter((c) => {
     if (couponFilter === "active")
       return !c.is_used && new Date(c.expires_at) > new Date();
     if (couponFilter === "used") return c.is_used;
     return true;
   });
+
   const totalInvoicePages = Math.ceil(invoiceTotal / 20);
 
   return (
@@ -1381,12 +1408,12 @@ export default function AdminDashboard() {
                   <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                     {Array.from({ length: 24 }, (_, h) => {
                       const found = daily.by_hour.find(
-                        (r) => parseInt(r.hour) === h,
+                        (r) => parseInt(r.hour) === h
                       );
                       const count = found ? parseInt(found.visits) : 0;
                       const maxCount = Math.max(
                         ...daily.by_hour.map((r) => parseInt(r.visits)),
-                        1,
+                        1
                       );
                       const opacity = count
                         ? 0.2 + (count / maxCount) * 0.8
@@ -1449,7 +1476,6 @@ export default function AdminDashboard() {
               {users.map((u) => {
                 const isInSession = activeSessionIds.has(u.id);
                 return (
-                  // ✅ الضغط يفتح المودال مباشرةً
                   <div
                     key={u.id}
                     onClick={() => setSelectedUser(u)}
@@ -1477,7 +1503,6 @@ export default function AdminDashboard() {
                         >
                           {u.phone}
                         </div>
-                        {/* تطبيق نفس ستايل صفحة العميل في الأدمن */}
                         {u.email && (
                           <div
                             style={{
@@ -2183,7 +2208,10 @@ export default function AdminDashboard() {
                       <button
                         onClick={() => {
                           setSelectedCouponUser(null);
-                          setNewCoupon((prev) => ({ ...prev, targetUser: "" }));
+                          setNewCoupon((prev) => ({
+                            ...prev,
+                            targetUser: "",
+                          }));
                         }}
                         style={{
                           background: "transparent",
@@ -2287,8 +2315,8 @@ export default function AdminDashboard() {
                 {newCoupon.targetType === "global"
                   ? "لأي عميل"
                   : selectedCouponUser
-                    ? `لـ ${selectedCouponUser.name}`
-                    : "حدد عميلاً"}
+                  ? `لـ ${selectedCouponUser.name}`
+                  : "حدد عميلاً"}
                 {newCoupon.code && (
                   <>
                     {" "}
@@ -2373,8 +2401,8 @@ export default function AdminDashboard() {
                 const status = c.is_used
                   ? "used"
                   : expired
-                    ? "expired"
-                    : "active";
+                  ? "expired"
+                  : "active";
                 const statusLabel = {
                   active: "✅ فعال",
                   used: "🔒 مستخدم",
@@ -2508,48 +2536,99 @@ export default function AdminDashboard() {
               />
             </div>
 
-            {/* فلتر الموظف */}
-            <div style={{ marginBottom: 12, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-              <span style={{ fontSize: 11, color: "var(--muted)" }}>👤 الموظف:</span>
-              <button
-                onClick={() => { setInvoiceStaffId(""); setInvoicePage(1); }}
+            {/* فلتر الموظف — ✅ يُخفى تلقائياً لو staffList فاضية */}
+            {staffList.length > 0 && (
+              <div
                 style={{
-                  padding: "4px 12px", borderRadius: 20, border: "1px solid",
-                  fontSize: 11, fontWeight: 600, cursor: "pointer",
-                  borderColor: invoiceStaffId === "" ? "var(--accent)" : "var(--border)",
-                  background:  invoiceStaffId === "" ? "var(--accent)"  : "transparent",
-                  color:       invoiceStaffId === "" ? "#000"           : "var(--muted)",
+                  marginBottom: 12,
+                  display: "flex",
+                  gap: 6,
+                  flexWrap: "wrap",
+                  alignItems: "center",
                 }}
               >
-                الكل
-              </button>
-              {staffList.map(s => (
+                <span style={{ fontSize: 11, color: "var(--muted)" }}>
+                  👤 الموظف:
+                </span>
                 <button
-                  key={s.id}
-                  onClick={() => { setInvoiceStaffId(String(s.id)); setInvoicePage(1); }}
+                  onClick={() => {
+                    setInvoiceStaffId("");
+                    setInvoicePage(1);
+                  }}
                   style={{
-                    padding: "4px 12px", borderRadius: 20, border: "1px solid",
-                    fontSize: 11, fontWeight: 600, cursor: "pointer",
-                    borderColor: invoiceStaffId === String(s.id) ? "var(--accent)" : "var(--border)",
-                    background:  invoiceStaffId === String(s.id) ? "var(--accent)"  : "transparent",
-                    color:       invoiceStaffId === String(s.id) ? "#000"           : "var(--muted)",
-                    opacity:     s.is_active ? 1 : 0.5,
+                    padding: "4px 12px",
+                    borderRadius: 20,
+                    border: "1px solid",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    borderColor:
+                      invoiceStaffId === "" ? "var(--accent)" : "var(--border)",
+                    background:
+                      invoiceStaffId === "" ? "var(--accent)" : "transparent",
+                    color: invoiceStaffId === "" ? "#000" : "var(--muted)",
                   }}
                 >
-                  {s.name}
+                  الكل
                 </button>
-              ))}
+                {staffList.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => {
+                      setInvoiceStaffId(String(s.id));
+                      setInvoicePage(1);
+                    }}
+                    style={{
+                      padding: "4px 12px",
+                      borderRadius: 20,
+                      border: "1px solid",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      borderColor:
+                        invoiceStaffId === String(s.id)
+                          ? "var(--accent)"
+                          : "var(--border)",
+                      background:
+                        invoiceStaffId === String(s.id)
+                          ? "var(--accent)"
+                          : "transparent",
+                      color:
+                        invoiceStaffId === String(s.id) ? "#000" : "var(--muted)",
+                      opacity: s.is_active ? 1 : 0.5,
+                    }}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div
+              style={{
+                fontSize: 12,
+                color: "var(--muted)",
+                marginBottom: 10,
+              }}
+            >
+              {invoiceTotal} فاتورة{" "}
+              {invoiceDate &&
+                `— ${new Date(invoiceDate).toLocaleDateString("ar-EG", {
+                  month: "long",
+                  day: "numeric",
+                })}`}
+              {invoiceStaffId &&
+                staffList.find((s) => String(s.id) === invoiceStaffId) && (
+                  <span style={{ marginRight: 6, color: "var(--accent)" }}>
+                    · 👤{" "}
+                    {
+                      staffList.find((s) => String(s.id) === invoiceStaffId)
+                        ?.name
+                    }
+                  </span>
+                )}
             </div>
 
-            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>
-              {invoiceTotal} فاتورة{" "}
-              {invoiceDate && `— ${new Date(invoiceDate).toLocaleDateString("ar-EG", { month: "long", day: "numeric" })}`}
-              {invoiceStaffId && staffList.find(s => String(s.id) === invoiceStaffId) && (
-                <span style={{ marginRight: 6, color: "var(--accent)" }}>
-                  · 👤 {staffList.find(s => String(s.id) === invoiceStaffId)?.name}
-                </span>
-              )}
-            </div>
             <div
               style={{
                 display: "flex",
@@ -2635,7 +2714,9 @@ export default function AdminDashboard() {
                           </>
                         ) : (
                           <span
-                            className={`badge badge-${inv.payment_method === "wallet" ? "info" : "warning"}`}
+                            className={`badge badge-${
+                              inv.payment_method === "wallet" ? "info" : "warning"
+                            }`}
                             style={{ fontSize: 10 }}
                           >
                             {inv.payment_method === "wallet"
@@ -2683,6 +2764,7 @@ export default function AdminDashboard() {
                 );
               })}
             </div>
+
             {totalInvoicePages > 1 && (
               <div
                 style={{ display: "flex", justifyContent: "center", gap: 8 }}
@@ -2695,7 +2777,8 @@ export default function AdminDashboard() {
                     borderRadius: 8,
                     border: "1px solid var(--border)",
                     background: "transparent",
-                    color: invoicePage === 1 ? "var(--muted)" : "var(--text)",
+                    color:
+                      invoicePage === 1 ? "var(--muted)" : "var(--text)",
                     cursor: invoicePage === 1 ? "default" : "pointer",
                   }}
                 >

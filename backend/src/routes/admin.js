@@ -186,4 +186,20 @@ router.put('/prices/:id',
   }
 );
 
+// GET /api/admin/staff — قائمة الموظفين للفلتر في الفواتير
+router.get('/staff', ...isStaffOrAdmin, async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT id, name, is_active
+      FROM users
+      WHERE role IN ('admin', 'staff')
+      ORDER BY name ASC
+    `);
+    res.json({ staff: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
 module.exports = router;
