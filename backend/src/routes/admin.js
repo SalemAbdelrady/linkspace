@@ -1,5 +1,6 @@
 const router  = require('express').Router();
 const db      = require('../config/db');
+const bcrypt  = require('bcryptjs');          // ✅ في الأعلى مش جوف الـ route
 const QRCode  = require('qrcode');
 const { auth, requireRole }   = require('../middleware/auth');
 const { requirePermission }   = require('../middleware/permissions');
@@ -39,7 +40,6 @@ router.get('/users', ...isStaffOrAdmin, async (req, res) => {
 });
 
 // PATCH /api/admin/users/:id/wallet — شحن المحفظة
-// ✅ يحتاج صلاحية can_charge_wallet للـ staff
 router.patch('/users/:id/wallet',
   ...isStaffOrAdmin,
   requirePermission('can_charge_wallet'),
@@ -64,7 +64,6 @@ router.patch('/users/:id/wallet',
 );
 
 // PATCH /api/admin/users/:id/points — إضافة نقاط
-// ✅ يحتاج صلاحية can_add_points للـ staff
 router.patch('/users/:id/points',
   ...isStaffOrAdmin,
   requirePermission('can_add_points'),
@@ -165,7 +164,6 @@ router.get('/prices', ...isStaffOrAdmin, async (req, res) => {
 });
 
 // PUT /api/admin/prices/:id — تعديل أسعار الأوقات
-// ✅ يحتاج صلاحية can_edit_prices للـ staff
 router.put('/prices/:id',
   ...isStaffOrAdmin,
   requirePermission('can_edit_prices'),
@@ -186,14 +184,17 @@ router.put('/prices/:id',
   }
 );
 
-// GET /api/admin/staff — قائمة الموظفين للفلتر في الفواتير
+// GET /api/admin/staff — قائمة الموظفين
 router.get('/staff', ...isStaffOrAdmin, async (req, res) => {
   try {
     const { rows } = await db.query(`
-      SELECT id, name, is_active
+      SELECT
+        id, name, phone, role, is_active,
+        can_charge_wallet, can_add_points,
+        can_edit_prices, can_create_coupons, can_view_reports
       FROM users
       WHERE role IN ('admin', 'staff')
-      ORDER BY name ASC
+      ORDER BY role DESC, name ASC
     `);
     res.json({ staff: rows });
   } catch (err) {
@@ -202,48 +203,94 @@ router.get('/staff', ...isStaffOrAdmin, async (req, res) => {
   }
 });
 
-// POST /api/admin/staff — إضافة موظف
+// POST /api/admin/staff — إضافة موظف جديد
 router.post('/staff', ...isAdmin, async (req, res) => {
   const { name, phone, password, role = 'staff' } = req.body;
-  const bcrypt = require('bcryptjs');
-  const hash = await bcrypt.hash(password, 10);
+  if (!name || !phone || !password)
+    return res.status(400).json({ error: 'أدخل الاسم والموبايل وكلمة السر' });
+  if (!['staff', 'admin'].includes(role))
+    return res.status(400).json({ error: 'دور غير صحيح' });
+
   try {
-    const { rows } = await db.query(
-      `INSERT INTO users (name, phone, password, role)
-       VALUES ($1, $2, $3, $4) RETURNING id, name, phone, role, is_active`,
-      [name, phone, hash, role]
-    );
-    res.json({ staff: rows[0] });
+    // ✅ bcrypt في أعلى الملف — لا مشكلة هنا
+    const hash = await bcrypt.hash(password, 10);
+    const { rows } = await db.query(`
+      INSERT INTO users (name, phone, password, role)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, name, phone, role, is_active,
+                can_charge_wallet, can_add_points,
+                can_edit_prices, can_create_coupons, can_view_reports
+    `, [name, phone, hash, role]);
+    res.status(201).json({ staff: rows[0] });
   } catch (err) {
-    res.status(400).json({ error: 'الموبايل مسجل مسبقاً' });
+    if (err.code === '23505') {
+      return res.status(400).json({ error: 'رقم الموبايل مسجل مسبقاً' });
+    }
+    console.error(err);
+    res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
 
-// PATCH /api/admin/staff/:id/toggle
+// PATCH /api/admin/staff/:id/toggle — تفعيل/تعطيل موظف
 router.patch('/staff/:id/toggle', ...isAdmin, async (req, res) => {
-  const { rows } = await db.query(
-    'UPDATE users SET is_active = NOT is_active WHERE id = $1 RETURNING is_active',
-    [req.params.id]
-  );
-  res.json({ is_active: rows[0].is_active });
+  try {
+    const { rows } = await db.query(
+      'UPDATE users SET is_active = NOT is_active WHERE id = $1 RETURNING is_active',
+      [req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'موظف غير موجود' });
+    res.json({ is_active: rows[0].is_active });
+  } catch (err) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
-// PATCH /api/admin/staff/:id/permissions
+// PATCH /api/admin/staff/:id/permissions — تعديل صلاحيات موظف
 router.patch('/staff/:id/permissions', ...isAdmin, async (req, res) => {
-  const { can_charge_wallet, can_add_points, can_edit_prices, can_create_coupons, can_view_reports } = req.body;
-  await db.query(
-    `UPDATE users SET can_charge_wallet=$1, can_add_points=$2,
-     can_edit_prices=$3, can_create_coupons=$4, can_view_reports=$5
-     WHERE id=$6`,
-    [can_charge_wallet, can_add_points, can_edit_prices, can_create_coupons, can_view_reports, req.params.id]
-  );
-  res.json({ success: true });
+  const {
+    can_charge_wallet  = false,
+    can_add_points     = false,
+    can_edit_prices    = false,
+    can_create_coupons = false,
+    can_view_reports   = false,
+  } = req.body;
+
+  try {
+    await db.query(`
+      UPDATE users
+      SET can_charge_wallet  = $1,
+          can_add_points     = $2,
+          can_edit_prices    = $3,
+          can_create_coupons = $4,
+          can_view_reports   = $5
+      WHERE id = $6 AND role = 'staff'
+    `, [can_charge_wallet, can_add_points, can_edit_prices, can_create_coupons, can_view_reports, req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
-// DELETE /api/admin/staff/:id
+// DELETE /api/admin/staff/:id — حذف موظف
 router.delete('/staff/:id', ...isAdmin, async (req, res) => {
-  await db.query('DELETE FROM users WHERE id=$1 AND role != $2', [req.params.id, 'admin']);
-  res.json({ success: true });
+  try {
+    // ✅ حماية: لا يحذف الأدمن الوحيد
+    const { rows: adminCount } = await db.query(
+      `SELECT COUNT(*) FROM users WHERE role = 'admin'`
+    );
+    const { rows: target } = await db.query(
+      'SELECT role FROM users WHERE id = $1', [req.params.id]
+    );
+    if (!target.length) return res.status(404).json({ error: 'موظف غير موجود' });
+    if (target[0].role === 'admin' && parseInt(adminCount[0].count) <= 1) {
+      return res.status(400).json({ error: 'لا يمكن حذف الأدمن الوحيد' });
+    }
+
+    await db.query('DELETE FROM users WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
 module.exports = router;

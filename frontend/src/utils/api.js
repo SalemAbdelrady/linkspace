@@ -61,6 +61,8 @@ export const adminAPI = {
   monthlyReport: (year, month)           => api.get(`/admin/reports/monthly?year=${year}&month=${month}`),
   getPrices:     ()                      => api.get('/admin/prices'),
   updatePrice:   (id, price_per_hr)      => api.put(`/admin/prices/${id}`, { price_per_hr }),
+  // ✅ endpoint قائمة الموظفين لفلتر الفواتير
+  staff:         ()                      => api.get('/admin/staff'),
 };
 
 // Spaces
@@ -88,42 +90,36 @@ export const ordersAPI = {
 
 // Subscriptions
 export const subscriptionsAPI = {
-  getPlans:   ()       => api.get('/subscriptions/plans'),
-  createPlan: (data)   => api.post('/subscriptions/plans', data),
-  updatePlan: (id, data) => api.put(`/subscriptions/plans/${id}`, data),
-  deletePlan: (id)     => api.delete(`/subscriptions/plans/${id}`),
-  subscribe:  (body)   => api.post('/subscriptions/subscribe', body),
-  cancel:     (id)     => api.post(`/subscriptions/cancel/${id}`),
-  getAll:     ()       => api.get('/subscriptions/all'),
+  getPlans:   ()           => api.get('/subscriptions/plans'),
+  createPlan: (data)       => api.post('/subscriptions/plans', data),
+  updatePlan: (id, data)   => api.put(`/subscriptions/plans/${id}`, data),
+  deletePlan: (id)         => api.delete(`/subscriptions/plans/${id}`),
+  subscribe:  (body)       => api.post('/subscriptions/subscribe', body),
+  cancel:     (id)         => api.post(`/subscriptions/cancel/${id}`),
+  getAll:     ()           => api.get('/subscriptions/all'),
 };
 
 // Invoices
 export const invoicesAPI = {
-  create:           (body)   => api.post('/invoices', body),
-  getAll:           (params) => api.get('/invoices', { params }),
-  getOne:           (id)     => api.get(`/invoices/${id}`),
-  getClientInvoices:(params) => api.get('/invoices/my', { params }),
+  create:            (body)   => api.post('/invoices', body),
+  getAll:            (params) => api.get('/invoices', { params }),
+  getOne:            (id)     => api.get(`/invoices/${id}`),
+  getClientInvoices: (params) => api.get('/invoices/my', { params }),
 };
 
 // Staff
 export const staffAPI = {
-  getAll:             ()                    => api.get('/staff'),
-  create:             (data)                => api.post('/staff', data),
-  update:             (id, data)            => api.patch(`/staff/${id}`, data),
-  updatePermissions:  (id, data)            => api.patch(`/staff/${id}/permissions`, data),
-  changePassword:     (id, password)        => api.patch(`/staff/${id}/password`, { password }),
-  toggle:             (id)                  => api.patch(`/staff/${id}/toggle`),
-  myStats:            (date)                => api.get(`/staff/me/stats?date=${date || ''}`),
-  myInvoices:         (params)              => api.get('/staff/me/invoices', { params }),
-  staffStats:         (id, year, month)     => api.get(`/staff/${id}/stats?year=${year}&month=${month}`),
-  compare:            (year, month)         => api.get(`/staff/compare?year=${year}&month=${month}`),
-};
-
-export const staffAPI = {
-  create: (data) => axios.post("/api/admin/staff", data),
-  toggle: (id) => axios.patch(`/api/admin/staff/${id}/toggle`),
-  updatePermissions: (id, perms) => axios.patch(`/api/admin/staff/${id}/permissions`, perms),
-  delete: (id) => axios.delete(`/api/admin/staff/${id}`),
+  getAll:            ()                => api.get('/staff'),
+  create:            (data)            => api.post('/staff', data),
+  update:            (id, data)        => api.patch(`/staff/${id}`, data),
+  updatePermissions: (id, data)        => api.patch(`/staff/${id}/permissions`, data),
+  changePassword:    (id, password)    => api.patch(`/staff/${id}/password`, { password }),
+  toggle:            (id)              => api.patch(`/staff/${id}/toggle`),
+  delete:            (id)              => api.delete(`/staff/${id}`),           // ✅ مضاف
+  myStats:           (date)            => api.get(`/staff/me/stats?date=${date || ''}`),
+  myInvoices:        (params)          => api.get('/staff/me/invoices', { params }),
+  staffStats:        (id, year, month) => api.get(`/staff/${id}/stats?year=${year}&month=${month}`),
+  compare:           (year, month)     => api.get(`/staff/compare?year=${year}&month=${month}`),
 };
 
 export default api;
