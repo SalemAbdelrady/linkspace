@@ -111,6 +111,28 @@ router.patch('/:id/permissions', ...isAdmin, async (req, res) => {
   }
 });
 
+router.patch('/:id', ...isAdmin, async (req, res) => {
+  const { name, phone, password } = req.body;
+  try {
+    if (password && password.trim() !== "") {
+      const hash = await bcrypt.hash(password, 10);
+      await db.query(
+        'UPDATE users SET name=$1, phone=$2, password=$3 WHERE id=$4',
+        [name, phone, hash, req.params.id]
+      );
+    } else {
+      await db.query(
+        'UPDATE users SET name=$1, phone=$2 WHERE id=$3',
+        [name, phone, req.params.id]
+      );
+    }
+    res.json({ success: true });
+  } catch (err) {
+    if (err.code === '23505') return res.status(400).json({ error: 'الموبايل مسجل مسبقاً' });
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
 // PATCH /api/staff/:id — تعديل بيانات موظف
 router.patch('/:id', ...isAdmin, async (req, res) => {
   const { name, email,

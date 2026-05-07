@@ -863,6 +863,7 @@ export default function AdminDashboard() {
   const [newStaff, setNewStaff] = useState({ name: "", phone: "", password: "", role: "staff" });
   const [staffLoading, setStaffLoading] = useState(false);
   const [editingStaffPerms, setEditingStaffPerms] = useState(null); // { id, perms }
+  const [editingStaff, setEditingStaff] = useState(null);           // { id, name, phone, password }
 
 
   const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -1024,6 +1025,23 @@ export default function AdminDashboard() {
       loadStaff();
     } catch {
       toast.error("خطأ في الحذف");
+    }
+  }
+
+  async function saveEditStaff() {
+    if (!editingStaff.name || !editingStaff.phone)
+      return toast.error("الاسم والموبايل مطلوبان");
+    try {
+      const payload = { name: editingStaff.name, phone: editingStaff.phone };
+      if (editingStaff.password && editingStaff.password.trim() !== "")
+        payload.password = editingStaff.password;
+      await staffAPI.update(editingStaff.id, payload);
+      toast.success("✅ تم تحديث البيانات");
+      setEditingStaff(null);
+      loadStaffMgmt();
+      loadStaff();
+    } catch (err) {
+      toast.error(err.response?.data?.error || "خطأ في التعديل");
     }
   }
 
@@ -1247,6 +1265,89 @@ export default function AdminDashboard() {
           invoice={selectedInvoice}
           onClose={() => setSelectedInvoice(null)}
         />
+      )}
+
+      {/* ── مودال تعديل بيانات الموظف ── */}
+      {editingStaff && (
+        <div
+          style={{
+            position: "fixed", inset: 0,
+            background: "rgba(0,0,0,0.75)",
+            zIndex: 100, display: "flex",
+            alignItems: "center", justifyContent: "center", padding: 16,
+          }}
+          onClick={() => setEditingStaff(null)}
+        >
+          <div
+            style={{
+              background: "var(--surface)", borderRadius: 20,
+              padding: 24, maxWidth: 380, width: "100%",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontWeight: 800, fontSize: 17 }}>✏️ تعديل بيانات الموظف</div>
+              <button
+                onClick={() => setEditingStaff(null)}
+                style={{ background: "transparent", border: "none", color: "var(--muted)", fontSize: 22, cursor: "pointer" }}
+              >✕</button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div>
+                <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>الاسم</div>
+                <input
+                  className="input-field"
+                  value={editingStaff.name}
+                  onChange={(e) => setEditingStaff((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="اسم الموظف"
+                />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>الموبايل</div>
+                <input
+                  className="input-field"
+                  value={editingStaff.phone}
+                  onChange={(e) => setEditingStaff((p) => ({ ...p, phone: e.target.value }))}
+                  placeholder="01xxxxxxxxx"
+                />
+              </div>
+              <div>
+                <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>
+                  كلمة السر الجديدة{" "}
+                  <span style={{ opacity: 0.5 }}>(اتركها فارغة إذا لا تريد تغييرها)</span>
+                </div>
+                <input
+                  className="input-field"
+                  type="password"
+                  value={editingStaff.password}
+                  onChange={(e) => setEditingStaff((p) => ({ ...p, password: e.target.value }))}
+                  placeholder="••••••••"
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+              <button
+                className="btn btn-primary"
+                style={{ flex: 1, padding: "10px" }}
+                onClick={saveEditStaff}
+              >
+                حفظ التغييرات
+              </button>
+              <button
+                onClick={() => setEditingStaff(null)}
+                style={{
+                  padding: "10px 16px", borderRadius: 10,
+                  border: "1px solid var(--border)", background: "transparent",
+                  color: "var(--muted)", cursor: "pointer", fontSize: 13,
+                }}
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Top Bar */}
@@ -1781,6 +1882,20 @@ export default function AdminDashboard() {
                         </span>
                       </div>
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        <button
+                          onClick={() => setEditingStaff({ id: s.id, name: s.name, phone: s.phone, password: "" })}
+                          style={{
+                            padding: "5px 10px",
+                            borderRadius: 8,
+                            border: "1px solid rgba(0,212,170,0.3)",
+                            background: "transparent",
+                            color: "var(--accent)",
+                            fontSize: 11,
+                            cursor: "pointer",
+                          }}
+                        >
+                          ✏️ تعديل
+                        </button>
                         <button
                           onClick={() => toggleStaffActive(s)}
                           style={{
