@@ -200,4 +200,25 @@ router.get('/:id', auth, requireRole('staff', 'admin'), async (req, res) => {
   }
 });
 
+// في GET /api/invoices — أضف هذا الـ query للـ summary
+const { rows: summary } = await db.query(`
+  SELECT
+    COALESCE(SUM(total), 0)       AS total_amount,
+    COALESCE(SUM(cash_paid), 0)   AS total_cash,
+    COALESCE(SUM(wallet_paid), 0) AS total_wallet
+  FROM invoices
+  WHERE ($1::text IS NULL OR client_name ILIKE $1 OR client_phone ILIKE $1)
+    AND ($2::date IS NULL OR DATE(created_at) = $2)
+    AND ($3::int  IS NULL OR created_by = $3)
+`, [search || null, date || null, staff_id || null]);
+
+// وأضفها في الـ response:
+res.json({
+  invoices,
+  total,
+  total_amount: summary[0].total_amount,  // ← جديد
+  total_cash:   summary[0].total_cash,    // ← جديد
+  total_wallet: summary[0].total_wallet,  // ← جديد
+});
+
 module.exports = router;

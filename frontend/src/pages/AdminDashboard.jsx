@@ -810,6 +810,13 @@ export default function AdminDashboard() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [amounts, setAmounts] = useState({});
 
+  // أضف هذا مع باقي الـ states:
+  const [invoiceSummary, setInvoiceSummary] = useState({
+    total_amount: 0,
+    total_cash: 0,
+    total_wallet: 0,
+  });
+
   const [priceTab, setPriceTab] = useState("cowork");
   const [spaces, setSpaces] = useState({
     cowork: {
@@ -860,11 +867,15 @@ export default function AdminDashboard() {
 
   // ══ state إدارة الموظفين ══
   const [staffMgmt, setStaffMgmt] = useState([]);
-  const [newStaff, setNewStaff] = useState({ name: "", phone: "", password: "", role: "staff" });
+  const [newStaff, setNewStaff] = useState({
+    name: "",
+    phone: "",
+    password: "",
+    role: "staff",
+  });
   const [staffLoading, setStaffLoading] = useState(false);
   const [editingStaffPerms, setEditingStaffPerms] = useState(null); // { id, perms }
-  const [editingStaff, setEditingStaff] = useState(null);           // { id, name, phone, password }
-
+  const [editingStaff, setEditingStaff] = useState(null); // { id, name, phone, password }
 
   const [selectedInvoice, setSelectedInvoice] = useState(null);
 
@@ -1007,7 +1018,10 @@ export default function AdminDashboard() {
 
   async function saveStaffPerms() {
     try {
-      await staffAPI.updatePermissions(editingStaffPerms.id, editingStaffPerms.perms);
+      await staffAPI.updatePermissions(
+        editingStaffPerms.id,
+        editingStaffPerms.perms,
+      );
       toast.success("✅ تم حفظ الصلاحيات");
       setEditingStaffPerms(null);
       loadStaffMgmt();
@@ -1045,7 +1059,6 @@ export default function AdminDashboard() {
     }
   }
 
-
   async function loadInvoices() {
     try {
       const { data } = await invoicesAPI.getAll({
@@ -1056,9 +1069,89 @@ export default function AdminDashboard() {
       });
       setInvoices(data.invoices);
       setInvoiceTotal(data.total);
+      setInvoiceSummary({
+        total_amount: data.total_amount || 0,
+        total_cash: data.total_cash || 0,
+        total_wallet: data.total_wallet || 0,
+      });
     } catch {
       toast.error("خطأ في تحميل الفواتير");
     }
+  }
+
+  // ══════════════════════════════════════════════
+  // التعديل 6 — دالة تصدير Excel (أضفها مع باقي الدوال)
+  // ══════════════════════════════════════════════
+
+  function exportToExcel(data, date, staffId, staffList) {
+    if (!data || data.length === 0)
+      return toast.error("لا توجد فواتير للتصدير");
+
+    const staffName = staffId
+      ? staffList.find((s) => String(s.id) === staffId)?.name || ""
+      : "الكل";
+
+    // بناء CSV بالعربي
+    const headers = [
+      "رقم الفاتورة",
+      "العميل",
+      "الموبايل",
+      "الإجمالي",
+      "كاش",
+      "محفظة",
+      "الموظف",
+      "التاريخ",
+      "الوقت",
+    ];
+    const rows = data.map((inv) => [
+      inv.invoice_number,
+      inv.client_name,
+      inv.client_phone,
+      parseFloat(inv.total).toFixed(2),
+      parseFloat(inv.cash_paid || 0).toFixed(2),
+      parseFloat(inv.wallet_paid || 0).toFixed(2),
+      inv.created_by_name || "",
+      new Date(inv.created_at).toLocaleDateString("ar-EG"),
+      new Date(inv.created_at).toLocaleTimeString("ar-EG", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    ]);
+
+    // إضافة سطر الإجماليات في الآخر
+    const totalAmount = data.reduce((s, i) => s + parseFloat(i.total), 0);
+    const totalCash = data.reduce(
+      (s, i) => s + parseFloat(i.cash_paid || 0),
+      0,
+    );
+    const totalWallet = data.reduce(
+      (s, i) => s + parseFloat(i.wallet_paid || 0),
+      0,
+    );
+    rows.push([
+      "",
+      "الإجمالي",
+      "",
+      totalAmount.toFixed(2),
+      totalCash.toFixed(2),
+      totalWallet.toFixed(2),
+      "",
+      "",
+      "",
+    ]);
+
+    // BOM لدعم العربي في Excel
+    const BOM = "\uFEFF";
+    const csv = BOM + [headers, ...rows].map((r) => r.join(",")).join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `فواتير_${date || "كل_التواريخ"}_${staffName}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success("✅ تم تصدير الملف");
   }
 
   async function saveSpace(key) {
@@ -1096,7 +1189,7 @@ export default function AdminDashboard() {
         price: parseFloat(editingService.price),
       });
       setServices((prev) =>
-        prev.map((x) => (x.id === editingService.id ? editingService : x))
+        prev.map((x) => (x.id === editingService.id ? editingService : x)),
       );
       setEditingService(null);
       toast.success("تم التعديل ✅");
@@ -1137,13 +1230,13 @@ export default function AdminDashboard() {
         prev.map((x) =>
           x.id === u.id
             ? { ...x, balance: parseFloat(x.balance) + parseFloat(amount) }
-            : x
-        )
+            : x,
+        ),
       );
       setSelectedUser((prev) =>
         prev
           ? { ...prev, balance: parseFloat(prev.balance) + parseFloat(amount) }
-          : prev
+          : prev,
       );
     } catch (err) {
       toast.error(err.response?.data?.error || "خطأ");
@@ -1152,19 +1245,18 @@ export default function AdminDashboard() {
 
   async function addPoints(u) {
     const points = getAmount(u.id, "points");
-    if (!points || parseInt(points) <= 0)
-      return toast.error("أدخل نقاط صحيحة");
+    if (!points || parseInt(points) <= 0) return toast.error("أدخل نقاط صحيحة");
     try {
       await adminAPI.addPoints(u.id, parseInt(points));
       toast.success(`تم إضافة ${points} نقطة`);
       setAmount(u.id, "points", "");
       setUsers((prev) =>
         prev.map((x) =>
-          x.id === u.id ? { ...x, points: x.points + parseInt(points) } : x
-        )
+          x.id === u.id ? { ...x, points: x.points + parseInt(points) } : x,
+        ),
       );
       setSelectedUser((prev) =>
-        prev ? { ...prev, points: prev.points + parseInt(points) } : prev
+        prev ? { ...prev, points: prev.points + parseInt(points) } : prev,
       );
     } catch (err) {
       toast.error(err.response?.data?.error || "خطأ");
@@ -1191,8 +1283,7 @@ export default function AdminDashboard() {
         code: newCoupon.code.trim().toUpperCase() || null,
         discount: parseInt(newCoupon.discount),
         days: parseInt(newCoupon.days),
-        user_id:
-          newCoupon.targetType === "user" ? selectedCouponUser.id : null,
+        user_id: newCoupon.targetType === "user" ? selectedCouponUser.id : null,
       });
       toast.success(`✅ تم إنشاء الكوبون: ${data.coupon.code}`);
       setNewCoupon({
@@ -1271,57 +1362,111 @@ export default function AdminDashboard() {
       {editingStaff && (
         <div
           style={{
-            position: "fixed", inset: 0,
+            position: "fixed",
+            inset: 0,
             background: "rgba(0,0,0,0.75)",
-            zIndex: 100, display: "flex",
-            alignItems: "center", justifyContent: "center", padding: 16,
+            zIndex: 100,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
           }}
           onClick={() => setEditingStaff(null)}
         >
           <div
             style={{
-              background: "var(--surface)", borderRadius: 20,
-              padding: 24, maxWidth: 380, width: "100%",
+              background: "var(--surface)",
+              borderRadius: 20,
+              padding: 24,
+              maxWidth: 380,
+              width: "100%",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontWeight: 800, fontSize: 17 }}>✏️ تعديل بيانات الموظف</div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 20,
+              }}
+            >
+              <div style={{ fontWeight: 800, fontSize: 17 }}>
+                ✏️ تعديل بيانات الموظف
+              </div>
               <button
                 onClick={() => setEditingStaff(null)}
-                style={{ background: "transparent", border: "none", color: "var(--muted)", fontSize: 22, cursor: "pointer" }}
-              >✕</button>
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--muted)",
+                  fontSize: 22,
+                  cursor: "pointer",
+                }}
+              >
+                ✕
+              </button>
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
-                <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>الاسم</div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "var(--muted)",
+                    marginBottom: 6,
+                  }}
+                >
+                  الاسم
+                </div>
                 <input
                   className="input-field"
                   value={editingStaff.name}
-                  onChange={(e) => setEditingStaff((p) => ({ ...p, name: e.target.value }))}
+                  onChange={(e) =>
+                    setEditingStaff((p) => ({ ...p, name: e.target.value }))
+                  }
                   placeholder="اسم الموظف"
                 />
               </div>
               <div>
-                <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>الموبايل</div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "var(--muted)",
+                    marginBottom: 6,
+                  }}
+                >
+                  الموبايل
+                </div>
                 <input
                   className="input-field"
                   value={editingStaff.phone}
-                  onChange={(e) => setEditingStaff((p) => ({ ...p, phone: e.target.value }))}
+                  onChange={(e) =>
+                    setEditingStaff((p) => ({ ...p, phone: e.target.value }))
+                  }
                   placeholder="01xxxxxxxxx"
                 />
               </div>
               <div>
-                <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "var(--muted)",
+                    marginBottom: 6,
+                  }}
+                >
                   كلمة السر الجديدة{" "}
-                  <span style={{ opacity: 0.5 }}>(اتركها فارغة إذا لا تريد تغييرها)</span>
+                  <span style={{ opacity: 0.5 }}>
+                    (اتركها فارغة إذا لا تريد تغييرها)
+                  </span>
                 </div>
                 <input
                   className="input-field"
                   type="password"
                   value={editingStaff.password}
-                  onChange={(e) => setEditingStaff((p) => ({ ...p, password: e.target.value }))}
+                  onChange={(e) =>
+                    setEditingStaff((p) => ({ ...p, password: e.target.value }))
+                  }
                   placeholder="••••••••"
                 />
               </div>
@@ -1338,9 +1483,13 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setEditingStaff(null)}
                 style={{
-                  padding: "10px 16px", borderRadius: 10,
-                  border: "1px solid var(--border)", background: "transparent",
-                  color: "var(--muted)", cursor: "pointer", fontSize: 13,
+                  padding: "10px 16px",
+                  borderRadius: 10,
+                  border: "1px solid var(--border)",
+                  background: "transparent",
+                  color: "var(--muted)",
+                  cursor: "pointer",
+                  fontSize: 13,
                 }}
               >
                 إلغاء
@@ -1374,7 +1523,22 @@ export default function AdminDashboard() {
             لوحة التحكم — {user?.name}
           </div>
         </div>
+
         <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => navigate("/scanner")}
+            style={{
+              background: "transparent",
+              border: "1px solid var(--accent)",
+              color: "var(--accent)",
+              padding: "6px 12px",
+              borderRadius: 8,
+              fontSize: 12,
+              cursor: "pointer",
+            }}
+          >
+            📡 Scanner
+          </button>
           <button
             onClick={() => navigate("/subscriptions")}
             style={{
@@ -1443,22 +1607,6 @@ export default function AdminDashboard() {
             {label}
           </button>
         ))}
-        <button
-          onClick={() => navigate("/scanner")}
-          style={{
-            padding: "7px 16px",
-            borderRadius: 20,
-            border: "1px solid var(--border)",
-            fontSize: 13,
-            fontWeight: 600,
-            whiteSpace: "nowrap",
-            cursor: "pointer",
-            background: "transparent",
-            color: "var(--muted)",
-          }}
-        >
-          📡 Scanner
-        </button>
       </div>
 
       <div style={{ padding: 16 }}>
@@ -1584,12 +1732,12 @@ export default function AdminDashboard() {
                   <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                     {Array.from({ length: 24 }, (_, h) => {
                       const found = daily.by_hour.find(
-                        (r) => parseInt(r.hour) === h
+                        (r) => parseInt(r.hour) === h,
                       );
                       const count = found ? parseInt(found.visits) : 0;
                       const maxCount = Math.max(
                         ...daily.by_hour.map((r) => parseInt(r.visits)),
-                        1
+                        1,
                       );
                       const opacity = count
                         ? 0.2 + (count / maxCount) * 0.8
@@ -1768,42 +1916,97 @@ export default function AdminDashboard() {
             {/* ── إضافة موظف جديد ── */}
             <div className="section-title">إضافة موظف جديد</div>
             <div className="card" style={{ marginBottom: 16 }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 10 }}
+              >
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 10,
+                  }}
+                >
                   <div>
-                    <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>الاسم</div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: "var(--muted)",
+                        marginBottom: 6,
+                      }}
+                    >
+                      الاسم
+                    </div>
                     <input
                       className="input-field"
                       placeholder="اسم الموظف"
                       value={newStaff.name}
-                      onChange={(e) => setNewStaff((p) => ({ ...p, name: e.target.value }))}
+                      onChange={(e) =>
+                        setNewStaff((p) => ({ ...p, name: e.target.value }))
+                      }
                     />
                   </div>
                   <div>
-                    <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>الموبايل</div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: "var(--muted)",
+                        marginBottom: 6,
+                      }}
+                    >
+                      الموبايل
+                    </div>
                     <input
                       className="input-field"
                       placeholder="01xxxxxxxxx"
                       value={newStaff.phone}
-                      onChange={(e) => setNewStaff((p) => ({ ...p, phone: e.target.value }))}
+                      onChange={(e) =>
+                        setNewStaff((p) => ({ ...p, phone: e.target.value }))
+                      }
                     />
                   </div>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 10,
+                  }}
+                >
                   <div>
-                    <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>كلمة السر</div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: "var(--muted)",
+                        marginBottom: 6,
+                      }}
+                    >
+                      كلمة السر
+                    </div>
                     <input
                       className="input-field"
                       type="password"
                       placeholder="كلمة سر قوية"
                       value={newStaff.password}
-                      onChange={(e) => setNewStaff((p) => ({ ...p, password: e.target.value }))}
+                      onChange={(e) =>
+                        setNewStaff((p) => ({ ...p, password: e.target.value }))
+                      }
                     />
                   </div>
                   <div>
-                    <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>الدور</div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: "var(--muted)",
+                        marginBottom: 6,
+                      }}
+                    >
+                      الدور
+                    </div>
                     <div style={{ display: "flex", gap: 6 }}>
-                      {[["staff", "موظف"], ["admin", "أدمن"]].map(([role, label]) => (
+                      {[
+                        ["staff", "موظف"],
+                        ["admin", "أدمن"],
+                      ].map(([role, label]) => (
                         <button
                           key={role}
                           onClick={() => setNewStaff((p) => ({ ...p, role }))}
@@ -1815,9 +2018,18 @@ export default function AdminDashboard() {
                             fontSize: 12,
                             fontWeight: 600,
                             cursor: "pointer",
-                            borderColor: newStaff.role === role ? "var(--accent)" : "var(--border)",
-                            background: newStaff.role === role ? "rgba(0,212,170,0.12)" : "transparent",
-                            color: newStaff.role === role ? "var(--accent)" : "var(--muted)",
+                            borderColor:
+                              newStaff.role === role
+                                ? "var(--accent)"
+                                : "var(--border)",
+                            background:
+                              newStaff.role === role
+                                ? "rgba(0,212,170,0.12)"
+                                : "transparent",
+                            color:
+                              newStaff.role === role
+                                ? "var(--accent)"
+                                : "var(--muted)",
                           }}
                         >
                           {label}
@@ -1841,18 +2053,25 @@ export default function AdminDashboard() {
             <div className="section-title">الموظفون الحاليون</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {staffMgmt.length === 0 && (
-                <div style={{ textAlign: "center", color: "var(--muted)", padding: 24, fontSize: 13 }}>
+                <div
+                  style={{
+                    textAlign: "center",
+                    color: "var(--muted)",
+                    padding: 24,
+                    fontSize: 13,
+                  }}
+                >
                   لا يوجد موظفون بعد
                 </div>
               )}
               {staffMgmt.map((s) => {
                 const isEditingPerms = editingStaffPerms?.id === s.id;
                 const PERMS = [
-                  ["can_charge_wallet",  "💳 شحن المحفظة"],
-                  ["can_add_points",     "⭐ إضافة نقاط"],
-                  ["can_edit_prices",    "🏷️ تعديل الأسعار"],
+                  ["can_charge_wallet", "💳 شحن المحفظة"],
+                  ["can_add_points", "⭐ إضافة نقاط"],
+                  ["can_edit_prices", "🏷️ تعديل الأسعار"],
                   ["can_create_coupons", "🎫 إنشاء كوبونات"],
-                  ["can_view_reports",   "📊 عرض التقارير"],
+                  ["can_view_reports", "📊 عرض التقارير"],
                 ];
                 return (
                   <div
@@ -1861,10 +2080,27 @@ export default function AdminDashboard() {
                     style={{ opacity: s.is_active ? 1 : 0.55 }}
                   >
                     {/* رأس الكارد */}
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        marginBottom: 10,
+                      }}
+                    >
                       <div>
-                        <div style={{ fontWeight: 700, fontSize: 15 }}>{s.name}</div>
-                        <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>{s.phone}</div>
+                        <div style={{ fontWeight: 700, fontSize: 15 }}>
+                          {s.name}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: "var(--muted)",
+                            marginTop: 2,
+                          }}
+                        >
+                          {s.phone}
+                        </div>
                         <span
                           style={{
                             display: "inline-block",
@@ -1873,17 +2109,35 @@ export default function AdminDashboard() {
                             borderRadius: 20,
                             fontSize: 10,
                             fontWeight: 700,
-                            background: s.role === "admin" ? "rgba(139,92,246,0.15)" : "rgba(0,212,170,0.1)",
-                            color: s.role === "admin" ? "#a78bfa" : "var(--accent)",
+                            background:
+                              s.role === "admin"
+                                ? "rgba(139,92,246,0.15)"
+                                : "rgba(0,212,170,0.1)",
+                            color:
+                              s.role === "admin" ? "#a78bfa" : "var(--accent)",
                             border: `1px solid ${s.role === "admin" ? "rgba(139,92,246,0.3)" : "rgba(0,212,170,0.3)"}`,
                           }}
                         >
                           {s.role === "admin" ? "👑 أدمن" : "👤 موظف"}
                         </span>
                       </div>
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 6,
+                          flexWrap: "wrap",
+                          justifyContent: "flex-end",
+                        }}
+                      >
                         <button
-                          onClick={() => setEditingStaff({ id: s.id, name: s.name, phone: s.phone, password: "" })}
+                          onClick={() =>
+                            setEditingStaff({
+                              id: s.id,
+                              name: s.name,
+                              phone: s.phone,
+                              password: "",
+                            })
+                          }
                           style={{
                             padding: "5px 10px",
                             borderRadius: 8,
@@ -1917,11 +2171,13 @@ export default function AdminDashboard() {
                               setEditingStaffPerms({
                                 id: s.id,
                                 perms: {
-                                  can_charge_wallet:  s.can_charge_wallet  ?? false,
-                                  can_add_points:     s.can_add_points     ?? false,
-                                  can_edit_prices:    s.can_edit_prices    ?? false,
-                                  can_create_coupons: s.can_create_coupons ?? false,
-                                  can_view_reports:   s.can_view_reports   ?? false,
+                                  can_charge_wallet:
+                                    s.can_charge_wallet ?? false,
+                                  can_add_points: s.can_add_points ?? false,
+                                  can_edit_prices: s.can_edit_prices ?? false,
+                                  can_create_coupons:
+                                    s.can_create_coupons ?? false,
+                                  can_view_reports: s.can_view_reports ?? false,
                                 },
                               })
                             }
@@ -1964,10 +2220,23 @@ export default function AdminDashboard() {
                           marginTop: 4,
                         }}
                       >
-                        <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10, fontWeight: 600 }}>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: "var(--muted)",
+                            marginBottom: 10,
+                            fontWeight: 600,
+                          }}
+                        >
                           🛡️ صلاحيات {s.name}
                         </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 8,
+                          }}
+                        >
                           {PERMS.map(([key, label]) => (
                             <label
                               key={key}
@@ -1989,14 +2258,19 @@ export default function AdminDashboard() {
                                 onClick={() =>
                                   setEditingStaffPerms((prev) => ({
                                     ...prev,
-                                    perms: { ...prev.perms, [key]: !prev.perms[key] },
+                                    perms: {
+                                      ...prev.perms,
+                                      [key]: !prev.perms[key],
+                                    },
                                   }))
                                 }
                                 style={{
                                   width: 36,
                                   height: 20,
                                   borderRadius: 10,
-                                  background: editingStaffPerms.perms[key] ? "var(--accent)" : "var(--border)",
+                                  background: editingStaffPerms.perms[key]
+                                    ? "var(--accent)"
+                                    : "var(--border)",
                                   position: "relative",
                                   cursor: "pointer",
                                   transition: "background 0.2s",
@@ -2047,13 +2321,20 @@ export default function AdminDashboard() {
 
                     {/* عرض الصلاحيات بدون تعديل */}
                     {!isEditingPerms && s.role !== "admin" && (
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 6,
+                          flexWrap: "wrap",
+                          marginTop: 6,
+                        }}
+                      >
                         {[
-                          ["can_charge_wallet",  "💳"],
-                          ["can_add_points",     "⭐"],
-                          ["can_edit_prices",    "🏷️"],
+                          ["can_charge_wallet", "💳"],
+                          ["can_add_points", "⭐"],
+                          ["can_edit_prices", "🏷️"],
                           ["can_create_coupons", "🎫"],
-                          ["can_view_reports",   "📊"],
+                          ["can_view_reports", "📊"],
                         ].map(([key, icon]) =>
                           s[key] ? (
                             <span
@@ -2069,15 +2350,25 @@ export default function AdminDashboard() {
                             >
                               {icon}
                             </span>
-                          ) : null
+                          ) : null,
                         )}
-                        {!s.can_charge_wallet && !s.can_add_points && !s.can_edit_prices && !s.can_create_coupons && !s.can_view_reports && (
-                          <span style={{ fontSize: 11, color: "var(--muted)" }}>لا توجد صلاحيات إضافية</span>
-                        )}
+                        {!s.can_charge_wallet &&
+                          !s.can_add_points &&
+                          !s.can_edit_prices &&
+                          !s.can_create_coupons &&
+                          !s.can_view_reports && (
+                            <span
+                              style={{ fontSize: 11, color: "var(--muted)" }}
+                            >
+                              لا توجد صلاحيات إضافية
+                            </span>
+                          )}
                       </div>
                     )}
                     {s.role === "admin" && (
-                      <div style={{ fontSize: 11, color: "#a78bfa", marginTop: 4 }}>
+                      <div
+                        style={{ fontSize: 11, color: "#a78bfa", marginTop: 4 }}
+                      >
                         👑 صلاحيات كاملة (أدمن)
                       </div>
                     )}
@@ -2817,8 +3108,8 @@ export default function AdminDashboard() {
                 {newCoupon.targetType === "global"
                   ? "لأي عميل"
                   : selectedCouponUser
-                  ? `لـ ${selectedCouponUser.name}`
-                  : "حدد عميلاً"}
+                    ? `لـ ${selectedCouponUser.name}`
+                    : "حدد عميلاً"}
                 {newCoupon.code && (
                   <>
                     {" "}
@@ -2903,8 +3194,8 @@ export default function AdminDashboard() {
                 const status = c.is_used
                   ? "used"
                   : expired
-                  ? "expired"
-                  : "active";
+                    ? "expired"
+                    : "active";
                 const statusLabel = {
                   active: "✅ فعال",
                   used: "🔒 مستخدم",
@@ -3096,7 +3387,9 @@ export default function AdminDashboard() {
                           ? "var(--accent)"
                           : "transparent",
                       color:
-                        invoiceStaffId === String(s.id) ? "#000" : "var(--muted)",
+                        invoiceStaffId === String(s.id)
+                          ? "#000"
+                          : "var(--muted)",
                       opacity: s.is_active ? 1 : 0.5,
                     }}
                   >
@@ -3113,6 +3406,85 @@ export default function AdminDashboard() {
                 marginBottom: 10,
               }}
             >
+              // ══════════════════════════════════════════════
+              {/* ── Summary Bar ── */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr 1fr",
+                  gap: 8,
+                  marginBottom: 14,
+                }}
+              >
+                {[
+                  [
+                    "الإجمالي",
+                    `${parseFloat(invoiceSummary.total_amount).toFixed(2)} ج`,
+                    "var(--accent)",
+                  ],
+                  [
+                    "كاش",
+                    `${parseFloat(invoiceSummary.total_cash).toFixed(2)} ج`,
+                    "var(--warning)",
+                  ],
+                  [
+                    "محفظة",
+                    `${parseFloat(invoiceSummary.total_wallet).toFixed(2)} ج`,
+                    "#3b82f6",
+                  ],
+                ].map(([label, val, color]) => (
+                  <div
+                    key={label}
+                    style={{
+                      background: "var(--surface)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 12,
+                      padding: "10px 12px",
+                      textAlign: "center",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 10,
+                        color: "var(--muted)",
+                        marginBottom: 4,
+                      }}
+                    >
+                      {label}
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color }}>
+                      {val}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* ── زر تصدير Excel ── */}
+              <button
+                onClick={() =>
+                  exportToExcel(
+                    invoices,
+                    invoiceDate,
+                    invoiceStaffId,
+                    staffList,
+                  )
+                }
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "7px 14px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(34,197,94,0.4)",
+                  background: "rgba(34,197,94,0.08)",
+                  color: "#22c55e",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  marginBottom: 12,
+                }}
+              >
+                📥 تصدير Excel
+              </button>
               {invoiceTotal} فاتورة{" "}
               {invoiceDate &&
                 `— ${new Date(invoiceDate).toLocaleDateString("ar-EG", {
@@ -3217,7 +3589,9 @@ export default function AdminDashboard() {
                         ) : (
                           <span
                             className={`badge badge-${
-                              inv.payment_method === "wallet" ? "info" : "warning"
+                              inv.payment_method === "wallet"
+                                ? "info"
+                                : "warning"
                             }`}
                             style={{ fontSize: 10 }}
                           >
@@ -3279,8 +3653,7 @@ export default function AdminDashboard() {
                     borderRadius: 8,
                     border: "1px solid var(--border)",
                     background: "transparent",
-                    color:
-                      invoicePage === 1 ? "var(--muted)" : "var(--text)",
+                    color: invoicePage === 1 ? "var(--muted)" : "var(--text)",
                     cursor: invoicePage === 1 ? "default" : "pointer",
                   }}
                 >
