@@ -67,13 +67,22 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
     if (walletPaid > 0) {
       if (currentBalance < walletPaid) {
         await client.query('ROLLBACK');
-        return res.status(400).json({ error: `الرصيد غير كافٍ — الرصيد الحالي: ${currentBalance.toFixed(2)} ج` });
+        return res.status(400).json({
+          error: `الرصيد غير كافٍ — الرصيد الحالي: ${currentBalance.toFixed(2)} ج`,
+        });
       }
-      await client.query('UPDATE users SET balance = balance - $1 WHERE id = $2', [walletPaid, user_id]);
+      await client.query(
+        'UPDATE users SET balance = balance - $1 WHERE id = $2',
+        [walletPaid, user_id]
+      );
       await client.query(`
         INSERT INTO wallet_transactions (user_id, type, amount, description)
         VALUES ($1, 'debit', $2, $3)
-      `, [user_id, walletPaid, `فاتورة #${invoice_number}${cashPaid > 0 ? ` (+ ${cashPaid.toFixed(2)} ج كاش)` : ''}`]);
+      `, [
+        user_id,
+        walletPaid,
+        `فاتورة #${invoice_number}${cashPaid > 0 ? ` (+ ${cashPaid.toFixed(2)} ج كاش)` : ''}`,
+      ]);
     }
 
     const { rows } = await client.query(`
@@ -111,10 +120,10 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
 
     await client.query('COMMIT');
     res.status(201).json({
-      invoice     : rows[0],
-      wallet_paid : walletPaid,
-      cash_paid   : cashPaid,
-      new_balance : parseFloat((currentBalance - walletPaid).toFixed(2)),
+      invoice    : rows[0],
+      wallet_paid: walletPaid,
+      cash_paid  : cashPaid,
+      new_balance: parseFloat((currentBalance - walletPaid).toFixed(2)),
     });
 
   } catch (err) {
@@ -136,10 +145,18 @@ router.get('/my', auth, async (req, res) => {
       SELECT * FROM invoices WHERE user_id = $1
       ORDER BY created_at DESC LIMIT $2 OFFSET $3
     `, [req.user.id, limit, offset]);
+
     const { rows: countRows } = await db.query(
-      'SELECT COUNT(*) FROM invoices WHERE user_id = $1', [req.user.id]
+      'SELECT COUNT(*) FROM invoices WHERE user_id = $1',
+      [req.user.id]
     );
-    res.json({ invoices: rows, total: parseInt(countRows[0].count), page, limit });
+
+    res.json({
+      invoices: rows,
+      total   : parseInt(countRows[0].count),
+      page,
+      limit,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'خطأ في جلب الفواتير' });
@@ -148,14 +165,15 @@ router.get('/my', auth, async (req, res) => {
 
 // GET /api/invoices — كل الفواتير [staff/admin]
 router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
-  const page     = parseInt(req.query.page)  || 1;
+  const page     = parseInt(req.query.page) || 1;
   const limit    = 20;
   const offset   = (page - 1) * limit;
   const search   = req.query.search   || '';
   const date     = req.query.date     || '';
-  const staff_id = req.query.staff_id || ''; // ← فلتر الموظف
+  const staff_id = req.query.staff_id || '';
 
   try {
+    // ── الفواتير مع pagination ──
     const { rows } = await db.query(`
       SELECT i.*, u.name AS created_by_name, c.email AS client_email
       FROM invoices i
@@ -165,9 +183,11 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
         ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%')
         AND ($2 = '' OR DATE(i.created_at) = $2::date)
         AND ($3 = '' OR i.created_by = $3::integer)
-      ORDER BY i.created_at DESC LIMIT $4 OFFSET $5
+      ORDER BY i.created_at DESC
+      LIMIT $4 OFFSET $5
     `, [search, date, staff_id, limit, offset]);
 
+    // ── عدد الفواتير الكلي ──
     const { rows: countRows } = await db.query(`
       SELECT COUNT(*) FROM invoices i
       WHERE
@@ -176,7 +196,30 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
         AND ($3 = '' OR i.created_by = $3::integer)
     `, [search, date, staff_id]);
 
-    res.json({ invoices: rows, total: parseInt(countRows[0].count), page, limit });
+    // ✅ ── مجاميع الفواتير (للـ Summary Bar) ──
+    const { rows: summary } = await db.query(`
+      SELECT
+        COALESCE(SUM(i.total),        0) AS total_amount,
+        COALESCE(SUM(i.cash_paid),    0) AS total_cash,
+        COALESCE(SUM(i.wallet_paid),  0) AS total_wallet
+      FROM invoices i
+      WHERE
+        ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%')
+        AND ($2 = '' OR DATE(i.created_at) = $2::date)
+        AND ($3 = '' OR i.created_by = $3::integer)
+    `, [search, date, staff_id]);
+
+    res.json({
+      invoices    : rows,
+      total       : parseInt(countRows[0].count),
+      page,
+      limit,
+      // ✅ مجاميع تظهر في الـ Summary Bar في الفرونت
+      total_amount: parseFloat(summary[0].total_amount),
+      total_cash  : parseFloat(summary[0].total_cash),
+      total_wallet: parseFloat(summary[0].total_wallet),
+    });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'خطأ في جلب الفواتير' });
@@ -193,6 +236,7 @@ router.get('/:id', auth, requireRole('staff', 'admin'), async (req, res) => {
       LEFT JOIN users c ON c.id = i.user_id
       WHERE i.id = $1
     `, [req.params.id]);
+
     if (!rows[0]) return res.status(404).json({ error: 'فاتورة غير موجودة' });
     res.json({ invoice: rows[0] });
   } catch (err) {
@@ -200,25 +244,5 @@ router.get('/:id', auth, requireRole('staff', 'admin'), async (req, res) => {
   }
 });
 
-// في GET /api/invoices — أضف هذا الـ query للـ summary
-const { rows: summary } = await db.query(`
-  SELECT
-    COALESCE(SUM(total), 0)       AS total_amount,
-    COALESCE(SUM(cash_paid), 0)   AS total_cash,
-    COALESCE(SUM(wallet_paid), 0) AS total_wallet
-  FROM invoices
-  WHERE ($1::text IS NULL OR client_name ILIKE $1 OR client_phone ILIKE $1)
-    AND ($2::date IS NULL OR DATE(created_at) = $2)
-    AND ($3::int  IS NULL OR created_by = $3)
-`, [search || null, date || null, staff_id || null]);
-
-// وأضفها في الـ response:
-res.json({
-  invoices,
-  total,
-  total_amount: summary[0].total_amount,  // ← جديد
-  total_cash:   summary[0].total_cash,    // ← جديد
-  total_wallet: summary[0].total_wallet,  // ← جديد
-});
-
 module.exports = router;
+

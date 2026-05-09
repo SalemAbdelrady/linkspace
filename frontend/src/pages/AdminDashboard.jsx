@@ -810,13 +810,6 @@ export default function AdminDashboard() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [amounts, setAmounts] = useState({});
 
-  // أضف هذا مع باقي الـ states:
-  const [invoiceSummary, setInvoiceSummary] = useState({
-    total_amount: 0,
-    total_cash: 0,
-    total_wallet: 0,
-  });
-
   const [priceTab, setPriceTab] = useState("cowork");
   const [spaces, setSpaces] = useState({
     cowork: {
@@ -1058,6 +1051,14 @@ export default function AdminDashboard() {
       toast.error(err.response?.data?.error || "خطأ في التعديل");
     }
   }
+  
+  // أضف هذا مع باقي الـ states:
+  const [invoiceSummary, setInvoiceSummary] = useState({
+    total_amount: 0,
+    total_cash: 0,
+    total_wallet: 0,
+  });
+
 
   async function loadInvoices() {
     try {
