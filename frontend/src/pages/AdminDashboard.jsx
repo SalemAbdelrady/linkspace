@@ -1051,14 +1051,13 @@ export default function AdminDashboard() {
       toast.error(err.response?.data?.error || "خطأ في التعديل");
     }
   }
-  
+
   // أضف هذا مع باقي الـ states:
   const [invoiceSummary, setInvoiceSummary] = useState({
     total_amount: 0,
     total_cash: 0,
     total_wallet: 0,
   });
-
 
   async function loadInvoices() {
     try {
@@ -1082,17 +1081,28 @@ export default function AdminDashboard() {
 
   //
   // التعديل 6 — دالة تصدير Excel (أضفها مع باقي الدوال)
-  
 
-  function exportToExcel(data, date, staffId, staffList) {
-    if (!data || data.length === 0)
+  async function exportToExcel(data, date, staffId, staffList) {
+    // ✅ جيب كل الفواتير مش بس الصفحة الحالية
+    let allInvoices = data;
+    try {
+      const { data: res } = await invoicesAPI.exportAll({
+        search: invoiceSearch || undefined,
+        date: invoiceDate || undefined,
+        staff_id: invoiceStaffId || undefined,
+      });
+      allInvoices = res.invoices;
+    } catch {
+      toast.error("تعذر جلب كل الفواتير، سيتم تصدير الصفحة الحالية فقط");
+    }
+
+    if (!allInvoices || allInvoices.length === 0)
       return toast.error("لا توجد فواتير للتصدير");
 
     const staffName = staffId
       ? staffList.find((s) => String(s.id) === staffId)?.name || ""
       : "الكل";
 
-    // بناء CSV بالعربي
     const headers = [
       "رقم الفاتورة",
       "العميل",
@@ -1104,7 +1114,8 @@ export default function AdminDashboard() {
       "التاريخ",
       "الوقت",
     ];
-    const rows = data.map((inv) => [
+
+    const rows = allInvoices.map((inv) => [
       inv.invoice_number,
       inv.client_name,
       inv.client_phone,
@@ -1119,13 +1130,16 @@ export default function AdminDashboard() {
       }),
     ]);
 
-    // إضافة سطر الإجماليات في الآخر
-    const totalAmount = data.reduce((s, i) => s + parseFloat(i.total), 0);
-    const totalCash = data.reduce(
+    // سطر الإجماليات في الآخر
+    const totalAmount = allInvoices.reduce(
+      (s, i) => s + parseFloat(i.total),
+      0,
+    );
+    const totalCash = allInvoices.reduce(
       (s, i) => s + parseFloat(i.cash_paid || 0),
       0,
     );
-    const totalWallet = data.reduce(
+    const totalWallet = allInvoices.reduce(
       (s, i) => s + parseFloat(i.wallet_paid || 0),
       0,
     );
@@ -1141,7 +1155,6 @@ export default function AdminDashboard() {
       "",
     ]);
 
-    // BOM لدعم العربي في Excel
     const BOM = "\uFEFF";
     const csv = BOM + [headers, ...rows].map((r) => r.join(",")).join("\n");
 
@@ -3407,7 +3420,6 @@ export default function AdminDashboard() {
                 marginBottom: 10,
               }}
             >
-            
               {/* ── Summary Bar ── */}
               <div
                 style={{
@@ -3461,14 +3473,15 @@ export default function AdminDashboard() {
               </div>
               {/* ── زر تصدير Excel ── */}
               <button
-                onClick={() =>
+                onClick={() => {
+                  toast.loading("جارٍ تجهيز الملف...", { id: "export" });
                   exportToExcel(
                     invoices,
                     invoiceDate,
                     invoiceStaffId,
                     staffList,
-                  )
-                }
+                  ).finally(() => toast.dismiss("export"));
+                }}
                 style={{
                   display: "flex",
                   alignItems: "center",

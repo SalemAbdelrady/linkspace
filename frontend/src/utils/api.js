@@ -105,6 +105,7 @@ export const invoicesAPI = {
   getAll:            (params) => api.get('/invoices', { params }),
   getOne:            (id)     => api.get(`/invoices/${id}`),
   getClientInvoices: (params) => api.get('/invoices/my', { params }),
+  exportAll: (params) => api.get('/invoices/export', { params }),
 };
 
 // Staff

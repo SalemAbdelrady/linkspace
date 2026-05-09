@@ -226,6 +226,31 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
   }
 });
 
+// GET /api/invoices/export — كل الفواتير بدون pagination للتصدير
+router.get('/export', auth, requireRole('staff', 'admin'), async (req, res) => {
+  const search   = req.query.search   || '';
+  const date     = req.query.date     || '';
+  const staff_id = req.query.staff_id || '';
+
+  try {
+    const { rows } = await db.query(`
+      SELECT i.*, u.name AS created_by_name
+      FROM invoices i
+      LEFT JOIN users u ON u.id = i.created_by
+      WHERE
+        ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%')
+        AND ($2 = '' OR DATE(i.created_at) = $2::date)
+        AND ($3 = '' OR i.created_by = $3::integer)
+      ORDER BY i.created_at DESC
+    `, [search, date, staff_id]);
+
+    res.json({ invoices: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'خطأ في التصدير' });
+  }
+});
+
 // GET /api/invoices/:id [staff/admin]
 router.get('/:id', auth, requireRole('staff', 'admin'), async (req, res) => {
   try {
