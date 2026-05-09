@@ -1080,9 +1080,9 @@ export default function AdminDashboard() {
     }
   }
 
-  // ══════════════════════════════════════════════
+  //
   // التعديل 6 — دالة تصدير Excel (أضفها مع باقي الدوال)
-  // ══════════════════════════════════════════════
+  
 
   function exportToExcel(data, date, staffId, staffList) {
     if (!data || data.length === 0)
@@ -3407,7 +3407,7 @@ export default function AdminDashboard() {
                 marginBottom: 10,
               }}
             >
-              // ══════════════════════════════════════════════
+            
               {/* ── Summary Bar ── */}
               <div
                 style={{
