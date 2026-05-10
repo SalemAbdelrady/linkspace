@@ -6,6 +6,9 @@ const { body, validationResult } = require('express-validator');
 const db      = require('../config/db');
 const { auth } = require('../middleware/auth');
 
+// ✅ في الأعلى — مش في آخر الملف
+const { uploadAvatar } = require('../utils/cloudinary');
+
 // ── Resend email client ───────────────────────────────────────────────
 const { Resend } = require('resend');
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -17,16 +20,14 @@ const FROM_EMAIL = 'onboarding@resend.dev';
 function generateQrCode() {
   return Math.floor(1000000 + Math.random() * 9000000).toString();
 }
-
 function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
-
 function isValidName(name) {
   return /^[\u0600-\u06FF\u0750-\u077F a-zA-Z\s'-]{2,100}$/.test(name.trim());
 }
 
-// ✅ helper آمن — يرجع null لو مفيش qr_code (الموظفين مثلاً)
+// ✅ helper آمن — يرجع null لو مفيش qr_code
 async function safeQRCode(qr_code) {
   if (!qr_code) return null;
   try {
@@ -40,9 +41,7 @@ async function sendEmail(to, subject, html) {
   try {
     await resend.emails.send({
       from: `${APP_NAME} <${FROM_EMAIL}>`,
-      to,
-      subject,
-      html,
+      to, subject, html,
     });
   } catch (err) {
     console.error('Email send error:', err.message);
@@ -80,14 +79,16 @@ router.post('/register', [
     const { rows } = await db.query(`
       INSERT INTO users (name, phone, password, role, qr_code, email)
       VALUES ($1, $2, $3, 'client', $4, $5)
-      RETURNING id, name, phone, email, role, balance, points, qr_code
+      RETURNING id, name, phone, email, role, balance, points, qr_code, avatar_url
     `, [name.trim(), phone, hash, qrToken, email || null]);
 
-    const user     = rows[0];
+    const user      = rows[0];
     const qrDataUrl = await safeQRCode(user.qr_code);
-    const token    = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-    });
+    const token     = jwt.sign(
+      { id: user.id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    );
 
     if (email) {
       await sendEmail(email, `مرحباً بك في ${APP_NAME} 🎉`, `
@@ -128,11 +129,12 @@ router.post('/login', [
       return res.status(401).json({ error: 'رقم الموبايل أو كلمة السر غلط' });
     }
 
-    // ✅ آمن — الموظف مش عنده qr_code فبيرجع null
     const qrDataUrl = await safeQRCode(user.qr_code);
-    const token     = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-    });
+    const token     = jwt.sign(
+      { id: user.id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    );
 
     const { password: _, ...safeUser } = user;
     res.json({ token, user: { ...safeUser, qr_image: qrDataUrl } });
@@ -143,12 +145,23 @@ router.post('/login', [
 });
 
 // ── GET /api/auth/me ──────────────────────────────────────────────────
+// ✅ الإصلاح الجذري — يجيب البيانات من DB مش من req.user
+// req.user جاي من الـ middleware وممكن يكون قديم أو ناقص email/avatar_url
 router.get('/me', auth, async (req, res) => {
   try {
-    // ✅ آمن — الموظف مش عنده qr_code
-    const qrDataUrl = await safeQRCode(req.user.qr_code);
-    res.json({ user: { ...req.user, qr_image: qrDataUrl } });
+    const { rows } = await db.query(`
+      SELECT id, name, phone, email, role,
+             balance, points, qr_code, avatar_url, is_active
+      FROM users
+      WHERE id = $1 AND is_active = true
+    `, [req.user.id]);
+
+    if (!rows[0]) return res.status(404).json({ error: 'المستخدم غير موجود' });
+
+    const qrDataUrl = await safeQRCode(rows[0].qr_code);
+    res.json({ user: { ...rows[0], qr_image: qrDataUrl } });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
@@ -189,10 +202,12 @@ router.patch('/settings', auth, async (req, res) => {
 
   try {
     const { rows } = await db.query(
-      `UPDATE users SET ${updates.join(', ')} WHERE id = $${idx} RETURNING id, name, phone, email, role, balance, points, qr_code`,
+      // ✅ avatar_url مضاف في الـ RETURNING
+      `UPDATE users SET ${updates.join(', ')}
+       WHERE id = $${idx}
+       RETURNING id, name, phone, email, role, balance, points, qr_code, avatar_url`,
       values
     );
-    // ✅ آمن
     const qrDataUrl = await safeQRCode(rows[0].qr_code);
     res.json({ user: { ...rows[0], qr_image: qrDataUrl } });
   } catch (err) {
@@ -211,12 +226,17 @@ router.patch('/change-password', auth, async (req, res) => {
     return res.status(400).json({ error: 'كلمة السر الجديدة 6 أحرف على الأقل' });
   }
   try {
-    const { rows } = await db.query('SELECT password FROM users WHERE id = $1', [req.user.id]);
+    const { rows } = await db.query(
+      'SELECT password FROM users WHERE id = $1', [req.user.id]
+    );
     const valid = await bcrypt.compare(current_password, rows[0].password);
     if (!valid) return res.status(401).json({ error: 'كلمة السر الحالية غلط' });
 
     const hash = await bcrypt.hash(new_password, 12);
-    await db.query('UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2', [hash, req.user.id]);
+    await db.query(
+      'UPDATE users SET password = $1, updated_at = NOW() WHERE id = $2',
+      [hash, req.user.id]
+    );
     res.json({ success: true });
   } catch (err) {
     console.error(err);
@@ -279,34 +299,49 @@ router.post('/reset-password', async (req, res) => {
   }
 
   try {
-    const { rows } = await db.query(
-      `SELECT id FROM users
-       WHERE email = $1
-         AND reset_otp = $2
-         AND reset_otp_expires > NOW()
-         AND is_active = true`,
-      [email, otp]
-    );
+    const { rows } = await db.query(`
+      SELECT id FROM users
+      WHERE email = $1
+        AND reset_otp = $2
+        AND reset_otp_expires > NOW()
+        AND is_active = true
+    `, [email, otp]);
 
     if (!rows[0]) {
       return res.status(400).json({ error: 'الكود غلط أو منتهي الصلاحية' });
     }
 
     const hash = await bcrypt.hash(new_password, 12);
-    await db.query(
-      `UPDATE users SET
-         password          = $1,
-         reset_otp         = NULL,
-         reset_otp_expires = NULL,
-         updated_at        = NOW()
-       WHERE id = $2`,
-      [hash, rows[0].id]
-    );
+    await db.query(`
+      UPDATE users SET
+        password          = $1,
+        reset_otp         = NULL,
+        reset_otp_expires = NULL,
+        updated_at        = NOW()
+      WHERE id = $2
+    `, [hash, rows[0].id]);
 
     res.json({ success: true, message: 'تم تغيير كلمة السر بنجاح' });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// ── POST /api/auth/avatar ─────────────────────────────────────────────
+router.post('/avatar', auth, uploadAvatar.single('avatar'), async (req, res) => {
+  try {
+    const avatar_url = req.file?.path;
+    if (!avatar_url) return res.status(400).json({ error: 'لم يتم رفع الصورة' });
+
+    await db.query(
+      'UPDATE users SET avatar_url = $1, updated_at = NOW() WHERE id = $2',
+      [avatar_url, req.user.id]
+    );
+    res.json({ avatar_url });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'خطأ في رفع الصورة' });
   }
 });
 
