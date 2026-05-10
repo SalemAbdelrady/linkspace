@@ -163,76 +163,97 @@ function UserModal({
                 src={u.avatar_url}
                 alt={u.name}
                 style={{
-                  width: 52, height: 52, borderRadius: "50%",
+                  width: 52,
+                  height: 52,
+                  borderRadius: "50%",
                   objectFit: "cover",
                   border: "2px solid var(--accent)",
                   flexShrink: 0,
                 }}
               />
             ) : (
-              <div style={{
-                width: 52, height: 52, borderRadius: "50%",
-                background: "linear-gradient(135deg, var(--accent), var(--accent2))",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontWeight: 800, fontSize: 18, color: "#fff", flexShrink: 0,
-              }}>
-                {(u.name || "U").split(" ").slice(0, 2).map(w => w[0]).join("")}
-              </div>
-            )}
-          <div>
-            <div style={{ fontWeight: 800, fontSize: 18 }}>{u.name}</div>
-            <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>
-              {u.phone}
-            </div>
-            {u.email ? (
-              <div style={{ marginBottom: 12 }}>
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: "var(--muted)",
-                    marginBottom: 4,
-                  }}
-                >
-                  البريد الإلكتروني
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span
-                    style={{
-                      fontSize: 14,
-                      color: "var(--accent)",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {u.email}
-                  </span>
-                  <a
-                    href={`mailto:${u.email}`}
-                    className="badge badge-info"
-                    style={{ textDecoration: "none" }}
-                  >
-                    إرسال ✉️
-                  </a>
-                </div>
-              </div>
-            ) : (
               <div
                 style={{
-                  fontSize: 12,
-                  color: "var(--danger)",
-                  marginBottom: 12,
+                  width: 52,
+                  height: 52,
+                  borderRadius: "50%",
+                  background:
+                    "linear-gradient(135deg, var(--accent), var(--accent2))",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 800,
+                  fontSize: 18,
+                  color: "#fff",
+                  flexShrink: 0,
                 }}
               >
-                ⚠️ لا يوجد بريد إلكتروني مسجل لهذا العميل
+                {(u.name || "U")
+                  .split(" ")
+                  .slice(0, 2)
+                  .map((w) => w[0])
+                  .join("")}
               </div>
             )}
-            <span
-              className={`badge badge-${isInSession ? "success" : "danger"}`}
-              style={{ marginTop: 6, display: "inline-block" }}
-            >
-              {isInSession ? "🟢 نشط الآن" : "⚫ غير نشط"}
-            </span>
-          </div>
-          </div> {/* ✅ إغلاق div الصورة + البيانات */}
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 18 }}>{u.name}</div>
+              <div
+                style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}
+              >
+                {u.phone}
+              </div>
+              {u.email ? (
+                <div style={{ marginBottom: 12 }}>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "var(--muted)",
+                      marginBottom: 4,
+                    }}
+                  >
+                    البريد الإلكتروني
+                  </div>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 14,
+                        color: "var(--accent)",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {u.email}
+                    </span>
+                    <a
+                      href={`mailto:${u.email}`}
+                      className="badge badge-info"
+                      style={{ textDecoration: "none" }}
+                    >
+                      إرسال ✉️
+                    </a>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "var(--danger)",
+                    marginBottom: 12,
+                  }}
+                >
+                  ⚠️ لا يوجد بريد إلكتروني مسجل لهذا العميل
+                </div>
+              )}
+              <span
+                className={`badge badge-${isInSession ? "success" : "danger"}`}
+                style={{ marginTop: 6, display: "inline-block" }}
+              >
+                {isInSession ? "🟢 نشط الآن" : "⚫ غير نشط"}
+              </span>
+            </div>
+          </div>{" "}
+          {/* ✅ إغلاق div الصورة + البيانات */}
           <button
             onClick={onClose}
             style={{
@@ -1075,14 +1096,13 @@ export default function AdminDashboard() {
       toast.error(err.response?.data?.error || "خطأ في التعديل");
     }
   }
-  
+
   // أضف هذا مع باقي الـ states:
   const [invoiceSummary, setInvoiceSummary] = useState({
     total_amount: 0,
     total_cash: 0,
     total_wallet: 0,
   });
-
 
   async function loadInvoices() {
     try {
@@ -1104,19 +1124,29 @@ export default function AdminDashboard() {
     }
   }
 
-  // ══════════════════════════════════════════════
   // التعديل 6 — دالة تصدير Excel (أضفها مع باقي الدوال)
-  // ══════════════════════════════════════════════
 
-  function exportToExcel(data, date, staffId, staffList) {
-    if (!data || data.length === 0)
+  async function exportToExcel(data, date, staffId, staffList) {
+    // ✅ جيب كل الفواتير مش بس الصفحة الحالية
+    let allInvoices = data;
+    try {
+      const { data: res } = await invoicesAPI.exportAll({
+        search: invoiceSearch || undefined,
+        date: invoiceDate || undefined,
+        staff_id: invoiceStaffId || undefined,
+      });
+      allInvoices = res.invoices;
+    } catch {
+      toast.error("تعذر جلب كل الفواتير، سيتم تصدير الصفحة الحالية فقط");
+    }
+
+    if (!allInvoices || allInvoices.length === 0)
       return toast.error("لا توجد فواتير للتصدير");
 
     const staffName = staffId
       ? staffList.find((s) => String(s.id) === staffId)?.name || ""
       : "الكل";
 
-    // بناء CSV بالعربي
     const headers = [
       "رقم الفاتورة",
       "العميل",
@@ -1128,7 +1158,8 @@ export default function AdminDashboard() {
       "التاريخ",
       "الوقت",
     ];
-    const rows = data.map((inv) => [
+
+    const rows = allInvoices.map((inv) => [
       inv.invoice_number,
       inv.client_name,
       inv.client_phone,
@@ -1143,13 +1174,16 @@ export default function AdminDashboard() {
       }),
     ]);
 
-    // إضافة سطر الإجماليات في الآخر
-    const totalAmount = data.reduce((s, i) => s + parseFloat(i.total), 0);
-    const totalCash = data.reduce(
+    // سطر الإجماليات في الآخر
+    const totalAmount = allInvoices.reduce(
+      (s, i) => s + parseFloat(i.total),
+      0,
+    );
+    const totalCash = allInvoices.reduce(
       (s, i) => s + parseFloat(i.cash_paid || 0),
       0,
     );
-    const totalWallet = data.reduce(
+    const totalWallet = allInvoices.reduce(
       (s, i) => s + parseFloat(i.wallet_paid || 0),
       0,
     );
@@ -1165,7 +1199,6 @@ export default function AdminDashboard() {
       "",
     ]);
 
-    // BOM لدعم العربي في Excel
     const BOM = "\uFEFF";
     const csv = BOM + [headers, ...rows].map((r) => r.join(",")).join("\n");
 
@@ -1178,7 +1211,6 @@ export default function AdminDashboard() {
     URL.revokeObjectURL(url);
     toast.success("✅ تم تصدير الملف");
   }
-
   async function saveSpace(key) {
     setLoadingSpaces(true);
     try {
@@ -1842,55 +1874,78 @@ export default function AdminDashboard() {
                       }}
                     >
                       {/* ✅ صورة العميل في القائمة */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                        }}
+                      >
                         {u.avatar_url ? (
                           <img
                             src={u.avatar_url}
                             alt={u.name}
                             style={{
-                              width: 40, height: 40, borderRadius: "50%",
+                              width: 40,
+                              height: 40,
+                              borderRadius: "50%",
                               objectFit: "cover",
                               border: "1.5px solid var(--accent)",
                               flexShrink: 0,
                             }}
                           />
                         ) : (
-                          <div style={{
-                            width: 40, height: 40, borderRadius: "50%",
-                            background: "linear-gradient(135deg, var(--accent), var(--accent2))",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            fontWeight: 700, fontSize: 14, color: "#fff", flexShrink: 0,
-                          }}>
-                            {(u.name || "U").split(" ").slice(0, 2).map(w => w[0]).join("")}
+                          <div
+                            style={{
+                              width: 40,
+                              height: 40,
+                              borderRadius: "50%",
+                              background:
+                                "linear-gradient(135deg, var(--accent), var(--accent2))",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontWeight: 700,
+                              fontSize: 14,
+                              color: "#fff",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {(u.name || "U")
+                              .split(" ")
+                              .slice(0, 2)
+                              .map((w) => w[0])
+                              .join("")}
                           </div>
                         )}
-                      <div>
-                        <div style={{ fontWeight: 700 }}>{u.name}</div>
-                        <div
-                          style={{
-                            fontSize: 12,
-                            color: "var(--muted)",
-                            marginTop: 2,
-                          }}
-                        >
-                          {u.phone}
-                        </div>
-                        {u.email && (
+                        <div>
+                          <div style={{ fontWeight: 700 }}>{u.name}</div>
                           <div
                             style={{
                               fontSize: 12,
-                              color: "var(--accent)",
-                              marginTop: 4,
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 4,
+                              color: "var(--muted)",
+                              marginTop: 2,
                             }}
                           >
-                            <span style={{ fontSize: 10 }}>✉️</span> {u.email}
+                            {u.phone}
                           </div>
-                        )}
-                      </div>
-                      </div> {/* إغلاق div الصورة + البيانات */}
+                          {u.email && (
+                            <div
+                              style={{
+                                fontSize: 12,
+                                color: "var(--accent)",
+                                marginTop: 4,
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 4,
+                              }}
+                            >
+                              <span style={{ fontSize: 10 }}>✉️</span> {u.email}
+                            </div>
+                          )}
+                        </div>
+                      </div>{" "}
+                      {/* إغلاق div الصورة + البيانات */}
                       <div
                         style={{
                           display: "flex",
@@ -3455,7 +3510,6 @@ export default function AdminDashboard() {
                 marginBottom: 10,
               }}
             >
-              // ══════════════════════════════════════════════
               {/* ── Summary Bar ── */}
               <div
                 style={{
@@ -3509,14 +3563,15 @@ export default function AdminDashboard() {
               </div>
               {/* ── زر تصدير Excel ── */}
               <button
-                onClick={() =>
+                onClick={() => {
+                  toast.loading("جارٍ تجهيز الملف...", { id: "export" });
                   exportToExcel(
                     invoices,
                     invoiceDate,
                     invoiceStaffId,
                     staffList,
-                  )
-                }
+                  ).finally(() => toast.dismiss("export"));
+                }}
                 style={{
                   display: "flex",
                   alignItems: "center",
