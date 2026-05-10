@@ -881,6 +881,7 @@ export default function AdminDashboard() {
 
   const [daily, setDaily] = useState(null);
   const [monthly, setMonthly] = useState(null);
+  const [usersStats, setUsersStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [activeSessionIds, setActiveSessionIds] = useState(new Set());
   const [search, setSearch] = useState("");
@@ -1019,6 +1020,7 @@ export default function AdminDashboard() {
     try {
       const { data } = await adminAPI.users(search);
       setUsers(data.users);
+      if (data.stats) setUsersStats(data.stats);
     } catch {
       toast.error("خطأ في تحميل العملاء");
     }
@@ -1890,17 +1892,57 @@ export default function AdminDashboard() {
             )}
           </div>
         )}
-
         {/* ══ USERS ══ */}
         {tab === "users" && (
           <div className="fade-up">
-            <div className="input-wrap">
-              <input
-                className="input-field"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="بحث بالاسم أو الموبايل..."
-              />
+
+            {/* ── Stats Bar ── */}
+            {usersStats && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(4,1fr)",
+                  gap: 8,
+                  marginBottom: 14,
+                }}
+              >
+                {[
+                  ["إجمالي العملاء", usersStats.total_clients,                                    "var(--text)"],
+                  ["نشطون الآن",     usersStats.active_clients,                                   "var(--success)"],
+                  ["جدد هذا الشهر",  usersStats.new_this_month,                                   "var(--accent)"],
+                  ["إجمالي الأرصدة", `${parseFloat(usersStats.total_balance || 0).toFixed(0)} ج`, "var(--warning)"],
+                ].map(([label, val, color]) => (
+                  <div key={label} className="card" style={{ padding: "10px 6px", textAlign: "center" }}>
+                    <div style={{ fontSize: 9, color: "var(--muted)", marginBottom: 4 }}>{label}</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color }}>{val}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ── صف البحث + زر التصدير ── */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center" }}>
+              <div className="input-wrap" style={{ flex: 1, marginBottom: 0 }}>
+                <input
+                  className="input-field"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="بحث بالاسم أو الموبايل..."
+                />
+              </div>
+              <button
+                onClick={exportUsersToExcel}
+                style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  padding: "9px 14px", borderRadius: 10, flexShrink: 0,
+                  border: "1px solid rgba(34,197,94,0.4)",
+                  background: "rgba(34,197,94,0.08)",
+                  color: "#22c55e", fontSize: 12, fontWeight: 600,
+                  cursor: "pointer", whiteSpace: "nowrap",
+                }}
+              >
+                📥 Excel
+              </button>
             </div>
             <div
               style={{
@@ -1920,9 +1962,6 @@ export default function AdminDashboard() {
                     style={{
                       cursor: "pointer",
                       transition: "border-color 0.2s",
-                      // ✅ border أحمر خفيف لو العميل محظور
-                      borderColor: !u.is_active ? "rgba(255,71,87,0.4)" : undefined,
-                      background: !u.is_active ? "rgba(255,71,87,0.03)" : undefined,
                     }}
                   >
                     <div
@@ -2012,18 +2051,6 @@ export default function AdminDashboard() {
                           gap: 8,
                         }}
                       >
-                        {/* ✅ بادج الحظر يظهر بوضوح لو محظور */}
-                        {!u.is_active && (
-                          <span style={{
-                            padding: "2px 8px", borderRadius: 20,
-                            fontSize: 10, fontWeight: 700,
-                            background: "rgba(255,71,87,0.15)",
-                            color: "#ff4757",
-                            border: "1px solid rgba(255,71,87,0.3)",
-                          }}>
-                            🚫 محظور
-                          </span>
-                        )}
                         <span
                           className={`badge badge-${isInSession ? "success" : "danger"}`}
                         >
