@@ -21,7 +21,6 @@ function ProgressBar({ value, max }) {
 const SPACE_ICONS = { cowork: '🖥️', meeting: '🤝', lessons: '📚' };
 
 // ── LiveTimer ─────────────────────────────────────────────────────────
-// ✅ إصلاح 2: يأخذ pricePerHr من الجلسة نفسها مش من coworkSpace
 function LiveTimer({ checkIn, pricePerHr, maxHours = 4, spaceName, spaceKey }) {
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
@@ -60,10 +59,9 @@ function ClientOrderModal({ sessionId, onClose, onOrderAdded }) {
   const [myOrders,    setMyOrders]    = useState([]);
   const [confirmItem, setConfirmItem] = useState(null);
   const [saving,      setSaving]      = useState(false);
-  const [loading,     setLoading]     = useState(true); // ✅ إصلاح 1
+  const [loading,     setLoading]     = useState(true);
 
   useEffect(() => {
-    // ✅ إصلاح 1: جيب الخدمات صح
     Promise.all([
       servicesAPI.getAll(),
       api.get(`/orders/session/${sessionId}`),
@@ -95,7 +93,6 @@ function ClientOrderModal({ sessionId, onClose, onOrderAdded }) {
     }
   }
 
-  // ✅ إصلاح 3: اعرض كل الطلبات (staff + client)
   const clientOrders = myOrders.filter(o => o.added_by === 'client');
   const staffOrders  = myOrders.filter(o => o.added_by === 'staff');
   const myTotal      = clientOrders.reduce((sum, o) => sum + parseFloat(o.price) * o.qty, 0);
@@ -106,7 +103,6 @@ function ClientOrderModal({ sessionId, onClose, onOrderAdded }) {
       <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 16px 16px', padding: 20, width: '100%', maxWidth: 440, maxHeight: '85vh', overflowY: 'auto' }}
         onClick={e => e.stopPropagation()}>
 
-        {/* نافذة تأكيد الإضافة */}
         {confirmItem && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
             <div style={{ background: 'var(--surface)', borderRadius: 16, padding: 24, maxWidth: 320, width: '100%', textAlign: 'center' }}>
@@ -140,7 +136,6 @@ function ClientOrderModal({ sessionId, onClose, onOrderAdded }) {
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 22, cursor: 'pointer' }}>✕</button>
         </div>
 
-        {/* ✅ إصلاح 3: الطلبات المضافة من Staff */}
         {staffOrders.length > 0 && (
           <div style={{ marginBottom: 12, padding: '10px 14px', background: 'rgba(255,165,2,0.06)', border: '1px solid rgba(255,165,2,0.2)', borderRadius: 12 }}>
             <div style={{ fontSize: 12, color: 'var(--warning)', marginBottom: 8, fontWeight: 600 }}>👷 مضاف من الطاقم</div>
@@ -153,7 +148,6 @@ function ClientOrderModal({ sessionId, onClose, onOrderAdded }) {
           </div>
         )}
 
-        {/* طلباتي */}
         {clientOrders.length > 0 && (
           <div style={{ marginBottom: 16, padding: '10px 14px', background: 'rgba(0,212,170,0.06)', border: '1px solid rgba(0,212,170,0.2)', borderRadius: 12 }}>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8, fontWeight: 600 }}>👤 طلباتي</div>
@@ -170,7 +164,6 @@ function ClientOrderModal({ sessionId, onClose, onOrderAdded }) {
           </div>
         )}
 
-        {/* ✅ إصلاح 1: الخدمات المتاحة */}
         <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10, fontWeight: 600 }}>اختر ما تريد</div>
         {loading ? (
           <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 20 }}>جارٍ التحميل...</div>
@@ -321,7 +314,7 @@ export default function ClientDashboard() {
   const [coupons,         setCoupons]         = useState([]);
   const [activeSession,   setActiveSession]   = useState(null);
   const [loadingSessions, setLoadingSessions] = useState(true);
-  const [spaces,          setSpaces]          = useState([]); // ✅ إصلاح 2
+  const [spaces,          setSpaces]          = useState([]);
 
   const [invoices,        setInvoices]        = useState([]);
   const [invoiceTotal,    setInvoiceTotal]    = useState(0);
@@ -333,12 +326,11 @@ export default function ClientDashboard() {
   const [loadingRecentInvoices, setLoadingRecentInvoices] = useState(true);
 
   const [showOrderModal, setShowOrderModal] = useState(false);
-  const [allOrdersCount, setAllOrdersCount] = useState(0); // ✅ إصلاح 3: كل الطلبات
+  const [allOrdersCount, setAllOrdersCount] = useState(0);
 
   useEffect(() => { loadData(); loadSpaces(); loadRecentInvoices(); }, []);
   useEffect(() => { if (tab === 'invoices') loadInvoices(); }, [tab, invoicePage]);
 
-  // ✅ إصلاح 3: جيب كل الطلبات مش بس client
   useEffect(() => {
     if (!activeSession) return;
     api.get(`/orders/session/${activeSession.id}`)
@@ -346,7 +338,6 @@ export default function ClientDashboard() {
       .catch(() => {});
   }, [activeSession]);
 
-  // ✅ إصلاح 2: جيب كل المساحات
   async function loadSpaces() {
     try {
       const { data } = await spacesAPI.getAll();
@@ -407,13 +398,13 @@ export default function ClientDashboard() {
       .catch(() => {});
   }
 
-  // ✅ إصلاح 2: جيب سعر المساحة من الجلسة نفسها
   const activeSpaceKey   = activeSession?.space_key   || 'cowork';
   const activeSpaceName  = activeSession?.space_name  || 'منطقة العمل المشتركة';
   const activePricePerHr = parseFloat(activeSession?.price_per_hr || 30);
   const activeMaxHours   = parseInt(activeSession?.max_hours || 4);
 
-  const initials = user?.name?.split(' ').slice(0, 2).map(w => w[0]).join('');
+  // ✅ الأحرف الأولى للاسم — fallback لو ما في صورة
+  const initials = (user?.name || 'U').split(' ').slice(0, 2).map(w => w[0]).join('');
   const totalInvoicePages = Math.ceil(invoiceTotal / 10);
 
   function InvoiceCard({ inv, onClick }) {
@@ -478,23 +469,42 @@ export default function ClientDashboard() {
       )}
 
       {/* Header */}
-<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingTop: 8 }}>
-  <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--accent)' }}>Link Space</div>
-  <div style={{ display: 'flex', gap: 8 }}>
-    <button
-      onClick={() => navigate('/settings')}
-      style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '6px 10px', borderRadius: 8, fontSize: 16, cursor: 'pointer' }}>
-      ⚙️
-    </button>
-    <button onClick={logout} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '6px 12px', borderRadius: 8, fontSize: 12 }}>خروج</button>
-  </div>
-</div>
- 
- 
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingTop: 8 }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--accent)' }}>Link Space</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => navigate('/settings')}
+            style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '6px 10px', borderRadius: 8, fontSize: 16, cursor: 'pointer' }}>
+            ⚙️
+          </button>
+          <button onClick={logout} style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)', padding: '6px 12px', borderRadius: 8, fontSize: 12 }}>خروج</button>
+        </div>
+      </div>
 
-      {/* Profile */}
+      {/* ✅ Profile — مع صورة أو أحرف أولى */}
       <div className="card fade-up" style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 14 }}>
-        <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent), var(--accent2))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 18, color: '#fff', flexShrink: 0 }}>{initials}</div>
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          {user?.avatar_url ? (
+            <img
+              src={user.avatar_url}
+              alt={user?.name}
+              style={{
+                width: 52, height: 52, borderRadius: '50%',
+                objectFit: 'cover',
+                border: '2px solid var(--accent)',
+              }}
+            />
+          ) : (
+            <div style={{
+              width: 52, height: 52, borderRadius: '50%',
+              background: 'linear-gradient(135deg, var(--accent), var(--accent2))',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 700, fontSize: 18, color: '#fff',
+            }}>
+              {initials}
+            </div>
+          )}
+        </div>
         <div>
           <div style={{ fontWeight: 700, fontSize: 16 }}>{user?.name}</div>
           <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{user?.phone}</div>
@@ -556,7 +566,6 @@ export default function ClientDashboard() {
             <>
               <div className="section-title">الجلسة الحالية</div>
               <div style={{ marginBottom: 12 }}>
-                {/* ✅ إصلاح 2: بيمرر السعر الصح من الجلسة */}
                 <LiveTimer
                   checkIn={activeSession.check_in}
                   pricePerHr={activePricePerHr}
@@ -564,8 +573,6 @@ export default function ClientDashboard() {
                   spaceName={activeSpaceName}
                   spaceKey={activeSpaceKey}
                 />
-
-                {/* ✅ إصلاح 3: عداد يظهر كل الطلبات */}
                 <button
                   onClick={() => setShowOrderModal(true)}
                   style={{ width: '100%', marginTop: 10, padding: '12px', borderRadius: 12, border: '1px solid var(--accent)', background: 'rgba(0,212,170,0.08)', color: 'var(--accent)', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, transition: 'all 0.2s' }}
@@ -651,4 +658,3 @@ export default function ClientDashboard() {
     </div>
   );
 }
-

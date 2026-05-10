@@ -156,6 +156,29 @@ function UserModal({
             marginBottom: 20,
           }}
         >
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {/* ✅ صورة العميل في المودال */}
+            {u.avatar_url ? (
+              <img
+                src={u.avatar_url}
+                alt={u.name}
+                style={{
+                  width: 52, height: 52, borderRadius: "50%",
+                  objectFit: "cover",
+                  border: "2px solid var(--accent)",
+                  flexShrink: 0,
+                }}
+              />
+            ) : (
+              <div style={{
+                width: 52, height: 52, borderRadius: "50%",
+                background: "linear-gradient(135deg, var(--accent), var(--accent2))",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontWeight: 800, fontSize: 18, color: "#fff", flexShrink: 0,
+              }}>
+                {(u.name || "U").split(" ").slice(0, 2).map(w => w[0]).join("")}
+              </div>
+            )}
           <div>
             <div style={{ fontWeight: 800, fontSize: 18 }}>{u.name}</div>
             <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>
@@ -209,6 +232,7 @@ function UserModal({
               {isInSession ? "🟢 نشط الآن" : "⚫ غير نشط"}
             </span>
           </div>
+          </div> {/* ✅ إغلاق div الصورة + البيانات */}
           <button
             onClick={onClose}
             style={{
@@ -1051,13 +1075,14 @@ export default function AdminDashboard() {
       toast.error(err.response?.data?.error || "خطأ في التعديل");
     }
   }
-
+  
   // أضف هذا مع باقي الـ states:
   const [invoiceSummary, setInvoiceSummary] = useState({
     total_amount: 0,
     total_cash: 0,
     total_wallet: 0,
   });
+
 
   async function loadInvoices() {
     try {
@@ -1079,30 +1104,19 @@ export default function AdminDashboard() {
     }
   }
 
-  //
+  // ══════════════════════════════════════════════
   // التعديل 6 — دالة تصدير Excel (أضفها مع باقي الدوال)
+  // ══════════════════════════════════════════════
 
-  async function exportToExcel(data, date, staffId, staffList) {
-    // ✅ جيب كل الفواتير مش بس الصفحة الحالية
-    let allInvoices = data;
-    try {
-      const { data: res } = await invoicesAPI.exportAll({
-        search: invoiceSearch || undefined,
-        date: invoiceDate || undefined,
-        staff_id: invoiceStaffId || undefined,
-      });
-      allInvoices = res.invoices;
-    } catch {
-      toast.error("تعذر جلب كل الفواتير، سيتم تصدير الصفحة الحالية فقط");
-    }
-
-    if (!allInvoices || allInvoices.length === 0)
+  function exportToExcel(data, date, staffId, staffList) {
+    if (!data || data.length === 0)
       return toast.error("لا توجد فواتير للتصدير");
 
     const staffName = staffId
       ? staffList.find((s) => String(s.id) === staffId)?.name || ""
       : "الكل";
 
+    // بناء CSV بالعربي
     const headers = [
       "رقم الفاتورة",
       "العميل",
@@ -1114,8 +1128,7 @@ export default function AdminDashboard() {
       "التاريخ",
       "الوقت",
     ];
-
-    const rows = allInvoices.map((inv) => [
+    const rows = data.map((inv) => [
       inv.invoice_number,
       inv.client_name,
       inv.client_phone,
@@ -1130,16 +1143,13 @@ export default function AdminDashboard() {
       }),
     ]);
 
-    // سطر الإجماليات في الآخر
-    const totalAmount = allInvoices.reduce(
-      (s, i) => s + parseFloat(i.total),
-      0,
-    );
-    const totalCash = allInvoices.reduce(
+    // إضافة سطر الإجماليات في الآخر
+    const totalAmount = data.reduce((s, i) => s + parseFloat(i.total), 0);
+    const totalCash = data.reduce(
       (s, i) => s + parseFloat(i.cash_paid || 0),
       0,
     );
-    const totalWallet = allInvoices.reduce(
+    const totalWallet = data.reduce(
       (s, i) => s + parseFloat(i.wallet_paid || 0),
       0,
     );
@@ -1155,6 +1165,7 @@ export default function AdminDashboard() {
       "",
     ]);
 
+    // BOM لدعم العربي في Excel
     const BOM = "\uFEFF";
     const csv = BOM + [headers, ...rows].map((r) => r.join(",")).join("\n");
 
@@ -1830,6 +1841,29 @@ export default function AdminDashboard() {
                         alignItems: "flex-start",
                       }}
                     >
+                      {/* ✅ صورة العميل في القائمة */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        {u.avatar_url ? (
+                          <img
+                            src={u.avatar_url}
+                            alt={u.name}
+                            style={{
+                              width: 40, height: 40, borderRadius: "50%",
+                              objectFit: "cover",
+                              border: "1.5px solid var(--accent)",
+                              flexShrink: 0,
+                            }}
+                          />
+                        ) : (
+                          <div style={{
+                            width: 40, height: 40, borderRadius: "50%",
+                            background: "linear-gradient(135deg, var(--accent), var(--accent2))",
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontWeight: 700, fontSize: 14, color: "#fff", flexShrink: 0,
+                          }}>
+                            {(u.name || "U").split(" ").slice(0, 2).map(w => w[0]).join("")}
+                          </div>
+                        )}
                       <div>
                         <div style={{ fontWeight: 700 }}>{u.name}</div>
                         <div
@@ -1856,6 +1890,7 @@ export default function AdminDashboard() {
                           </div>
                         )}
                       </div>
+                      </div> {/* إغلاق div الصورة + البيانات */}
                       <div
                         style={{
                           display: "flex",
@@ -3420,6 +3455,7 @@ export default function AdminDashboard() {
                 marginBottom: 10,
               }}
             >
+              // ══════════════════════════════════════════════
               {/* ── Summary Bar ── */}
               <div
                 style={{
@@ -3473,15 +3509,14 @@ export default function AdminDashboard() {
               </div>
               {/* ── زر تصدير Excel ── */}
               <button
-                onClick={() => {
-                  toast.loading("جارٍ تجهيز الملف...", { id: "export" });
+                onClick={() =>
                   exportToExcel(
                     invoices,
                     invoiceDate,
                     invoiceStaffId,
                     staffList,
-                  ).finally(() => toast.dismiss("export"));
-                }}
+                  )
+                }
                 style={{
                   display: "flex",
                   alignItems: "center",
