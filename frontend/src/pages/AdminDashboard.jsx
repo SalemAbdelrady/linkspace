@@ -435,7 +435,13 @@ function UserModal({
         </div>
 
         {/* ✅ زر الحظر / رفع الحظر */}
-        <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px dashed var(--border)" }}>
+        <div
+          style={{
+            marginTop: 16,
+            paddingTop: 16,
+            borderTop: "1px dashed var(--border)",
+          }}
+        >
           <button
             onClick={() => toggleBan(u)}
             style={{
@@ -443,7 +449,9 @@ function UserModal({
               padding: "10px",
               borderRadius: 10,
               border: `1px solid ${u.is_active ? "rgba(255,71,87,0.4)" : "rgba(0,212,170,0.4)"}`,
-              background: u.is_active ? "rgba(255,71,87,0.06)" : "rgba(0,212,170,0.06)",
+              background: u.is_active
+                ? "rgba(255,71,87,0.06)"
+                : "rgba(0,212,170,0.06)",
               color: u.is_active ? "#ff4757" : "var(--success)",
               fontSize: 13,
               fontWeight: 700,
@@ -453,13 +461,18 @@ function UserModal({
             {u.is_active ? "🚫 حظر هذا العميل" : "✅ رفع الحظر عن العميل"}
           </button>
           {!u.is_active && (
-            <div style={{
-              marginTop: 8, padding: "8px 12px",
-              background: "rgba(255,71,87,0.06)",
-              border: "1px solid rgba(255,71,87,0.2)",
-              borderRadius: 8, fontSize: 11,
-              color: "#ff4757", textAlign: "center",
-            }}>
+            <div
+              style={{
+                marginTop: 8,
+                padding: "8px 12px",
+                background: "rgba(255,71,87,0.06)",
+                border: "1px solid rgba(255,71,87,0.2)",
+                borderRadius: 8,
+                fontSize: 11,
+                color: "#ff4757",
+                textAlign: "center",
+              }}
+            >
               ⚠️ هذا العميل محظور حالياً — لن يتمكن من الدخول
             </div>
           )}
@@ -1364,13 +1377,15 @@ export default function AdminDashboard() {
     try {
       await adminAPI.toggleUser(u.id);
       const newStatus = !isBanning;
-      toast.success(isBanning ? `🚫 تم حظر ${u.name}` : `✅ تم رفع الحظر عن ${u.name}`);
+      toast.success(
+        isBanning ? `🚫 تم حظر ${u.name}` : `✅ تم رفع الحظر عن ${u.name}`,
+      );
       // تحديث القائمة والمودال بدون إغلاقه
       setUsers((prev) =>
-        prev.map((x) => x.id === u.id ? { ...x, is_active: newStatus } : x)
+        prev.map((x) => (x.id === u.id ? { ...x, is_active: newStatus } : x)),
       );
       setSelectedUser((prev) =>
-        prev ? { ...prev, is_active: newStatus } : prev
+        prev ? { ...prev, is_active: newStatus } : prev,
       );
     } catch (err) {
       toast.error(err.response?.data?.error || "خطأ في تغيير الحالة");
@@ -1895,7 +1910,6 @@ export default function AdminDashboard() {
         {/* ══ USERS ══ */}
         {tab === "users" && (
           <div className="fade-up">
-
             {/* ── Stats Bar ── */}
             {usersStats && (
               <div
@@ -1907,21 +1921,46 @@ export default function AdminDashboard() {
                 }}
               >
                 {[
-                  ["إجمالي العملاء", usersStats.total_clients,                                    "var(--text)"],
-                  ["نشطون الآن",     usersStats.active_clients,                                   "var(--success)"],
-                  ["جدد هذا الشهر",  usersStats.new_this_month,                                   "var(--accent)"],
-                  ["إجمالي الأرصدة", `${parseFloat(usersStats.total_balance || 0).toFixed(0)} ج`, "var(--warning)"],
+                  ["إجمالي العملاء", usersStats.total_clients, "var(--text)"],
+                  ["نشطون الآن", usersStats.active_clients, "var(--success)"],
+                  ["جدد هذا الشهر", usersStats.new_this_month, "var(--accent)"],
+                  [
+                    "إجمالي الأرصدة",
+                    `${parseFloat(usersStats.total_balance || 0).toFixed(0)} ج`,
+                    "var(--warning)",
+                  ],
                 ].map(([label, val, color]) => (
-                  <div key={label} className="card" style={{ padding: "10px 6px", textAlign: "center" }}>
-                    <div style={{ fontSize: 9, color: "var(--muted)", marginBottom: 4 }}>{label}</div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color }}>{val}</div>
+                  <div
+                    key={label}
+                    className="card"
+                    style={{ padding: "10px 6px", textAlign: "center" }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 9,
+                        color: "var(--muted)",
+                        marginBottom: 4,
+                      }}
+                    >
+                      {label}
+                    </div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color }}>
+                      {val}
+                    </div>
                   </div>
                 ))}
               </div>
             )}
 
             {/* ── صف البحث + زر التصدير ── */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 8,
+                marginBottom: 12,
+                alignItems: "center",
+              }}
+            >
               <div className="input-wrap" style={{ flex: 1, marginBottom: 0 }}>
                 <input
                   className="input-field"
@@ -1933,17 +1972,25 @@ export default function AdminDashboard() {
               <button
                 onClick={exportUsersToExcel}
                 style={{
-                  display: "flex", alignItems: "center", gap: 5,
-                  padding: "9px 14px", borderRadius: 10, flexShrink: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "9px 14px",
+                  borderRadius: 10,
+                  flexShrink: 0,
                   border: "1px solid rgba(34,197,94,0.4)",
                   background: "rgba(34,197,94,0.08)",
-                  color: "#22c55e", fontSize: 12, fontWeight: 600,
-                  cursor: "pointer", whiteSpace: "nowrap",
+                  color: "#22c55e",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
                 }}
               >
                 📥 Excel
               </button>
             </div>
+
             <div
               style={{
                 display: "flex",
@@ -1962,6 +2009,13 @@ export default function AdminDashboard() {
                     style={{
                       cursor: "pointer",
                       transition: "border-color 0.2s",
+                      // ✅ border أحمر خفيف لو العميل محظور
+                      borderColor: !u.is_active
+                        ? "rgba(255,71,87,0.4)"
+                        : undefined,
+                      background: !u.is_active
+                        ? "rgba(255,71,87,0.03)"
+                        : undefined,
                     }}
                   >
                     <div
@@ -2050,7 +2104,19 @@ export default function AdminDashboard() {
                           alignItems: "center",
                           gap: 8,
                         }}
-                      >
+                                             >
+                        {/* ✅ بادج الحظر يظهر بوضوح لو محظور */}
+                        {!u.is_active && (
+                          <span style={{
+                            padding: "2px 8px", borderRadius: 20,
+                            fontSize: 10, fontWeight: 700,
+                            background: "rgba(255,71,87,0.15)",
+                            color: "#ff4757",
+                            border: "1px solid rgba(255,71,87,0.3)",
+                          }}>
+                            🚫 محظور
+                          </span>
+                        )}
                         <span
                           className={`badge badge-${isInSession ? "success" : "danger"}`}
                         >
