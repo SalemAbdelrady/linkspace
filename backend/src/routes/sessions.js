@@ -39,15 +39,28 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
   try {
     await client.query('BEGIN');
 
+    // ✅ جيب العميل بدون شرط is_active عشان نقدر نميز بين "محظور" و"غير موجود"
     const { rows: userRows } = await client.query(
-      `SELECT id, name, phone, email, balance, points
-       FROM users WHERE qr_code = $1 AND is_active = true FOR UPDATE`,
+      `SELECT id, name, phone, email, balance, points, is_active
+       FROM users WHERE qr_code = $1 FOR UPDATE`,
       [qr_code]
     );
     const user = userRows[0];
+
+    // ✅ العميل غير موجود خالص
     if (!user) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'العميل غير موجود' });
+    }
+
+    // ✅ العميل محظور — رسالة واضحة ومميزة
+    if (!user.is_active) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({
+        error  : '🚫 هذا العميل محظور من الدخول',
+        banned : true,
+        client : { name: user.name, phone: user.phone },
+      });
     }
 
     const { rows: activeSessions } = await client.query(
@@ -268,4 +281,3 @@ router.get('/active', auth, requireRole('staff', 'admin'), async (req, res) => {
 });
 
 module.exports = router;
-

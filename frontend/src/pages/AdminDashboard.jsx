@@ -118,6 +118,7 @@ function UserModal({
   setAmount,
   chargeWallet,
   addPoints,
+  toggleBan,
   onClose,
 }) {
   if (!u) return null;
@@ -431,6 +432,37 @@ function UserModal({
               إضافة
             </button>
           </div>
+        </div>
+
+        {/* ✅ زر الحظر / رفع الحظر */}
+        <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px dashed var(--border)" }}>
+          <button
+            onClick={() => toggleBan(u)}
+            style={{
+              width: "100%",
+              padding: "10px",
+              borderRadius: 10,
+              border: `1px solid ${u.is_active ? "rgba(255,71,87,0.4)" : "rgba(0,212,170,0.4)"}`,
+              background: u.is_active ? "rgba(255,71,87,0.06)" : "rgba(0,212,170,0.06)",
+              color: u.is_active ? "#ff4757" : "var(--success)",
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            {u.is_active ? "🚫 حظر هذا العميل" : "✅ رفع الحظر عن العميل"}
+          </button>
+          {!u.is_active && (
+            <div style={{
+              marginTop: 8, padding: "8px 12px",
+              background: "rgba(255,71,87,0.06)",
+              border: "1px solid rgba(255,71,87,0.2)",
+              borderRadius: 8, fontSize: 11,
+              color: "#ff4757", textAlign: "center",
+            }}>
+              ⚠️ هذا العميل محظور حالياً — لن يتمكن من الدخول
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -850,7 +882,6 @@ export default function AdminDashboard() {
   const [daily, setDaily] = useState(null);
   const [monthly, setMonthly] = useState(null);
   const [users, setUsers] = useState([]);
-  const [usersStats, setUsersStats] = useState(null);
   const [activeSessionIds, setActiveSessionIds] = useState(new Set());
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
@@ -988,7 +1019,6 @@ export default function AdminDashboard() {
     try {
       const { data } = await adminAPI.users(search);
       setUsers(data.users);
-      if (data.stats) setUsersStats(data.stats);
     } catch {
       toast.error("خطأ في تحميل العملاء");
     }
@@ -999,59 +1029,6 @@ export default function AdminDashboard() {
       const { data } = await sessionsAPI.active();
       setActiveSessionIds(new Set(data.sessions.map((s) => s.user_id)));
     } catch {}
-  }
-
-  // ══ تصدير العملاء Excel ══
-  async function exportUsersToExcel() {
-    toast.loading("جارٍ تجهيز الملف...", { id: "export-users" });
-    try {
-      const { data } = await adminAPI.exportUsers(search);
-      const allUsers = data.users;
-      if (!allUsers?.length) {
-        toast.dismiss("export-users");
-        return toast.error("لا يوجد عملاء للتصدير");
-      }
-
-      const headers = [
-        "الاسم", "الموبايل", "البريد الإلكتروني",
-        "الرصيد", "النقاط", "الحالة", "تاريخ التسجيل",
-      ];
-      const rows = allUsers.map((u) => [
-        u.name,
-        u.phone,
-        u.email || "",
-        parseFloat(u.balance).toFixed(2),
-        u.points,
-        u.is_active ? "نشط" : "معطل",
-        new Date(u.created_at).toLocaleDateString("ar-EG"),
-      ]);
-
-      // سطر الإجماليات
-      const totalBalance = allUsers.reduce((s, u) => s + parseFloat(u.balance), 0);
-      const totalPoints  = allUsers.reduce((s, u) => s + parseInt(u.points),   0);
-      rows.push([
-        `الإجمالي (${allUsers.length} عميل)`,
-        "", "",
-        totalBalance.toFixed(2),
-        totalPoints,
-        "", "",
-      ]);
-
-      const BOM = "\uFEFF";
-      const csv = BOM + [headers, ...rows].map((r) => r.join(",")).join("\n");
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const url  = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href     = url;
-      link.download = `عملاء_${new Date().toLocaleDateString("ar-EG").replace(/\//g, "-")}.csv`;
-      link.click();
-      URL.revokeObjectURL(url);
-      toast.success(`✅ تم تصدير ${allUsers.length} عميل`);
-    } catch {
-      toast.error("خطأ في التصدير");
-    } finally {
-      toast.dismiss("export-users");
-    }
   }
 
   async function loadAllCoupons() {
@@ -1375,6 +1352,29 @@ export default function AdminDashboard() {
     }
   }
 
+  // ✅ دالة الحظر / رفع الحظر
+  async function toggleBan(u) {
+    const isBanning = u.is_active;
+    const confirmMsg = isBanning
+      ? `هل تريد حظر ${u.name}؟ لن يتمكن من الدخول.`
+      : `هل تريد رفع الحظر عن ${u.name}؟`;
+    if (!window.confirm(confirmMsg)) return;
+    try {
+      await adminAPI.toggleUser(u.id);
+      const newStatus = !isBanning;
+      toast.success(isBanning ? `🚫 تم حظر ${u.name}` : `✅ تم رفع الحظر عن ${u.name}`);
+      // تحديث القائمة والمودال بدون إغلاقه
+      setUsers((prev) =>
+        prev.map((x) => x.id === u.id ? { ...x, is_active: newStatus } : x)
+      );
+      setSelectedUser((prev) =>
+        prev ? { ...prev, is_active: newStatus } : prev
+      );
+    } catch (err) {
+      toast.error(err.response?.data?.error || "خطأ في تغيير الحالة");
+    }
+  }
+
   async function searchCouponUsers(q) {
     if (!q || q.length < 2) {
       setCouponUsers([]);
@@ -1460,6 +1460,7 @@ export default function AdminDashboard() {
           setAmount={setAmount}
           chargeWallet={chargeWallet}
           addPoints={addPoints}
+          toggleBan={toggleBan}
           onClose={() => setSelectedUser(null)}
         />
       )}
@@ -1893,54 +1894,13 @@ export default function AdminDashboard() {
         {/* ══ USERS ══ */}
         {tab === "users" && (
           <div className="fade-up">
-
-            {/* ── Stats Bar ── */}
-            {usersStats && (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(4,1fr)",
-                  gap: 8,
-                  marginBottom: 14,
-                }}
-              >
-                {[
-                  ["إجمالي العملاء", usersStats.total_clients,                                    "var(--text)"],
-                  ["نشطون الآن",     usersStats.active_clients,                                   "var(--success)"],
-                  ["جدد هذا الشهر",  usersStats.new_this_month,                                   "var(--accent)"],
-                  ["إجمالي الأرصدة", `${parseFloat(usersStats.total_balance || 0).toFixed(0)} ج`, "var(--warning)"],
-                ].map(([label, val, color]) => (
-                  <div key={label} className="card" style={{ padding: "10px 6px", textAlign: "center" }}>
-                    <div style={{ fontSize: 9, color: "var(--muted)", marginBottom: 4 }}>{label}</div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color }}>{val}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* ── صف البحث + زر التصدير ── */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center" }}>
-              <div className="input-wrap" style={{ flex: 1, marginBottom: 0 }}>
-                <input
-                  className="input-field"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="بحث بالاسم أو الموبايل..."
-                />
-              </div>
-              <button
-                onClick={exportUsersToExcel}
-                style={{
-                  display: "flex", alignItems: "center", gap: 5,
-                  padding: "9px 14px", borderRadius: 10, flexShrink: 0,
-                  border: "1px solid rgba(34,197,94,0.4)",
-                  background: "rgba(34,197,94,0.08)",
-                  color: "#22c55e", fontSize: 12, fontWeight: 600,
-                  cursor: "pointer", whiteSpace: "nowrap",
-                }}
-              >
-                📥 Excel
-              </button>
+            <div className="input-wrap">
+              <input
+                className="input-field"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="بحث بالاسم أو الموبايل..."
+              />
             </div>
             <div
               style={{
@@ -1960,6 +1920,9 @@ export default function AdminDashboard() {
                     style={{
                       cursor: "pointer",
                       transition: "border-color 0.2s",
+                      // ✅ border أحمر خفيف لو العميل محظور
+                      borderColor: !u.is_active ? "rgba(255,71,87,0.4)" : undefined,
+                      background: !u.is_active ? "rgba(255,71,87,0.03)" : undefined,
                     }}
                   >
                     <div
@@ -2049,6 +2012,18 @@ export default function AdminDashboard() {
                           gap: 8,
                         }}
                       >
+                        {/* ✅ بادج الحظر يظهر بوضوح لو محظور */}
+                        {!u.is_active && (
+                          <span style={{
+                            padding: "2px 8px", borderRadius: 20,
+                            fontSize: 10, fontWeight: 700,
+                            background: "rgba(255,71,87,0.15)",
+                            color: "#ff4757",
+                            border: "1px solid rgba(255,71,87,0.3)",
+                          }}>
+                            🚫 محظور
+                          </span>
+                        )}
                         <span
                           className={`badge badge-${isInSession ? "success" : "danger"}`}
                         >

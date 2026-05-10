@@ -32,10 +32,10 @@ router.get('/users', ...isStaffOrAdmin, async (req, res) => {
       })
     );
 
-    const { rows: stats } = await db.query(`
+const { rows: stats } = await db.query(`
   SELECT
     COUNT(*)                                                          AS total_clients,
-    COUNT(*) FILTER (WHERE is_active = true)                         AS active_clients,
+    (SELECT COUNT(DISTINCT user_id) FROM sessions WHERE status = 'active') AS active_clients,
     COALESCE(SUM(balance), 0)                                        AS total_balance,
     COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days') AS new_this_month
   FROM users WHERE role = 'client'
