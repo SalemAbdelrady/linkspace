@@ -32,7 +32,16 @@ router.get('/users', ...isStaffOrAdmin, async (req, res) => {
       })
     );
 
-    res.json({ users: usersWithQR });
+    const { rows: stats } = await db.query(`
+  SELECT
+    COUNT(*)                                                          AS total_clients,
+    COUNT(*) FILTER (WHERE is_active = true)                         AS active_clients,
+    COALESCE(SUM(balance), 0)                                        AS total_balance,
+    COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days') AS new_this_month
+  FROM users WHERE role = 'client'
+`);
+
+ res.json({ users: usersWithQR, stats: stats[0] });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'خطأ في الخادم' });
@@ -290,6 +299,24 @@ router.delete('/staff/:id', ...isAdmin, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// GET /api/admin/users/export
+router.get('/users/export', ...isStaffOrAdmin, async (req, res) => {
+  const { search = '' } = req.query;
+  try {
+    const { rows } = await db.query(`
+      SELECT id, name, phone, email, balance, points,
+             is_active, created_at
+      FROM users
+      WHERE (name ILIKE $1 OR phone ILIKE $1) AND role = 'client'
+      ORDER BY created_at DESC
+    `, [`%${search}%`]);
+    res.json({ users: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'خطأ في التصدير' });
   }
 });
 

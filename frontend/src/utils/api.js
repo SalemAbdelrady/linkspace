@@ -63,6 +63,7 @@ export const adminAPI = {
   updatePrice:   (id, price_per_hr)      => api.put(`/admin/prices/${id}`, { price_per_hr }),
   // ✅ endpoint قائمة الموظفين لفلتر الفواتير
   staff:         ()                      => api.get('/admin/staff'),
+  exportUsers: (search = '') => api.get(`/admin/users/export?search=${encodeURIComponent(search)}`),
 };
 
 // Spaces
