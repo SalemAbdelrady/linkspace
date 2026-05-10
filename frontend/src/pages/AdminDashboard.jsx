@@ -1258,6 +1258,43 @@ export default function AdminDashboard() {
     URL.revokeObjectURL(url);
     toast.success("✅ تم تصدير الملف");
   }
+  async function exportUsersToExcel() {
+    if (!users || users.length === 0)
+      return toast.error("لا يوجد عملاء للتصدير");
+
+    const headers = [
+      "الاسم",
+      "الموبايل",
+      "البريد الإلكتروني",
+      "الرصيد",
+      "النقاط",
+      "كود QR",
+      "الحالة",
+    ];
+
+    const rows = users.map((u) => [
+      u.name,
+      u.phone,
+      u.email || "",
+      parseFloat(u.balance).toFixed(2),
+      u.points,
+      u.qr_code || "",
+      u.is_active ? "نشط" : "محظور",
+    ]);
+
+    const BOM = "\uFEFF";
+    const csv = BOM + [headers, ...rows].map((r) => r.join(",")).join("\n");
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `عملاء_${new Date().toLocaleDateString("ar-EG")}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success("✅ تم تصدير الملف");
+  }
+
   async function saveSpace(key) {
     setLoadingSpaces(true);
     try {
@@ -2104,16 +2141,20 @@ export default function AdminDashboard() {
                           alignItems: "center",
                           gap: 8,
                         }}
-                                             >
+                      >
                         {/* ✅ بادج الحظر يظهر بوضوح لو محظور */}
                         {!u.is_active && (
-                          <span style={{
-                            padding: "2px 8px", borderRadius: 20,
-                            fontSize: 10, fontWeight: 700,
-                            background: "rgba(255,71,87,0.15)",
-                            color: "#ff4757",
-                            border: "1px solid rgba(255,71,87,0.3)",
-                          }}>
+                          <span
+                            style={{
+                              padding: "2px 8px",
+                              borderRadius: 20,
+                              fontSize: 10,
+                              fontWeight: 700,
+                              background: "rgba(255,71,87,0.15)",
+                              color: "#ff4757",
+                              border: "1px solid rgba(255,71,87,0.3)",
+                            }}
+                          >
                             🚫 محظور
                           </span>
                         )}
