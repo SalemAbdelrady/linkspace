@@ -7,6 +7,7 @@ import {
   couponsAPI,
   invoicesAPI,
   staffAPI,
+  quickSaleAPI,
 } from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -435,13 +436,7 @@ function UserModal({
         </div>
 
         {/* ✅ زر الحظر / رفع الحظر */}
-        <div
-          style={{
-            marginTop: 16,
-            paddingTop: 16,
-            borderTop: "1px dashed var(--border)",
-          }}
-        >
+        <div style={{ marginTop: 16, paddingTop: 16, borderTop: "1px dashed var(--border)" }}>
           <button
             onClick={() => toggleBan(u)}
             style={{
@@ -449,9 +444,7 @@ function UserModal({
               padding: "10px",
               borderRadius: 10,
               border: `1px solid ${u.is_active ? "rgba(255,71,87,0.4)" : "rgba(0,212,170,0.4)"}`,
-              background: u.is_active
-                ? "rgba(255,71,87,0.06)"
-                : "rgba(0,212,170,0.06)",
+              background: u.is_active ? "rgba(255,71,87,0.06)" : "rgba(0,212,170,0.06)",
               color: u.is_active ? "#ff4757" : "var(--success)",
               fontSize: 13,
               fontWeight: 700,
@@ -461,18 +454,13 @@ function UserModal({
             {u.is_active ? "🚫 حظر هذا العميل" : "✅ رفع الحظر عن العميل"}
           </button>
           {!u.is_active && (
-            <div
-              style={{
-                marginTop: 8,
-                padding: "8px 12px",
-                background: "rgba(255,71,87,0.06)",
-                border: "1px solid rgba(255,71,87,0.2)",
-                borderRadius: 8,
-                fontSize: 11,
-                color: "#ff4757",
-                textAlign: "center",
-              }}
-            >
+            <div style={{
+              marginTop: 8, padding: "8px 12px",
+              background: "rgba(255,71,87,0.06)",
+              border: "1px solid rgba(255,71,87,0.2)",
+              borderRadius: 8, fontSize: 11,
+              color: "#ff4757", textAlign: "center",
+            }}>
               ⚠️ هذا العميل محظور حالياً — لن يتمكن من الدخول
             </div>
           )}
@@ -886,15 +874,256 @@ function InvoiceModal({ invoice, onClose }) {
   );
 }
 
+// ── مودال البيع السريع ⚡ ─────────────────────────────────────────────
+function QuickSaleModal({ services: allServices, adminAPI, onClose, onDone }) {
+  const [clientName,  setClientName]  = useState('');
+  const [clientPhone, setClientPhone] = useState('');
+  const [searchUser,  setSearchUser]  = useState('');
+  const [foundUser,   setFoundUser]   = useState(null);
+  const [userResults, setUserResults] = useState([]);
+  const [cart,        setCart]        = useState([]); // [{name,price,qty}]
+  const [payMethod,   setPayMethod]   = useState('cash');
+  const [note,        setNote]        = useState('');
+  const [saving,      setSaving]      = useState(false);
+  const [step,        setStep]        = useState(1); // 1=العميل 2=الخدمات 3=الدفع
+
+  const total = cart.reduce((s, x) => s + x.price * x.qty, 0);
+
+  async function searchClients(q) {
+    if (q.length < 2) { setUserResults([]); return; }
+    try {
+      const { data } = await adminAPI.users(q);
+      setUserResults(data.users.slice(0, 5));
+    } catch {}
+  }
+
+  function selectUser(u) {
+    setFoundUser(u);
+    setClientName(u.name);
+    setClientPhone(u.phone);
+    setSearchUser(u.name);
+    setUserResults([]);
+  }
+
+  function clearUser() {
+    setFoundUser(null);
+    setClientName('');
+    setClientPhone('');
+    setSearchUser('');
+  }
+
+  function addToCart(svc) {
+    setCart(prev => {
+      const ex = prev.find(x => x.name === svc.name);
+      if (ex) return prev.map(x => x.name === svc.name ? { ...x, qty: x.qty + 1 } : x);
+      return [...prev, { name: svc.name, price: parseFloat(svc.price), qty: 1 }];
+    });
+  }
+
+  function changeQty(name, delta) {
+    setCart(prev => prev
+      .map(x => x.name === name ? { ...x, qty: Math.max(0, x.qty + delta) } : x)
+      .filter(x => x.qty > 0)
+    );
+  }
+
+  async function confirm() {
+    if (!clientName.trim()) return toast.error('أدخل اسم العميل');
+    if (!cart.length)       return toast.error('أضف خدمة واحدة على الأقل');
+    setSaving(true);
+    try {
+      const { data } = await quickSaleAPI.create({
+        client_name   : clientName.trim(),
+        client_phone  : clientPhone.trim(),
+        user_id       : foundUser?.id || null,
+        services      : cart,
+        payment_method: payMethod,
+        note          : note || null,
+      });
+      toast.success(`✅ تم إصدار الفاتورة ${data.invoice.invoice_number}`);
+      onDone && onDone(data.invoice);
+      onClose();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'خطأ في الحفظ');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 200,
+      display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: 16 }}
+      onClick={onClose}>
+      <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 16px 16px',
+        padding: 20, width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' }}
+        onClick={e => e.stopPropagation()}>
+
+        {/* رأس */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 17 }}>⚡ بيع سريع</div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>فاتورة بدون جلسة — زوار أو خدمات منفردة</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 22, cursor: 'pointer' }}>✕</button>
+        </div>
+
+        {/* ── الخطوة 1: العميل ── */}
+        <div style={{ marginBottom: 16, padding: 14, background: 'rgba(255,255,255,0.03)', borderRadius: 12, border: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', marginBottom: 10 }}>👤 بيانات العميل</div>
+
+          {foundUser ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+              background: 'rgba(0,212,170,0.08)', border: '1px solid rgba(0,212,170,0.3)', borderRadius: 10 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700 }}>{foundUser.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>{foundUser.phone}</div>
+                <div style={{ fontSize: 12, color: 'var(--accent)', marginTop: 2 }}>
+                  💰 رصيد: {parseFloat(foundUser.balance).toFixed(2)} ج
+                </div>
+              </div>
+              <button onClick={clearUser} style={{ background: 'transparent', border: 'none', color: '#ff4757', fontSize: 18, cursor: 'pointer' }}>✕</button>
+            </div>
+          ) : (
+            <>
+              {/* بحث عن عميل مسجل */}
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>
+                بحث عن عميل مسجل (اختياري)
+              </div>
+              <div style={{ position: 'relative', marginBottom: 10 }}>
+                <input className="input-field" placeholder="اسم أو موبايل..."
+                  value={searchUser}
+                  onChange={e => { setSearchUser(e.target.value); searchClients(e.target.value); }}
+                />
+                {userResults.length > 0 && (
+                  <div style={{ position: 'absolute', top: '100%', right: 0, left: 0, zIndex: 20,
+                    background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, marginTop: 4, overflow: 'hidden' }}>
+                    {userResults.map(u => (
+                      <div key={u.id} onClick={() => selectUser(u)}
+                        style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 13 }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,212,170,0.08)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                        <div style={{ fontWeight: 600 }}>{u.name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)' }}>{u.phone} · {parseFloat(u.balance).toFixed(2)} ج</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* أو إدخال يدوي */}
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 6 }}>أو أدخل بيانات الزائر يدوياً</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <input className="input-field" placeholder="الاسم *" value={clientName}
+                  onChange={e => setClientName(e.target.value)} />
+                <input className="input-field" placeholder="الموبايل" value={clientPhone}
+                  onChange={e => setClientPhone(e.target.value)} />
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* ── الخطوة 2: الخدمات ── */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', marginBottom: 10 }}>☕ اختر الخدمات</div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 12 }}>
+            {allServices.map(svc => (
+              <button key={svc.id} onClick={() => addToCart(svc)}
+                style={{ padding: '12px 8px', borderRadius: 12, border: '1px solid var(--border)',
+                  background: 'transparent', cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'rgba(0,212,170,0.06)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'transparent'; }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>{svc.name}</div>
+                <div style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 700 }}>{svc.price} ج</div>
+              </button>
+            ))}
+          </div>
+
+          {/* السلة */}
+          {cart.length > 0 && (
+            <div style={{ padding: 12, background: 'rgba(0,212,170,0.06)', border: '1px solid rgba(0,212,170,0.2)', borderRadius: 12 }}>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, fontWeight: 600 }}>🛒 السلة</div>
+              {cart.map(item => (
+                <div key={item.name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 13 }}>{item.name}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button onClick={() => changeQty(item.name, -1)}
+                      style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text)', cursor: 'pointer', fontSize: 16 }}>−</button>
+                    <span style={{ fontSize: 13, fontWeight: 700, minWidth: 16, textAlign: 'center' }}>{item.qty}</span>
+                    <button onClick={() => changeQty(item.name, 1)}
+                      style={{ width: 28, height: 28, borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text)', cursor: 'pointer', fontSize: 16 }}>+</button>
+                    <span style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 700, minWidth: 50, textAlign: 'left' }}>
+                      {(item.price * item.qty).toFixed(2)} ج
+                    </span>
+                  </div>
+                </div>
+              ))}
+              <div style={{ borderTop: '1px dashed var(--border)', paddingTop: 8, marginTop: 4,
+                display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: 16, color: 'var(--accent)' }}>
+                <span>الإجمالي</span>
+                <span>{total.toFixed(2)} ج</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── الخطوة 3: الدفع ── */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', marginBottom: 10 }}>💳 طريقة الدفع</div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+            {[
+              ['cash',   '💵 كاش',    true],
+              ['wallet', '💳 محفظة',  !!foundUser],
+            ].map(([val, label, enabled]) => (
+              <button key={val}
+                onClick={() => enabled && setPayMethod(val)}
+                style={{
+                  flex: 1, padding: '10px', borderRadius: 10, border: '1px solid',
+                  fontSize: 13, fontWeight: 600, cursor: enabled ? 'pointer' : 'not-allowed',
+                  borderColor: payMethod === val ? 'var(--accent)' : 'var(--border)',
+                  background:  payMethod === val ? 'rgba(0,212,170,0.12)' : 'transparent',
+                  color:       payMethod === val ? 'var(--accent)' : enabled ? 'var(--muted)' : 'var(--border)',
+                  opacity: enabled ? 1 : 0.4,
+                }}>
+                {label}
+                {val === 'wallet' && !foundUser && <div style={{ fontSize: 9 }}>حدد عميلاً أولاً</div>}
+              </button>
+            ))}
+          </div>
+          {payMethod === 'wallet' && foundUser && (
+            <div style={{ fontSize: 12, color: parseFloat(foundUser.balance) >= total ? 'var(--success)' : '#ff4757',
+              padding: '6px 10px', background: 'rgba(0,0,0,0.1)', borderRadius: 8 }}>
+              {parseFloat(foundUser.balance) >= total
+                ? `✅ الرصيد كافٍ — ${parseFloat(foundUser.balance).toFixed(2)} ج`
+                : `❌ الرصيد غير كافٍ — ${parseFloat(foundUser.balance).toFixed(2)} ج`}
+            </div>
+          )}
+        </div>
+
+        {/* ملاحظة */}
+        <input className="input-field" placeholder="ملاحظة (اختياري)..." value={note}
+          onChange={e => setNote(e.target.value)} style={{ marginBottom: 16 }} />
+
+        {/* زر الحفظ */}
+        <button className="btn btn-primary" style={{ width: '100%', padding: 12, fontSize: 15 }}
+          disabled={saving || !clientName || !cart.length || (payMethod === 'wallet' && (!foundUser || parseFloat(foundUser.balance) < total))}
+          onClick={confirm}>
+          {saving ? 'جارٍ الحفظ...' : `⚡ إصدار الفاتورة — ${total.toFixed(2)} ج`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── AdminDashboard ────────────────────────────────────────────────────
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState("overview");
+  const [showQuickSale, setShowQuickSale] = useState(false);
 
   const [daily, setDaily] = useState(null);
   const [monthly, setMonthly] = useState(null);
-  const [usersStats, setUsersStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [activeSessionIds, setActiveSessionIds] = useState(new Set());
   const [search, setSearch] = useState("");
@@ -1033,7 +1262,6 @@ export default function AdminDashboard() {
     try {
       const { data } = await adminAPI.users(search);
       setUsers(data.users);
-      if (data.stats) setUsersStats(data.stats);
     } catch {
       toast.error("خطأ في تحميل العملاء");
     }
@@ -1258,43 +1486,6 @@ export default function AdminDashboard() {
     URL.revokeObjectURL(url);
     toast.success("✅ تم تصدير الملف");
   }
-  async function exportUsersToExcel() {
-    if (!users || users.length === 0)
-      return toast.error("لا يوجد عملاء للتصدير");
-
-    const headers = [
-      "الاسم",
-      "الموبايل",
-      "البريد الإلكتروني",
-      "الرصيد",
-      "النقاط",
-      "كود QR",
-      "الحالة",
-    ];
-
-    const rows = users.map((u) => [
-      u.name,
-      u.phone,
-      u.email || "",
-      parseFloat(u.balance).toFixed(2),
-      u.points,
-      u.qr_code || "",
-      u.is_active ? "نشط" : "محظور",
-    ]);
-
-    const BOM = "\uFEFF";
-    const csv = BOM + [headers, ...rows].map((r) => r.join(",")).join("\n");
-
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `عملاء_${new Date().toLocaleDateString("ar-EG")}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-    toast.success("✅ تم تصدير الملف");
-  }
-
   async function saveSpace(key) {
     setLoadingSpaces(true);
     try {
@@ -1414,15 +1605,13 @@ export default function AdminDashboard() {
     try {
       await adminAPI.toggleUser(u.id);
       const newStatus = !isBanning;
-      toast.success(
-        isBanning ? `🚫 تم حظر ${u.name}` : `✅ تم رفع الحظر عن ${u.name}`,
-      );
+      toast.success(isBanning ? `🚫 تم حظر ${u.name}` : `✅ تم رفع الحظر عن ${u.name}`);
       // تحديث القائمة والمودال بدون إغلاقه
       setUsers((prev) =>
-        prev.map((x) => (x.id === u.id ? { ...x, is_active: newStatus } : x)),
+        prev.map((x) => x.id === u.id ? { ...x, is_active: newStatus } : x)
       );
       setSelectedUser((prev) =>
-        prev ? { ...prev, is_active: newStatus } : prev,
+        prev ? { ...prev, is_active: newStatus } : prev
       );
     } catch (err) {
       toast.error(err.response?.data?.error || "خطأ في تغيير الحالة");
@@ -1522,6 +1711,16 @@ export default function AdminDashboard() {
         <InvoiceModal
           invoice={selectedInvoice}
           onClose={() => setSelectedInvoice(null)}
+        />
+      )}
+
+      {/* ── مودال البيع السريع ── */}
+      {showQuickSale && (
+        <QuickSaleModal
+          services={services}
+          adminAPI={adminAPI}
+          onClose={() => setShowQuickSale(false)}
+          onDone={() => { if (tab === "invoices") loadInvoices(); }}
         />
       )}
 
@@ -1692,6 +1891,21 @@ export default function AdminDashboard() {
         </div>
 
         <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => setShowQuickSale(true)}
+            style={{
+              background: "var(--accent)",
+              border: "none",
+              color: "#000",
+              padding: "6px 12px",
+              borderRadius: 8,
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            ⚡ بيع سريع
+          </button>
           <button
             onClick={() => navigate("/scanner")}
             style={{
@@ -1944,90 +2158,18 @@ export default function AdminDashboard() {
             )}
           </div>
         )}
+
         {/* ══ USERS ══ */}
         {tab === "users" && (
           <div className="fade-up">
-            {/* ── Stats Bar ── */}
-            {usersStats && (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(4,1fr)",
-                  gap: 8,
-                  marginBottom: 14,
-                }}
-              >
-                {[
-                  ["إجمالي العملاء", usersStats.total_clients, "var(--text)"],
-                  ["نشطون الآن", usersStats.active_clients, "var(--success)"],
-                  ["جدد هذا الشهر", usersStats.new_this_month, "var(--accent)"],
-                  [
-                    "إجمالي الأرصدة",
-                    `${parseFloat(usersStats.total_balance || 0).toFixed(0)} ج`,
-                    "var(--warning)",
-                  ],
-                ].map(([label, val, color]) => (
-                  <div
-                    key={label}
-                    className="card"
-                    style={{ padding: "10px 6px", textAlign: "center" }}
-                  >
-                    <div
-                      style={{
-                        fontSize: 9,
-                        color: "var(--muted)",
-                        marginBottom: 4,
-                      }}
-                    >
-                      {label}
-                    </div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color }}>
-                      {val}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* ── صف البحث + زر التصدير ── */}
-            <div
-              style={{
-                display: "flex",
-                gap: 8,
-                marginBottom: 12,
-                alignItems: "center",
-              }}
-            >
-              <div className="input-wrap" style={{ flex: 1, marginBottom: 0 }}>
-                <input
-                  className="input-field"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="بحث بالاسم أو الموبايل..."
-                />
-              </div>
-              <button
-                onClick={exportUsersToExcel}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 5,
-                  padding: "9px 14px",
-                  borderRadius: 10,
-                  flexShrink: 0,
-                  border: "1px solid rgba(34,197,94,0.4)",
-                  background: "rgba(34,197,94,0.08)",
-                  color: "#22c55e",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                📥 Excel
-              </button>
+            <div className="input-wrap">
+              <input
+                className="input-field"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="بحث بالاسم أو الموبايل..."
+              />
             </div>
-
             <div
               style={{
                 display: "flex",
@@ -2047,12 +2189,8 @@ export default function AdminDashboard() {
                       cursor: "pointer",
                       transition: "border-color 0.2s",
                       // ✅ border أحمر خفيف لو العميل محظور
-                      borderColor: !u.is_active
-                        ? "rgba(255,71,87,0.4)"
-                        : undefined,
-                      background: !u.is_active
-                        ? "rgba(255,71,87,0.03)"
-                        : undefined,
+                      borderColor: !u.is_active ? "rgba(255,71,87,0.4)" : undefined,
+                      background: !u.is_active ? "rgba(255,71,87,0.03)" : undefined,
                     }}
                   >
                     <div
@@ -2144,17 +2282,13 @@ export default function AdminDashboard() {
                       >
                         {/* ✅ بادج الحظر يظهر بوضوح لو محظور */}
                         {!u.is_active && (
-                          <span
-                            style={{
-                              padding: "2px 8px",
-                              borderRadius: 20,
-                              fontSize: 10,
-                              fontWeight: 700,
-                              background: "rgba(255,71,87,0.15)",
-                              color: "#ff4757",
-                              border: "1px solid rgba(255,71,87,0.3)",
-                            }}
-                          >
+                          <span style={{
+                            padding: "2px 8px", borderRadius: 20,
+                            fontSize: 10, fontWeight: 700,
+                            background: "rgba(255,71,87,0.15)",
+                            color: "#ff4757",
+                            border: "1px solid rgba(255,71,87,0.3)",
+                          }}>
                             🚫 محظور
                           </span>
                         )}

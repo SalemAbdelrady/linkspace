@@ -10,10 +10,11 @@ const { auth, requireRole } = require('../middleware/auth');
     await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_key    VARCHAR(20)   DEFAULT 'cowork'`);
     await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_name   VARCHAR(100)  DEFAULT 'منطقة العمل المشتركة'`);
     await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL`);
+    await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_type VARCHAR(20)   DEFAULT 'session'`);
   } catch (e) { /* الأعمدة موجودة مسبقاً */ }
 })();
 
-// POST /api/invoices — حفظ فاتورة [staff/admin]
+// POST /api/invoices — حفظ فاتورة جلسة [staff/admin]
 router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
   const {
     invoice_number, session_id, user_id,
@@ -78,9 +79,7 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
       await client.query(`
         INSERT INTO wallet_transactions (user_id, type, amount, description)
         VALUES ($1, 'debit', $2, $3)
-      `, [
-        user_id,
-        walletPaid,
+      `, [user_id, walletPaid,
         `فاتورة #${invoice_number}${cashPaid > 0 ? ` (+ ${cashPaid.toFixed(2)} ج كاش)` : ''}`,
       ]);
     }
@@ -96,12 +95,12 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
         subtotal, total,
         wallet_paid, cash_paid,
         payment_method, note,
-        created_by
+        created_by, invoice_type
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,
         $8,$9,$10,$11,$12,
         $13,$14,$15,$16,$17,$18,$19,$20,$21,
-        $22
+        $22, 'session'
       )
       ON CONFLICT (invoice_number) DO NOTHING
       RETURNING *
@@ -135,7 +134,112 @@ router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
   }
 });
 
-// GET /api/invoices/my — فواتير العميل الحالي [client]
+// ✅ POST /api/invoices/quick-sale — بيع سريع بدون جلسة [staff/admin]
+router.post('/quick-sale', auth, requireRole('staff', 'admin'), async (req, res) => {
+  const {
+    client_name,    // اسم العميل أو "زائر"
+    client_phone,   // موبايل (اختياري)
+    user_id,        // id العميل لو مسجل (اختياري)
+    services,       // [{ name, price, qty }]
+    payment_method, // cash | wallet
+    note,
+  } = req.body;
+
+  if (!client_name || !services?.length) {
+    return res.status(400).json({ error: 'اسم العميل والخدمات مطلوبة' });
+  }
+
+  const total          = parseFloat(services.reduce((s, x) => s + parseFloat(x.price) * parseInt(x.qty), 0).toFixed(2));
+  const invoice_number = `QS-${Date.now()}-${Math.floor(Math.random() * 900 + 100)}`;
+
+  const client = await db.pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    let walletPaid     = 0;
+    let cashPaid       = total;
+    let currentBalance = 0;
+
+    // دفع بالمحفظة — فقط لو عميل مسجل
+    if (user_id && payment_method === 'wallet') {
+      const { rows: userRows } = await client.query(
+        'SELECT balance FROM users WHERE id = $1 FOR UPDATE', [user_id]
+      );
+      if (!userRows[0]) throw new Error('العميل غير موجود');
+      currentBalance = parseFloat(userRows[0].balance);
+
+      if (currentBalance < total) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          error: `الرصيد غير كافٍ — الرصيد الحالي: ${currentBalance.toFixed(2)} ج`,
+        });
+      }
+
+      walletPaid = total;
+      cashPaid   = 0;
+
+      await client.query(
+        'UPDATE users SET balance = balance - $1 WHERE id = $2',
+        [walletPaid, user_id]
+      );
+      await client.query(`
+        INSERT INTO wallet_transactions (user_id, type, amount, description)
+        VALUES ($1, 'debit', $2, $3)
+      `, [user_id, walletPaid, `بيع سريع #${invoice_number}`]);
+    }
+
+    const { rows } = await client.query(`
+      INSERT INTO invoices (
+        invoice_number, user_id,
+        client_name, client_phone,
+        space_key, space_name,
+        session_cost, services, services_cost,
+        subtotal, total,
+        wallet_paid, cash_paid,
+        payment_method, note,
+        created_by, invoice_type
+      ) VALUES (
+        $1, $2, $3, $4,
+        'quick_sale', '⚡ بيع سريع',
+        0, $5, $6,
+        $7, $7,
+        $8, $9,
+        $10, $11,
+        $12, 'quick_sale'
+      ) RETURNING *
+    `, [
+      invoice_number,
+      user_id || null,
+      client_name,
+      client_phone || '',
+      JSON.stringify(services),
+      total,
+      total,
+      walletPaid,
+      cashPaid,
+      payment_method || 'cash',
+      note || null,
+      req.user.id,
+    ]);
+
+    await client.query('COMMIT');
+    res.status(201).json({
+      invoice    : rows[0],
+      wallet_paid: walletPaid,
+      cash_paid  : cashPaid,
+      new_balance: user_id ? parseFloat((currentBalance - walletPaid).toFixed(2)) : null,
+    });
+
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'خطأ في حفظ الفاتورة' });
+  } finally {
+    client.release();
+  }
+});
+
+// GET /api/invoices/my — فواتير العميل [client]
 router.get('/my', auth, async (req, res) => {
   const page   = parseInt(req.query.page) || 1;
   const limit  = 10;
@@ -145,18 +249,10 @@ router.get('/my', auth, async (req, res) => {
       SELECT * FROM invoices WHERE user_id = $1
       ORDER BY created_at DESC LIMIT $2 OFFSET $3
     `, [req.user.id, limit, offset]);
-
     const { rows: countRows } = await db.query(
-      'SELECT COUNT(*) FROM invoices WHERE user_id = $1',
-      [req.user.id]
+      'SELECT COUNT(*) FROM invoices WHERE user_id = $1', [req.user.id]
     );
-
-    res.json({
-      invoices: rows,
-      total   : parseInt(countRows[0].count),
-      page,
-      limit,
-    });
+    res.json({ invoices: rows, total: parseInt(countRows[0].count), page, limit });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'خطأ في جلب الفواتير' });
@@ -173,7 +269,6 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
   const staff_id = req.query.staff_id || '';
 
   try {
-    // ── الفواتير مع pagination ──
     const { rows } = await db.query(`
       SELECT i.*, u.name AS created_by_name, c.email AS client_email
       FROM invoices i
@@ -183,11 +278,9 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
         ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%')
         AND ($2 = '' OR DATE(i.created_at) = $2::date)
         AND ($3 = '' OR i.created_by = $3::integer)
-      ORDER BY i.created_at DESC
-      LIMIT $4 OFFSET $5
+      ORDER BY i.created_at DESC LIMIT $4 OFFSET $5
     `, [search, date, staff_id, limit, offset]);
 
-    // ── عدد الفواتير الكلي ──
     const { rows: countRows } = await db.query(`
       SELECT COUNT(*) FROM invoices i
       WHERE
@@ -196,12 +289,11 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
         AND ($3 = '' OR i.created_by = $3::integer)
     `, [search, date, staff_id]);
 
-    // ✅ ── مجاميع الفواتير (للـ Summary Bar) ──
     const { rows: summary } = await db.query(`
       SELECT
-        COALESCE(SUM(i.total),        0) AS total_amount,
-        COALESCE(SUM(i.cash_paid),    0) AS total_cash,
-        COALESCE(SUM(i.wallet_paid),  0) AS total_wallet
+        COALESCE(SUM(i.total),       0) AS total_amount,
+        COALESCE(SUM(i.cash_paid),   0) AS total_cash,
+        COALESCE(SUM(i.wallet_paid), 0) AS total_wallet
       FROM invoices i
       WHERE
         ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%')
@@ -212,38 +304,32 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
     res.json({
       invoices    : rows,
       total       : parseInt(countRows[0].count),
-      page,
-      limit,
-      // ✅ مجاميع تظهر في الـ Summary Bar في الفرونت
+      page, limit,
       total_amount: parseFloat(summary[0].total_amount),
       total_cash  : parseFloat(summary[0].total_cash),
       total_wallet: parseFloat(summary[0].total_wallet),
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'خطأ في جلب الفواتير' });
   }
 });
 
-// GET /api/invoices/export — كل الفواتير بدون pagination للتصدير
+// GET /api/invoices/export
 router.get('/export', auth, requireRole('staff', 'admin'), async (req, res) => {
   const search   = req.query.search   || '';
   const date     = req.query.date     || '';
   const staff_id = req.query.staff_id || '';
-
   try {
     const { rows } = await db.query(`
       SELECT i.*, u.name AS created_by_name
-      FROM invoices i
-      LEFT JOIN users u ON u.id = i.created_by
+      FROM invoices i LEFT JOIN users u ON u.id = i.created_by
       WHERE
         ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%')
         AND ($2 = '' OR DATE(i.created_at) = $2::date)
         AND ($3 = '' OR i.created_by = $3::integer)
       ORDER BY i.created_at DESC
     `, [search, date, staff_id]);
-
     res.json({ invoices: rows });
   } catch (err) {
     console.error(err);
@@ -251,7 +337,7 @@ router.get('/export', auth, requireRole('staff', 'admin'), async (req, res) => {
   }
 });
 
-// GET /api/invoices/:id [staff/admin]
+// GET /api/invoices/:id
 router.get('/:id', auth, requireRole('staff', 'admin'), async (req, res) => {
   try {
     const { rows } = await db.query(`
@@ -261,7 +347,6 @@ router.get('/:id', auth, requireRole('staff', 'admin'), async (req, res) => {
       LEFT JOIN users c ON c.id = i.user_id
       WHERE i.id = $1
     `, [req.params.id]);
-
     if (!rows[0]) return res.status(404).json({ error: 'فاتورة غير موجودة' });
     res.json({ invoice: rows[0] });
   } catch (err) {
@@ -270,4 +355,3 @@ router.get('/:id', auth, requireRole('staff', 'admin'), async (req, res) => {
 });
 
 module.exports = router;
-

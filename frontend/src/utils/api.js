@@ -124,4 +124,9 @@ export const staffAPI = {
   compare:           (year, month)     => api.get(`/staff/compare?year=${year}&month=${month}`),
 };
 
+//quickSaleAPI 
+export const quickSaleAPI = {
+  create: (data) => api.post('/invoices/quick-sale', data),
+};
+
 export default api;
