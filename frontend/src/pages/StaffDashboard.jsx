@@ -280,12 +280,13 @@ function QuickSaleModal({ services: allServices, onClose, onDone }) {
                   background: 'transparent', cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'rgba(0,212,170,0.06)'; }}
                 onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'transparent'; }}>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{svc.name}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4, color: '#fff' }}>{svc.name}</div>
                 <div style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 700 }}>{svc.price} ج</div>
               </button>
             ))}
           </div>
 
+          {/* السلة */}
           {cart.length > 0 && (
             <div style={{ padding: 12, background: 'rgba(0,212,170,0.06)', border: '1px solid rgba(0,212,170,0.2)', borderRadius: 12 }}>
               <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, fontWeight: 600 }}>🛒 السلة</div>

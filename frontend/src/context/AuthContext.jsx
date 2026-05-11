@@ -30,8 +30,9 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
-  const register = async (name, phone, password) => {
-    const { data } = await authAPI.register({ name, phone, password });
+  // ✅ register يقبل email إجباري الآن
+  const register = async (name, phone, password, email) => {
+    const { data } = await authAPI.register({ name, phone, password, email });
     localStorage.setItem('ls_token', data.token);
     setUser(data.user);
     return data.user;
@@ -43,7 +44,6 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    // ✅ أضفنا setUser للـ value عشان SettingsPage تقدر تحدّث بيانات المستخدم
     <AuthContext.Provider value={{ user, setUser, loading, login, register, logout, refreshUser: loadUser }}>
       {children}
     </AuthContext.Provider>

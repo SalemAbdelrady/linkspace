@@ -53,8 +53,8 @@ router.post('/register', [
   body('name').trim().notEmpty().withMessage('الاسم مطلوب'),
   body('phone').matches(/^01[0125][0-9]{8}$/).withMessage('رقم موبايل غير صحيح'),
   body('password').isLength({ min: 6 }).withMessage('كلمة السر 6 أحرف على الأقل'),
-  body('email').optional().isEmail().withMessage('البريد الإلكتروني غير صحيح'),
-], async (req, res) => {
+  body('email').isEmail().withMessage('البريد الإلكتروني مطلوب وغير صحيح'),
+  ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
