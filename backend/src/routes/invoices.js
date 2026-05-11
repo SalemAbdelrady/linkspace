@@ -193,16 +193,20 @@ router.post('/quick-sale', auth, requireRole('staff', 'admin'), async (req, res)
         invoice_number, user_id,
         client_name, client_phone,
         space_key, space_name,
-        session_cost, services, services_cost,
+        session_cost, duration_min, price_per_hr,
+        services, services_cost,
         subtotal, total,
+        discount_pct, discount_amount,
         wallet_paid, cash_paid,
         payment_method, note,
         created_by, invoice_type
       ) VALUES (
         $1, $2, $3, $4,
         'quick_sale', '⚡ بيع سريع',
-        0, $5, $6,
+        0, 0, 0,
+        $5, $6,
         $7, $7,
+        0, 0,
         $8, $9,
         $10, $11,
         $12, 'quick_sale'
