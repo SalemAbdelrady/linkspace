@@ -5,6 +5,7 @@ const QRCode  = require('qrcode');
 const { body, validationResult } = require('express-validator');
 const db      = require('../config/db');
 const { auth } = require('../middleware/auth');
+const authMiddleware = require('../middleware/auth');
 
 // ✅ في الأعلى — مش في آخر الملف
 const { uploadAvatar } = require('../utils/cloudinary');
