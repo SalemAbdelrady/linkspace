@@ -9,7 +9,7 @@ const isStaffOrAdmin = [auth, requireRole('staff', 'admin')];
 router.get('/', auth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT * FROM services WHERE is_active = true ORDER BY id'
+      'SELECT * FROM services ORDER BY sort_order ASC, id ASC'
     );
     res.json({ services: rows });
   } catch (err) {
@@ -56,6 +56,36 @@ router.delete('/:id', ...isStaffOrAdmin, requirePermission('can_edit_prices'), a
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// PUT /api/services/reorder
+router.put('/reorder', authMiddleware, async (req, res) => {
+  const { items } = req.body;
+  
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'بيانات غير صحيحة' });
+  }
+
+  try {
+    // أضف العمود لو مش موجود
+    await db.query(`
+      ALTER TABLE services 
+      ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0
+    `);
+
+    // حدّث الترتيب لكل عنصر
+    for (const item of items) {
+      await db.query(
+        'UPDATE services SET sort_order = $1 WHERE id = $2',
+        [item.sort_order, item.id]
+      );
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('reorder error:', err);
+    res.status(500).json({ error: 'خطأ في حفظ الترتيب' });
   }
 });
 
