@@ -892,11 +892,7 @@ export default function ClientDashboard() {
 
     if (!missingPhoto && !missingEmail) return;
 
-    const key = `profile_nudge_${user.id}`;
-    if (sessionStorage.getItem(key)) return;
-
     nudgeShown.current = true;
-    sessionStorage.setItem(key, "1");
 
     let line1 = "";
     let line2 = "";
@@ -997,7 +993,7 @@ export default function ClientDashboard() {
           </div>
         ),
         {
-          duration: 8000,
+          duration: 15000,  // يختفي لوحده بعد 15 ثانية
           position: "top-center",
           style: {
             background: "#1a1a2e",
