@@ -32,33 +32,6 @@ router.post('/', ...isStaffOrAdmin, requirePermission('can_edit_prices'), async 
   }
 });
 
-// PUT /api/services/:id — أدمن أو موظف عنده can_edit_prices
-router.put('/:id', ...isStaffOrAdmin, requirePermission('can_edit_prices'), async (req, res) => {
-  const { name, price } = req.body;
-  try {
-    const { rows } = await db.query(`
-      UPDATE services SET name = $1, price = $2, updated_at = NOW()
-      WHERE id = $3 RETURNING *
-    `, [name, price, req.params.id]);
-    res.json({ service: rows[0] });
-  } catch (err) {
-    res.status(500).json({ error: 'خطأ في الخادم' });
-  }
-});
-
-// DELETE /api/services/:id — أدمن أو موظف عنده can_edit_prices
-router.delete('/:id', ...isStaffOrAdmin, requirePermission('can_edit_prices'), async (req, res) => {
-  try {
-    await db.query(
-      'UPDATE services SET is_active = false WHERE id = $1',
-      [req.params.id]
-    );
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: 'خطأ في الخادم' });
-  }
-});
-
 // PUT /api/services/reorder
 router.put('/reorder', auth, async (req, res) => { // [{id, sort_order}]
   const { items } = req.body;
@@ -86,6 +59,33 @@ router.put('/reorder', auth, async (req, res) => { // [{id, sort_order}]
   } catch (err) {
     console.error('reorder error:', err);
     res.status(500).json({ error: 'خطأ في حفظ الترتيب' });
+  }
+});
+
+// PUT /api/services/:id — أدمن أو موظف عنده can_edit_prices
+router.put('/:id', ...isStaffOrAdmin, requirePermission('can_edit_prices'), async (req, res) => {
+  const { name, price } = req.body;
+  try {
+    const { rows } = await db.query(`
+      UPDATE services SET name = $1, price = $2, updated_at = NOW()
+      WHERE id = $3 RETURNING *
+    `, [name, price, req.params.id]);
+    res.json({ service: rows[0] });
+  } catch (err) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// DELETE /api/services/:id — أدمن أو موظف عنده can_edit_prices
+router.delete('/:id', ...isStaffOrAdmin, requirePermission('can_edit_prices'), async (req, res) => {
+  try {
+    await db.query(
+      'UPDATE services SET is_active = false WHERE id = $1',
+      [req.params.id]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
 
