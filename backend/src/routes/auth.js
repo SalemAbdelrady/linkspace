@@ -5,7 +5,6 @@ const QRCode  = require('qrcode');
 const { body, validationResult } = require('express-validator');
 const db      = require('../config/db');
 const { auth } = require('../middleware/auth');
-const authMiddleware = require('../middleware/auth');
 
 // ✅ في الأعلى — مش في آخر الملف
 const { uploadAvatar } = require('../utils/cloudinary');
@@ -347,8 +346,7 @@ router.post('/avatar', auth, uploadAvatar.single('avatar'), async (req, res) => 
 });
 
 // PUT /api/services/reorder
-router.put('/reorder', authMiddleware, async (req, res) => {
-  const { items } = req.body; // [{id, sort_order}]
+router.put('/reorder', auth, async (req, res) => {  const { items } = req.body; // [{id, sort_order}]
   try {
     for (const item of items) {
       await db.query(
