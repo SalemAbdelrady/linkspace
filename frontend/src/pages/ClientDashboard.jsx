@@ -844,6 +844,8 @@ export default function ClientDashboard() {
   const navigate = useNavigate();
   const [tab, setTab] = useState("overview");
 
+  const nudgeShown = useRef(false);
+
   const [sessions, setSessions] = useState([]);
   const [coupons, setCoupons] = useState([]);
   const [activeSession, setActiveSession] = useState(null);
@@ -878,23 +880,24 @@ export default function ClientDashboard() {
       .then(({ data }) => setAllOrdersCount(data.orders?.length || 0))
       .catch(() => {});
   }, [activeSession]);
+
   // ── Profile completion nudge ─────────────────────────────────────────
+  // ✅ الحل — استخدم useRef عشان تتأكد إن user اتحمل فعلاً
   useEffect(() => {
-    // لو مفيش user بعد، استنى
-    if (!user) return;
+    // لو user لسه null أو الـ nudge اتعرض قبل كده، اخرج
+    if (!user || nudgeShown.current) return;
 
     const missingPhoto = !user.avatar_url;
     const missingEmail = !user.email;
 
-    // لو كل حاجة موجودة، متعملش حاجة
     if (!missingPhoto && !missingEmail) return;
 
-    // اتأكد إنك ما عرضتهاش في نفس الـ session
-    const key = `profile_nudge_shown_${user.id}`;
+    const key = `profile_nudge_${user.id}`;
     if (sessionStorage.getItem(key)) return;
+
+    nudgeShown.current = true;
     sessionStorage.setItem(key, "1");
 
-    // بنى الرسالة حسب اللي ناقص
     let line1 = "";
     let line2 = "";
 
@@ -909,7 +912,6 @@ export default function ClientDashboard() {
       line2 = "أضف إيميلك لاستقبال فواتيرك وإشعاراتك";
     }
 
-    // عرض الـ toast بعد ثانية واحدة (عشان الصفحة تتحمل أولاً)
     const timer = setTimeout(() => {
       toast(
         (t) => (
@@ -922,7 +924,6 @@ export default function ClientDashboard() {
               cursor: "pointer",
             }}
           >
-            {/* أيقونة */}
             <div
               style={{
                 width: 40,
@@ -940,7 +941,6 @@ export default function ClientDashboard() {
               {missingPhoto ? "📸" : "📧"}
             </div>
 
-            {/* النص */}
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 3 }}>
                 {line1}
@@ -976,7 +976,6 @@ export default function ClientDashboard() {
               </button>
             </div>
 
-            {/* زر الإغلاق */}
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -998,7 +997,7 @@ export default function ClientDashboard() {
           </div>
         ),
         {
-          duration: 8000, // يختفي لوحده بعد 8 ثواني
+          duration: 8000,
           position: "top-center",
           style: {
             background: "#1a1a2e",
@@ -1009,14 +1008,13 @@ export default function ClientDashboard() {
             boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
             color: "#fff",
           },
-          icon: null, // نلغي الأيقونة الافتراضية
+          icon: null,
         },
       );
-    }, 1200);
+    }, 1500);
 
     return () => clearTimeout(timer);
-  }, [user]); // بيشتغل لما user يتحمل
-
+  }, [user]); // لازم يفضل [user] عشان ينتظر تحميله
   async function loadSpaces() {
     try {
       const { data } = await spacesAPI.getAll();
