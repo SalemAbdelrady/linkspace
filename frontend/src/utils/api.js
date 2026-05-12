@@ -78,6 +78,7 @@ export const servicesAPI = {
   create: (data)      => api.post('/services', data),
   update: (id, data)  => api.put(`/services/${id}`, data),
   delete: (id)        => api.delete(`/services/${id}`),
+  reorder: (items) => api.put('/services/reorder', { items }),
 };
 
 // Orders

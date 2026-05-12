@@ -345,4 +345,20 @@ router.post('/avatar', auth, uploadAvatar.single('avatar'), async (req, res) => 
   }
 });
 
+// PUT /api/services/reorder
+router.put('/reorder', authMiddleware, async (req, res) => {
+  const { items } = req.body; // [{id, sort_order}]
+  try {
+    for (const item of items) {
+      await db.query(
+        'UPDATE services SET sort_order = $1 WHERE id = $2',
+        [item.sort_order, item.id]
+      );
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'خطأ في حفظ الترتيب' });
+  }
+});
+
 module.exports = router;

@@ -1372,6 +1372,17 @@ export default function AdminDashboard() {
     }
   }
 
+// ── دالة حفظ ترتيب الخدمات ──
+async function reorderServices(newOrder) {
+  setServices(newOrder); // تحديث فوري في الـ UI
+  try {
+    await servicesAPI.reorder(newOrder.map((s, i) => ({ id: s.id, sort_order: i })));
+  } catch {
+    toast.error("خطأ في حفظ الترتيب");
+    loadServices(); // رجع للترتيب القديم لو فشل
+  }
+}
+
   // أضف هذا مع باقي الـ states:
   const [invoiceSummary, setInvoiceSummary] = useState({
     total_amount: 0,
@@ -3196,89 +3207,134 @@ export default function AdminDashboard() {
                       لا توجد خدمات بعد — أضف أول خدمة!
                     </div>
                   )}
-                  {services.map((s) => (
-                    <div
-                      key={s.id}
-                      className="card"
-                      style={{ display: "flex", alignItems: "center", gap: 10 }}
-                    >
-                      {editingService?.id === s.id ? (
-                        <>
-                          <input
-                            className="input-field"
-                            style={{ flex: 1 }}
-                            value={editingService.name}
-                            onChange={(e) =>
-                              setEditingService((prev) => ({
-                                ...prev,
-                                name: e.target.value,
-                              }))
-                            }
-                          />
-                          <input
-                            className="input-field"
-                            type="number"
-                            style={{ width: 80 }}
-                            value={editingService.price}
-                            onChange={(e) =>
-                              setEditingService((prev) => ({
-                                ...prev,
-                                price: e.target.value,
-                              }))
-                            }
-                          />
-                          <button
-                            className="btn btn-primary"
-                            style={{ padding: "6px 12px", fontSize: 12 }}
-                            onClick={saveService}
-                          >
-                            حفظ
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 600, fontSize: 14 }}>
-                              {s.name}
-                            </div>
-                            <div
-                              style={{ fontSize: 12, color: "var(--accent)" }}
-                            >
-                              {s.price} ج
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => setEditingService(s)}
-                            style={{
-                              background: "transparent",
-                              border: "1px solid var(--border)",
-                              color: "var(--muted)",
-                              padding: "5px 10px",
-                              borderRadius: 8,
-                              fontSize: 12,
-                              cursor: "pointer",
-                            }}
-                          >
-                            ✏️
-                          </button>
-                          <button
-                            onClick={() => deleteService(s.id)}
-                            style={{
-                              background: "transparent",
-                              border: "1px solid rgba(255,71,87,0.3)",
-                              color: "#ff4757",
-                              padding: "5px 10px",
-                              borderRadius: 8,
-                              fontSize: 12,
-                              cursor: "pointer",
-                            }}
-                          >
-                            🗑️
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  ))}
+        {services.map((s, index) => (
+  <div
+    key={s.id}
+    className="card"
+    style={{ display: "flex", alignItems: "center", gap: 10 }}
+    draggable
+    onDragStart={(e) => {
+      e.dataTransfer.setData("dragIndex", index);
+    }}
+    onDragOver={(e) => e.preventDefault()}
+    onDrop={(e) => {
+      e.preventDefault();
+      const from = parseInt(e.dataTransfer.getData("dragIndex"));
+      const to = index;
+      if (from === to) return;
+      const updated = [...services];
+      const [moved] = updated.splice(from, 1);
+      updated.splice(to, 0, moved);
+      reorderServices(updated);
+    }}
+  >
+    {editingService?.id === s.id ? (
+      <>
+        <input className="input-field" style={{ flex: 1 }}
+          value={editingService.name}
+          onChange={(e) => setEditingService(prev => ({ ...prev, name: e.target.value }))} />
+        <input className="input-field" type="number" style={{ width: 80 }}
+          value={editingService.price}
+          onChange={(e) => setEditingService(prev => ({ ...prev, price: e.target.value }))} />
+        <button className="btn btn-primary" style={{ padding: "6px 12px", fontSize: 12 }}
+          onClick={saveService}>حفظ</button>
+      </>
+    ) : (
+      <>
+        {/* ✅ مقبض السحب */}
+        <div
+          title="اسحب لتغيير الترتيب"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 3,
+            padding: "4px 6px",
+            cursor: "grab",
+            flexShrink: 0,
+            opacity: 0.4,
+          }}
+          onMouseEnter={e => e.currentTarget.style.opacity = 1}
+          onMouseLeave={e => e.currentTarget.style.opacity = 0.4}
+        >
+          {[0,1,2].map(i => (
+            <div key={i} style={{
+              display: "flex", gap: 3,
+            }}>
+              {[0,1].map(j => (
+                <div key={j} style={{
+                  width: 3, height: 3, borderRadius: "50%",
+                  background: "var(--muted)",
+                }} />
+              ))}
+            </div>
+          ))}
+        </div>
+
+        {/* رقم الترتيب */}
+        <div style={{
+          width: 20, height: 20, borderRadius: "50%",
+          background: "rgba(0,212,170,0.1)",
+          border: "1px solid rgba(0,212,170,0.2)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 10, fontWeight: 700, color: "var(--accent)",
+          flexShrink: 0,
+        }}>
+          {index + 1}
+        </div>
+
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>{s.name}</div>
+          <div style={{ fontSize: 12, color: "var(--accent)" }}>{s.price} ج</div>
+        </div>
+
+        {/* أزرار أعلى/أسفل للموبايل */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <button
+            onClick={() => {
+              if (index === 0) return;
+              const updated = [...services];
+              [updated[index - 1], updated[index]] = [updated[index], updated[index - 1]];
+              reorderServices(updated);
+            }}
+            disabled={index === 0}
+            style={{
+              width: 24, height: 22, borderRadius: 6,
+              border: "1px solid var(--border)", background: "transparent",
+              color: index === 0 ? "var(--border)" : "var(--muted)",
+              cursor: index === 0 ? "default" : "pointer", fontSize: 11,
+            }}
+          >▲</button>
+          <button
+            onClick={() => {
+              if (index === services.length - 1) return;
+              const updated = [...services];
+              [updated[index + 1], updated[index]] = [updated[index], updated[index + 1]];
+              reorderServices(updated);
+            }}
+            disabled={index === services.length - 1}
+            style={{
+              width: 24, height: 22, borderRadius: 6,
+              border: "1px solid var(--border)", background: "transparent",
+              color: index === services.length - 1 ? "var(--border)" : "var(--muted)",
+              cursor: index === services.length - 1 ? "default" : "pointer", fontSize: 11,
+            }}
+          >▼</button>
+        </div>
+
+        <button onClick={() => setEditingService(s)}
+          style={{ background: "transparent", border: "1px solid var(--border)",
+            color: "var(--muted)", padding: "5px 10px", borderRadius: 8, fontSize: 12, cursor: "pointer" }}>
+          ✏️
+        </button>
+        <button onClick={() => deleteService(s.id)}
+          style={{ background: "transparent", border: "1px solid rgba(255,71,87,0.3)",
+            color: "#ff4757", padding: "5px 10px", borderRadius: 8, fontSize: 12, cursor: "pointer" }}>
+          🗑️
+        </button>
+      </>
+    )}
+  </div>
+))}
                 </div>
               </div>
             )}

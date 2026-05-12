@@ -993,7 +993,7 @@ export default function ClientDashboard() {
           </div>
         ),
         {
-          duration: 15000,  // يختفي لوحده بعد 15 ثانية
+          duration: 8000,  // يختفي لوحده بعد 8 ثواني
           position: "top-center",
           style: {
             background: "#1a1a2e",
