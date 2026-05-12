@@ -60,7 +60,7 @@ router.delete('/:id', ...isStaffOrAdmin, requirePermission('can_edit_prices'), a
 });
 
 // PUT /api/services/reorder
-router.put('/reorder', authMiddleware, async (req, res) => {
+router.put('/reorder', auth, async (req, res) => { // [{id, sort_order}]
   const { items } = req.body;
   
   if (!Array.isArray(items) || items.length === 0) {
