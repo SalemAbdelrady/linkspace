@@ -229,6 +229,13 @@ function AddOrderModal({ session, onClose, onAdded }) {
         >
           اختر خدمة أو مشروب
         </div>
+        <input
+          className="input-field"
+          placeholder="🔍 بحث باسم أو سعر..."
+          value={serviceSearch}
+          onChange={(e) => setServiceSearch(e.target.value)}
+          style={{ marginBottom: 10 }}
+        />
         <div
           style={{
             display: "grid",
@@ -236,13 +243,13 @@ function AddOrderModal({ session, onClose, onAdded }) {
             gap: 8,
           }}
         >
-          {allServices
+          {services
             .filter(
               (s) =>
-                s.name.toLowerCase().includes(svcSearch.toLowerCase()) ||
-                String(s.price).includes(svcSearch),
+                s.name.toLowerCase().includes(serviceSearch.toLowerCase()) ||
+                String(s.price).includes(serviceSearch),
             )
-            .map((svc) => (
+            .map((s) => (
               <button
                 key={s.id}
                 onClick={() => addOrder(s)}
@@ -326,7 +333,7 @@ export default function ScannerPage() {
 
   // ✅ مودال إضافة الطلبات
   const [orderModal, setOrderModal] = useState(null); // session object
-
+  // AddOrderModal
   const [serviceSearch, setServiceSearch] = useState("");
 
   // ✅ عداد الطلبات لكل جلسة

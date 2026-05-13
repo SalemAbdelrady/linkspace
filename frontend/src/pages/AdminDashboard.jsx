@@ -3703,6 +3703,7 @@ export default function AdminDashboard() {
                     </div>
                   )}
                   {services
+                    .map((s, index) => ({ ...s, _index: index })) // احفظ الـ index الأصلي
                     .filter(
                       (s) =>
                         s.name
@@ -3713,23 +3714,15 @@ export default function AdminDashboard() {
                     .map((s) => (
                       <div
                         key={s.id}
-                        className="card"
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                        }}
                         draggable
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData("dragIndex", index);
-                        }}
-                        onDragOver={(e) => e.preventDefault()}
+                        onDragStart={(e) =>
+                          e.dataTransfer.setData("dragIndex", s._index)
+                        }
                         onDrop={(e) => {
-                          e.preventDefault();
                           const from = parseInt(
                             e.dataTransfer.getData("dragIndex"),
                           );
-                          const to = index;
+                          const to = s._index;
                           if (from === to) return;
                           const updated = [...services];
                           const [moved] = updated.splice(from, 1);
@@ -4562,14 +4555,14 @@ export default function AdminDashboard() {
                   >
                     <div
                       style={{
-                        fontSize: 8,
+                        fontSize: 10,
                         color: "var(--muted)",
                         marginBottom: 4,
                       }}
                     >
                       {label}
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color }}>
                       {val}
                     </div>
                   </div>
