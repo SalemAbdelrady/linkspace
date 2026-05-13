@@ -898,6 +898,9 @@ function QuickSaleModal({ services: allServices, adminAPI, onClose, onDone }) {
   const [payMethod, setPayMethod] = useState("cash");
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const [svcSearch, setSvcSearch] = useState("");
+
   const [step, setStep] = useState(1); // 1=العميل 2=الخدمات 3=الدفع
 
   const total = cart.reduce((s, x) => s + x.price * x.qty, 0);
@@ -1190,7 +1193,13 @@ function QuickSaleModal({ services: allServices, adminAPI, onClose, onDone }) {
           >
             ☕ اختر الخدمات
           </div>
-
+          <input
+            className="input-field"
+            placeholder="🔍 بحث باسم أو سعر..."
+            value={svcSearch}
+            onChange={(e) => setSvcSearch(e.target.value)}
+            style={{ marginBottom: 10 }}
+          />
           <div
             style={{
               display: "grid",
@@ -1199,49 +1208,55 @@ function QuickSaleModal({ services: allServices, adminAPI, onClose, onDone }) {
               marginBottom: 12,
             }}
           >
-            {allServices.map((svc) => (
-              <button
-                key={svc.id}
-                onClick={() => addToCart(svc)}
-                style={{
-                  padding: "12px 8px",
-                  borderRadius: 12,
-                  border: "1px solid var(--border)",
-                  background: "transparent",
-                  cursor: "pointer",
-                  textAlign: "center",
-                  transition: "all 0.15s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "var(--accent)";
-                  e.currentTarget.style.background = "rgba(0,212,170,0.06)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "var(--border)";
-                  e.currentTarget.style.background = "transparent";
-                }}
-              >
-                <div
+            {allServices
+              .filter(
+                (s) =>
+                  s.name.toLowerCase().includes(svcSearch.toLowerCase()) ||
+                  String(s.price).includes(svcSearch),
+              )
+              .map((svc) => (
+                <button
+                  key={svc.id}
+                  onClick={() => addToCart(svc)}
                   style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: "var(--text)",
-                    marginBottom: 4,
+                    padding: "12px 8px",
+                    borderRadius: 12,
+                    border: "1px solid var(--border)",
+                    background: "transparent",
+                    cursor: "pointer",
+                    textAlign: "center",
+                    transition: "all 0.15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "var(--accent)";
+                    e.currentTarget.style.background = "rgba(0,212,170,0.06)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = "var(--border)";
+                    e.currentTarget.style.background = "transparent";
                   }}
                 >
-                  {svc.name}
-                </div>
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "var(--accent)",
-                    fontWeight: 700,
-                  }}
-                >
-                  {svc.price} ج
-                </div>
-              </button>
-            ))}
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: "var(--text)",
+                      marginBottom: 4,
+                    }}
+                  >
+                    {svc.name}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "var(--accent)",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {svc.price} ج
+                  </div>
+                </button>
+              ))}
           </div>
 
           {/* السلة */}
@@ -1514,6 +1529,8 @@ export default function AdminDashboard() {
   const [staffList, setStaffList] = useState([]);
   // state لخانة البحث عن الخدمات المتاحة
   const [serviceSearch, setServiceSearch] = useState("");
+  // state لتصدير العملاء الى ملف اكسيل
+  const [usersStats, setUsersStats] = useState(null);
 
   // ══ state إدارة الموظفين ══
   const [staffMgmt, setStaffMgmt] = useState([]);
@@ -1599,8 +1616,59 @@ export default function AdminDashboard() {
     try {
       const { data } = await adminAPI.users(search);
       setUsers(data.users);
+      setUsersStats(data.stats); // ← جديد
     } catch {
       toast.error("خطأ في تحميل العملاء");
+    }
+  }
+
+  // دالة تصدير العملاء لملف اكسيل
+  async function exportUsersToExcel() {
+    toast.loading("جارٍ تجهيز الملف...", { id: "export-users" });
+    try {
+      const { data } = await adminAPI.exportUsers(search);
+      const allUsers = data.users;
+      if (!allUsers?.length) return toast.error("لا يوجد عملاء للتصدير");
+
+      const headers = [
+        "الاسم",
+        "الموبايل",
+        "البريد الإلكتروني",
+        "الرصيد",
+        "النقاط",
+        "الحالة",
+        "تاريخ التسجيل",
+      ];
+      const rows = allUsers.map((u) => [
+        u.name,
+        u.phone,
+        u.email || "",
+        parseFloat(u.balance).toFixed(2),
+        u.points,
+        u.is_active ? "نشط" : "معطل",
+        new Date(u.created_at).toLocaleDateString("ar-EG"),
+      ]);
+
+      const totalBalance = allUsers.reduce(
+        (s, u) => s + parseFloat(u.balance),
+        0,
+      );
+      rows.push(["الإجمالي", "", "", totalBalance.toFixed(2), "", "", ""]);
+
+      const BOM = "\uFEFF";
+      const csv = BOM + [headers, ...rows].map((r) => r.join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `عملاء_${new Date().toLocaleDateString("ar-EG").replace(/\//g, "-")}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success("✅ تم تصدير الملف");
+    } catch {
+      toast.error("خطأ في التصدير");
+    } finally {
+      toast.dismiss("export-users");
     }
   }
 
@@ -2520,6 +2588,68 @@ export default function AdminDashboard() {
         {/* ══ USERS ══ */}
         {tab === "users" && (
           <div className="fade-up">
+            {/* ── Stats Bar ── */}
+            {usersStats && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(4,1fr)",
+                  gap: 8,
+                  marginBottom: 14,
+                }}
+              >
+                {[
+                  ["إجمالي العملاء", usersStats.total_clients, "var(--text)"],
+                  ["نشطون الآن", usersStats.active_clients, "var(--success)"],
+                  ["جدد هذا الشهر", usersStats.new_this_month, "var(--accent)"],
+                  [
+                    "إجمالي الأرصدة",
+                    `${parseFloat(usersStats.total_balance).toFixed(0)} ج`,
+                    "var(--warning)",
+                  ],
+                ].map(([label, val, color]) => (
+                  <div
+                    key={label}
+                    className="card"
+                    style={{ padding: "10px 8px", textAlign: "center" }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 9,
+                        color: "var(--muted)",
+                        marginBottom: 4,
+                      }}
+                    >
+                      {label}
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color }}>
+                      {val}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ── زر التصدير ── */}
+            <button
+              onClick={exportUsersToExcel}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "7px 14px",
+                borderRadius: 10,
+                border: "1px solid rgba(34,197,94,0.4)",
+                background: "rgba(34,197,94,0.08)",
+                color: "#22c55e",
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer",
+                marginBottom: 12,
+              }}
+            >
+              📥 تصدير Excel
+            </button>
             <div className="input-wrap">
               <input
                 className="input-field"
@@ -3572,236 +3702,248 @@ export default function AdminDashboard() {
                       لا توجد خدمات بعد — أضف أول خدمة!
                     </div>
                   )}
-                  {services.map((s, index) => (
-                    <div
-                      key={s.id}
-                      className="card"
-                      style={{ display: "flex", alignItems: "center", gap: 10 }}
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData("dragIndex", index);
-                      }}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        const from = parseInt(
-                          e.dataTransfer.getData("dragIndex"),
-                        );
-                        const to = index;
-                        if (from === to) return;
-                        const updated = [...services];
-                        const [moved] = updated.splice(from, 1);
-                        updated.splice(to, 0, moved);
-                        reorderServices(updated);
-                      }}
-                    >
-                      {editingService?.id === s.id ? (
-                        <>
-                          <input
-                            className="input-field"
-                            style={{ flex: 1 }}
-                            value={editingService.name}
-                            onChange={(e) =>
-                              setEditingService((prev) => ({
-                                ...prev,
-                                name: e.target.value,
-                              }))
-                            }
-                          />
-                          <input
-                            className="input-field"
-                            type="number"
-                            style={{ width: 80 }}
-                            value={editingService.price}
-                            onChange={(e) =>
-                              setEditingService((prev) => ({
-                                ...prev,
-                                price: e.target.value,
-                              }))
-                            }
-                          />
-                          <button
-                            className="btn btn-primary"
-                            style={{ padding: "6px 12px", fontSize: 12 }}
-                            onClick={saveService}
-                          >
-                            حفظ
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          {/* ✅ مقبض السحب */}
-                          <div
-                            title="اسحب لتغيير الترتيب"
-                            style={{
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 3,
-                              padding: "4px 6px",
-                              cursor: "grab",
-                              flexShrink: 0,
-                              opacity: 0.4,
-                            }}
-                            onMouseEnter={(e) =>
-                              (e.currentTarget.style.opacity = 1)
-                            }
-                            onMouseLeave={(e) =>
-                              (e.currentTarget.style.opacity = 0.4)
-                            }
-                          >
-                            {[0, 1, 2].map((i) => (
+                  {services
+                    .filter(
+                      (s) =>
+                        s.name
+                          .toLowerCase()
+                          .includes(serviceSearch.toLowerCase()) ||
+                        String(s.price).includes(serviceSearch),
+                    )
+                    .map((s) => (
+                      <div
+                        key={s.id}
+                        className="card"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                        }}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("dragIndex", index);
+                        }}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const from = parseInt(
+                            e.dataTransfer.getData("dragIndex"),
+                          );
+                          const to = index;
+                          if (from === to) return;
+                          const updated = [...services];
+                          const [moved] = updated.splice(from, 1);
+                          updated.splice(to, 0, moved);
+                          reorderServices(updated);
+                        }}
+                      >
+                        {editingService?.id === s.id ? (
+                          <>
+                            <input
+                              className="input-field"
+                              style={{ flex: 1 }}
+                              value={editingService.name}
+                              onChange={(e) =>
+                                setEditingService((prev) => ({
+                                  ...prev,
+                                  name: e.target.value,
+                                }))
+                              }
+                            />
+                            <input
+                              className="input-field"
+                              type="number"
+                              style={{ width: 80 }}
+                              value={editingService.price}
+                              onChange={(e) =>
+                                setEditingService((prev) => ({
+                                  ...prev,
+                                  price: e.target.value,
+                                }))
+                              }
+                            />
+                            <button
+                              className="btn btn-primary"
+                              style={{ padding: "6px 12px", fontSize: 12 }}
+                              onClick={saveService}
+                            >
+                              حفظ
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            {/* ✅ مقبض السحب */}
+                            <div
+                              title="اسحب لتغيير الترتيب"
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 3,
+                                padding: "4px 6px",
+                                cursor: "grab",
+                                flexShrink: 0,
+                                opacity: 0.4,
+                              }}
+                              onMouseEnter={(e) =>
+                                (e.currentTarget.style.opacity = 1)
+                              }
+                              onMouseLeave={(e) =>
+                                (e.currentTarget.style.opacity = 0.4)
+                              }
+                            >
+                              {[0, 1, 2].map((i) => (
+                                <div
+                                  key={i}
+                                  style={{
+                                    display: "flex",
+                                    gap: 3,
+                                  }}
+                                >
+                                  {[0, 1].map((j) => (
+                                    <div
+                                      key={j}
+                                      style={{
+                                        width: 3,
+                                        height: 3,
+                                        borderRadius: "50%",
+                                        background: "var(--muted)",
+                                      }}
+                                    />
+                                  ))}
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* رقم الترتيب */}
+                            <div
+                              style={{
+                                width: 20,
+                                height: 20,
+                                borderRadius: "50%",
+                                background: "rgba(0,212,170,0.1)",
+                                border: "1px solid rgba(0,212,170,0.2)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: 10,
+                                fontWeight: 700,
+                                color: "var(--accent)",
+                                flexShrink: 0,
+                              }}
+                            >
+                              {index + 1}
+                            </div>
+
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 600, fontSize: 14 }}>
+                                {s.name}
+                              </div>
                               <div
-                                key={i}
+                                style={{ fontSize: 12, color: "var(--accent)" }}
+                              >
+                                {s.price} ج
+                              </div>
+                            </div>
+
+                            {/* أزرار أعلى/أسفل للموبايل */}
+                            <div
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 2,
+                              }}
+                            >
+                              <button
+                                onClick={() => {
+                                  if (index === 0) return;
+                                  const updated = [...services];
+                                  [updated[index - 1], updated[index]] = [
+                                    updated[index],
+                                    updated[index - 1],
+                                  ];
+                                  reorderServices(updated);
+                                }}
+                                disabled={index === 0}
                                 style={{
-                                  display: "flex",
-                                  gap: 3,
+                                  width: 24,
+                                  height: 22,
+                                  borderRadius: 6,
+                                  border: "1px solid var(--border)",
+                                  background: "transparent",
+                                  color:
+                                    index === 0
+                                      ? "var(--border)"
+                                      : "var(--muted)",
+                                  cursor: index === 0 ? "default" : "pointer",
+                                  fontSize: 11,
                                 }}
                               >
-                                {[0, 1].map((j) => (
-                                  <div
-                                    key={j}
-                                    style={{
-                                      width: 3,
-                                      height: 3,
-                                      borderRadius: "50%",
-                                      background: "var(--muted)",
-                                    }}
-                                  />
-                                ))}
-                              </div>
-                            ))}
-                          </div>
-
-                          {/* رقم الترتيب */}
-                          <div
-                            style={{
-                              width: 20,
-                              height: 20,
-                              borderRadius: "50%",
-                              background: "rgba(0,212,170,0.1)",
-                              border: "1px solid rgba(0,212,170,0.2)",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: 10,
-                              fontWeight: 700,
-                              color: "var(--accent)",
-                              flexShrink: 0,
-                            }}
-                          >
-                            {index + 1}
-                          </div>
-
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 600, fontSize: 14 }}>
-                              {s.name}
+                                ▲
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (index === services.length - 1) return;
+                                  const updated = [...services];
+                                  [updated[index + 1], updated[index]] = [
+                                    updated[index],
+                                    updated[index + 1],
+                                  ];
+                                  reorderServices(updated);
+                                }}
+                                disabled={index === services.length - 1}
+                                style={{
+                                  width: 24,
+                                  height: 22,
+                                  borderRadius: 6,
+                                  border: "1px solid var(--border)",
+                                  background: "transparent",
+                                  color:
+                                    index === services.length - 1
+                                      ? "var(--border)"
+                                      : "var(--muted)",
+                                  cursor:
+                                    index === services.length - 1
+                                      ? "default"
+                                      : "pointer",
+                                  fontSize: 11,
+                                }}
+                              >
+                                ▼
+                              </button>
                             </div>
-                            <div
-                              style={{ fontSize: 12, color: "var(--accent)" }}
-                            >
-                              {s.price} ج
-                            </div>
-                          </div>
 
-                          {/* أزرار أعلى/أسفل للموبايل */}
-                          <div
-                            style={{
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 2,
-                            }}
-                          >
                             <button
-                              onClick={() => {
-                                if (index === 0) return;
-                                const updated = [...services];
-                                [updated[index - 1], updated[index]] = [
-                                  updated[index],
-                                  updated[index - 1],
-                                ];
-                                reorderServices(updated);
-                              }}
-                              disabled={index === 0}
+                              onClick={() => setEditingService(s)}
                               style={{
-                                width: 24,
-                                height: 22,
-                                borderRadius: 6,
-                                border: "1px solid var(--border)",
                                 background: "transparent",
-                                color:
-                                  index === 0
-                                    ? "var(--border)"
-                                    : "var(--muted)",
-                                cursor: index === 0 ? "default" : "pointer",
-                                fontSize: 11,
+                                border: "1px solid var(--border)",
+                                color: "var(--muted)",
+                                padding: "5px 10px",
+                                borderRadius: 8,
+                                fontSize: 12,
+                                cursor: "pointer",
                               }}
                             >
-                              ▲
+                              ✏️
                             </button>
                             <button
-                              onClick={() => {
-                                if (index === services.length - 1) return;
-                                const updated = [...services];
-                                [updated[index + 1], updated[index]] = [
-                                  updated[index],
-                                  updated[index + 1],
-                                ];
-                                reorderServices(updated);
-                              }}
-                              disabled={index === services.length - 1}
+                              onClick={() => deleteService(s.id)}
                               style={{
-                                width: 24,
-                                height: 22,
-                                borderRadius: 6,
-                                border: "1px solid var(--border)",
                                 background: "transparent",
-                                color:
-                                  index === services.length - 1
-                                    ? "var(--border)"
-                                    : "var(--muted)",
-                                cursor:
-                                  index === services.length - 1
-                                    ? "default"
-                                    : "pointer",
-                                fontSize: 11,
+                                border: "1px solid rgba(255,71,87,0.3)",
+                                color: "#ff4757",
+                                padding: "5px 10px",
+                                borderRadius: 8,
+                                fontSize: 12,
+                                cursor: "pointer",
                               }}
                             >
-                              ▼
+                              🗑️
                             </button>
-                          </div>
-
-                          <button
-                            onClick={() => setEditingService(s)}
-                            style={{
-                              background: "transparent",
-                              border: "1px solid var(--border)",
-                              color: "var(--muted)",
-                              padding: "5px 10px",
-                              borderRadius: 8,
-                              fontSize: 12,
-                              cursor: "pointer",
-                            }}
-                          >
-                            ✏️
-                          </button>
-                          <button
-                            onClick={() => deleteService(s.id)}
-                            style={{
-                              background: "transparent",
-                              border: "1px solid rgba(255,71,87,0.3)",
-                              color: "#ff4757",
-                              padding: "5px 10px",
-                              borderRadius: 8,
-                              fontSize: 12,
-                              cursor: "pointer",
-                            }}
-                          >
-                            🗑️
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  ))}
+                          </>
+                        )}
+                      </div>
+                    ))}
                 </div>
               </div>
             )}
@@ -4420,14 +4562,14 @@ export default function AdminDashboard() {
                   >
                     <div
                       style={{
-                        fontSize: 10,
+                        fontSize: 8,
                         color: "var(--muted)",
                         marginBottom: 4,
                       }}
                     >
                       {label}
                     </div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color }}>
                       {val}
                     </div>
                   </div>
