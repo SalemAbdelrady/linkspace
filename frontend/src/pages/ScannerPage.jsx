@@ -236,13 +236,13 @@ function AddOrderModal({ session, onClose, onAdded }) {
             gap: 8,
           }}
         >
-          {services
+          {allServices
             .filter(
               (s) =>
-                s.name.toLowerCase().includes(serviceSearch.toLowerCase()) ||
-                String(s.price).includes(serviceSearch),
+                s.name.toLowerCase().includes(svcSearch.toLowerCase()) ||
+                String(s.price).includes(svcSearch),
             )
-            .map((s) => (
+            .map((svc) => (
               <button
                 key={s.id}
                 onClick={() => addOrder(s)}
@@ -326,6 +326,8 @@ export default function ScannerPage() {
 
   // ✅ مودال إضافة الطلبات
   const [orderModal, setOrderModal] = useState(null); // session object
+
+  const [serviceSearch, setServiceSearch] = useState("");
 
   // ✅ عداد الطلبات لكل جلسة
   const [sessionOrders, setSessionOrders] = useState({}); // { session_id: count }

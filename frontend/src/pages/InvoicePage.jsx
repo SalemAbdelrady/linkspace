@@ -983,49 +983,55 @@ export default function InvoicePage() {
                 marginBottom: 16,
               }}
             >
-              {servicesList.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => addService(s)}
-                  style={{
-                    padding: "10px 8px",
-                    borderRadius: 10,
-                    border: "1px solid",
-                    background: addedServices.find((x) => x.id === s.id)
-                      ? "rgba(0,212,170,0.1)"
-                      : "transparent",
-                    borderColor: addedServices.find((x) => x.id === s.id)
-                      ? "var(--accent)"
-                      : "var(--border)",
-                    cursor: "pointer",
-                    textAlign: "center",
-                  }}
-                >
-                  <div
+              {allServices
+                .filter(
+                  (s) =>
+                    s.name.toLowerCase().includes(svcSearch.toLowerCase()) ||
+                    String(s.price).includes(svcSearch),
+                )
+                .map((svc) => (
+                  <button
+                    key={s.id}
+                    onClick={() => addService(s)}
                     style={{
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: "var(--text)",
+                      padding: "10px 8px",
+                      borderRadius: 10,
+                      border: "1px solid",
+                      background: addedServices.find((x) => x.id === s.id)
+                        ? "rgba(0,212,170,0.1)"
+                        : "transparent",
+                      borderColor: addedServices.find((x) => x.id === s.id)
+                        ? "var(--accent)"
+                        : "var(--border)",
+                      cursor: "pointer",
+                      textAlign: "center",
                     }}
                   >
-                    {s.name}
-                  </div>
-                  <div style={{ fontSize: 11, color: "var(--accent)" }}>
-                    {s.price} ج
-                  </div>
-                  {addedServices.find((x) => x.id === s.id) && (
                     <div
                       style={{
-                        fontSize: 11,
-                        color: "var(--success)",
-                        marginTop: 2,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: "var(--text)",
                       }}
                     >
-                      ×{addedServices.find((x) => x.id === s.id).qty}
+                      {s.name}
                     </div>
-                  )}
-                </button>
-              ))}
+                    <div style={{ fontSize: 11, color: "var(--accent)" }}>
+                      {s.price} ج
+                    </div>
+                    {addedServices.find((x) => x.id === s.id) && (
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "var(--success)",
+                          marginTop: 2,
+                        }}
+                      >
+                        ×{addedServices.find((x) => x.id === s.id).qty}
+                      </div>
+                    )}
+                  </button>
+                ))}
             </div>
           )}
 
