@@ -249,55 +249,50 @@ function AddOrderModal({ session, onClose, onAdded }) {
                 s.name.toLowerCase().includes(serviceSearch.toLowerCase()) ||
                 String(s.price).includes(serviceSearch),
             )
-            .map(
-              (
-                s, // ✅ s مش svc
-              ) => (
-                <button
-                  key={s.id}
-                  onClick={() => addOrder(s)}
-                  disabled={saving}
+            .map((s) => (
+              <button
+                key={s.id}
+                onClick={() => addOrder(s)}
+                disabled={saving}
+                style={{
+                  padding: "12px 8px",
+                  borderRadius: 12,
+                  border: "1px solid var(--border)",
+                  background: "transparent",
+                  cursor: saving ? "not-allowed" : "pointer",
+                  textAlign: "center",
+                  transition: "all 0.15s",
+                  opacity: saving ? 0.6 : 1,
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.borderColor = "var(--accent)")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.borderColor = "var(--border)")
+                }
+              >
+                <div
                   style={{
-                    padding: "12px 8px",
-                    borderRadius: 12,
-                    border: "1px solid var(--border)",
-                    background: "transparent",
-                    cursor: saving ? "not-allowed" : "pointer",
-                    textAlign: "center",
-                    transition: "all 0.15s",
-                    opacity: saving ? 0.6 : 1,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "var(--text)",
+                    marginBottom: 4,
                   }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.borderColor = "var(--accent)")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.borderColor = "var(--border)")
-                  }
                 >
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: "var(--text)",
-                      marginBottom: 4,
-                    }}
-                  >
-                    {s.name}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: "var(--accent)",
-                      fontWeight: 700,
-                    }}
-                  >
-                    {s.price} ج
-                  </div>
-                </button>
-              ),
-            )}
+                  {s.name}
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "var(--accent)",
+                    fontWeight: 700,
+                  }}
+                >
+                  {s.price} ج
+                </div>
+              </button>
+            ))}
         </div>
-
         <button
           onClick={onClose}
           style={{
@@ -338,7 +333,7 @@ export default function ScannerPage() {
   // ✅ مودال إضافة الطلبات
   const [orderModal, setOrderModal] = useState(null); // session object
   // AddOrderModal
-  const [serviceSearch, setServiceSearch] = useState("");
+  const [serviceSearch, setServiceSearch] = useState('');
 
   // ✅ عداد الطلبات لكل جلسة
   const [sessionOrders, setSessionOrders] = useState({}); // { session_id: count }

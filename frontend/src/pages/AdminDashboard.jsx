@@ -3703,7 +3703,7 @@ export default function AdminDashboard() {
                     </div>
                   )}
                   {services
-                    .map((s, index) => ({ ...s, _index: index })) // احفظ الـ index الأصلي
+                    .map((s, index) => ({ ...s, _index: index }))
                     .filter(
                       (s) =>
                         s.name
@@ -3719,6 +3719,7 @@ export default function AdminDashboard() {
                           e.dataTransfer.setData("dragIndex", s._index)
                         }
                         onDrop={(e) => {
+                          e.preventDefault();
                           const from = parseInt(
                             e.dataTransfer.getData("dragIndex"),
                           );
@@ -3848,15 +3849,15 @@ export default function AdminDashboard() {
                             >
                               <button
                                 onClick={() => {
-                                  if (index === 0) return;
+                                  if (s._index === 0) return;
                                   const updated = [...services];
-                                  [updated[index - 1], updated[index]] = [
-                                    updated[index],
-                                    updated[index - 1],
+                                  [updated[s._index - 1], updated[s._index]] = [
+                                    updated[s._index],
+                                    updated[s._index - 1],
                                   ];
                                   reorderServices(updated);
                                 }}
-                                disabled={index === 0}
+                                disabled={s._index === 0}
                                 style={{
                                   width: 24,
                                   height: 22,
@@ -3864,10 +3865,11 @@ export default function AdminDashboard() {
                                   border: "1px solid var(--border)",
                                   background: "transparent",
                                   color:
-                                    index === 0
+                                    s._index === 0
                                       ? "var(--border)"
                                       : "var(--muted)",
-                                  cursor: index === 0 ? "default" : "pointer",
+                                  cursor:
+                                    s._index === 0 ? "default" : "pointer",
                                   fontSize: 11,
                                 }}
                               >
@@ -3875,15 +3877,15 @@ export default function AdminDashboard() {
                               </button>
                               <button
                                 onClick={() => {
-                                  if (index === services.length - 1) return;
+                                  if (s._index === services.length - 1) return;
                                   const updated = [...services];
-                                  [updated[index + 1], updated[index]] = [
-                                    updated[index],
-                                    updated[index + 1],
+                                  [updated[s._index + 1], updated[s._index]] = [
+                                    updated[s._index],
+                                    updated[s._index + 1],
                                   ];
                                   reorderServices(updated);
                                 }}
-                                disabled={index === services.length - 1}
+                                disabled={s._index === services.length - 1}
                                 style={{
                                   width: 24,
                                   height: 22,
@@ -3891,11 +3893,11 @@ export default function AdminDashboard() {
                                   border: "1px solid var(--border)",
                                   background: "transparent",
                                   color:
-                                    index === services.length - 1
+                                    s._index === services.length - 1
                                       ? "var(--border)"
                                       : "var(--muted)",
                                   cursor:
-                                    index === services.length - 1
+                                    s._index === services.length - 1
                                       ? "default"
                                       : "pointer",
                                   fontSize: 11,
