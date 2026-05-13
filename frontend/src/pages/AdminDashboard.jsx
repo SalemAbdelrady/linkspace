@@ -275,7 +275,7 @@ function UserModal({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(5,1fr)",
+            gridTemplateColumns: "1fr 1fr",
             gap: 10,
             marginBottom: 20,
           }}
@@ -4518,7 +4518,7 @@ export default function AdminDashboard() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1fr 1fr 1fr",
+                  gridTemplateColumns: "repeat(5,1fr)",
                   gap: 8,
                   marginBottom: 14,
                 }}
