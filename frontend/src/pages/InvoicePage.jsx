@@ -29,6 +29,8 @@ export default function InvoicePage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { session, client } = location.state || {};
+  // state للبحث في الخدمات الموجودة
+  const [serviceSearch, setServiceSearch] = useState("");
 
   const [servicesList, setServicesList] = useState([]);
   const [addedServices, setAddedServices] = useState([]);
@@ -953,6 +955,13 @@ export default function InvoicePage() {
           )}
 
           <div className="section-title">إضافة خدمات / مشروبات</div>
+          <input
+            className="input-field"
+            placeholder="🔍 بحث باسم أو سعر..."
+            value={serviceSearch}
+            onChange={(e) => setServiceSearch(e.target.value)}
+            style={{ marginBottom: 10 }}
+          />
           {servicesList.length === 0 ? (
             <div
               style={{

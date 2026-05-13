@@ -279,7 +279,7 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
       LEFT JOIN users u ON u.id = i.created_by
       LEFT JOIN users c ON c.id = i.user_id
       WHERE
-        ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%')
+        ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%'  OR i.invoice_number ILIKE '%' || $1 || '%')
         AND ($2 = '' OR DATE(i.created_at) = $2::date)
         AND ($3 = '' OR i.created_by = $3::integer)
       ORDER BY i.created_at DESC LIMIT $4 OFFSET $5
@@ -297,7 +297,9 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
       SELECT
         COALESCE(SUM(i.total),       0) AS total_amount,
         COALESCE(SUM(i.cash_paid),   0) AS total_cash,
-        COALESCE(SUM(i.wallet_paid), 0) AS total_wallet
+        COALESCE(SUM(i.wallet_paid), 0) AS total_wallet,
+        COUNT(*) FILTER (WHERE i.invoice_type = 'quick_sale') AS quick_sale_count,
+        COUNT(*) FILTER (WHERE i.invoice_type = 'session' OR i.invoice_type IS NULL) AS session_count
       FROM invoices i
       WHERE
         ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%')
@@ -312,6 +314,8 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
       total_amount: parseFloat(summary[0].total_amount),
       total_cash  : parseFloat(summary[0].total_cash),
       total_wallet: parseFloat(summary[0].total_wallet),
+      quick_sale_count: parseInt(summary[0].quick_sale_count),
+      session_count:    parseInt(summary[0].session_count),
     });
   } catch (err) {
     console.error(err);
