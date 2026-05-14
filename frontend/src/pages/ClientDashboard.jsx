@@ -839,6 +839,17 @@ function InvoiceDetailModal({ invoice, onClose }) {
 }
 
 // ── ClientDashboard ───────────────────────────────────────────────────
+// لعرض العضوية مثل (عضو منذ سنة و٣ أشهر)
+function memberSince(dateStr) {
+  const diff = Date.now() - new Date(dateStr);
+  const days = Math.floor(diff / 86400000);
+  if (days < 30) return `${days} يوم`;
+  if (days < 365) return `${Math.floor(days / 30)} شهر`;
+  const years = Math.floor(days / 365);
+  const months = Math.floor((days % 365) / 30);
+  return months > 0 ? `${years} سنة و${months} شهر` : `${years} سنة`;
+}
+
 export default function ClientDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -1346,15 +1357,21 @@ export default function ClientDashboard() {
             </div>
           )}
           {user?.created_at && (
-  <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
-    📅 عضو منذ{" "}
-    {new Date(user.created_at).toLocaleDateString("ar-EG", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    })}
-  </div>
-)}
+            <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
+              📅 عضو منذ{" "}
+              <strong style={{ color: "var(--accent)" }}>
+                {memberSince(user.created_at)}
+              </strong>
+              <span style={{ opacity: 0.6, marginRight: 4 }}>
+                ·{" "}
+                {new Date(user.created_at).toLocaleDateString("ar-EG", {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                })}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 

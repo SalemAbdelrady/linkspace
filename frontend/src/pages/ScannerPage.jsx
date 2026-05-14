@@ -14,9 +14,7 @@ function AddOrderModal({ session, onClose, onAdded }) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [orders, setOrders] = useState([]); // الطلبات الحالية
-  const [serviceSearch, setServiceSearch] = useState('');   // AddOrderModal
-
-
+  const [serviceSearch, setServiceSearch] = useState(""); // AddOrderModal
 
   useEffect(() => {
     // جيب الخدمات المتاحة
@@ -333,6 +331,9 @@ export default function ScannerPage() {
   const [spaces, setSpaces] = useState([]);
   const [selectedSpace, setSelectedSpace] = useState("cowork");
 
+  // ── state اضافة عدد الاشخاص على فاتورة وحدة ──
+  const [guestCount, setGuestCount] = useState(1);
+
   // ✅ مودال إضافة الطلبات
   const [orderModal, setOrderModal] = useState(null); // session object
   // ✅ عداد الطلبات لكل جلسة
@@ -454,12 +455,13 @@ export default function ScannerPage() {
     scanningRef.current = true;
     setScanning(true);
     try {
-      const { data } = await sessionsAPI.scan(qrCode.trim(), selectedSpace);
+      const { data } = await sessionsAPI.scan(qrCode.trim(), selectedSpace, guestCount);
       if (scanModeRef.current === "camera") await stopCamera();
       setResult(data);
       setManualCode("");
       loadActive();
       if (data.action === "checkin") {
+        setGuestCount(1);
         toast.success(`تم تسجيل دخول ${data.client.name} — ${data.spaceName}`);
         setTimeout(() => {
           if (scanModeRef.current === "camera") startCamera();
@@ -662,7 +664,57 @@ export default function ScannerPage() {
           </div>
         )}
       </div>
-
+          {/* تحديد عدد الاشخاص من حساب واحد */}
+      <div style={{ marginBottom: 16 }}>
+        <div
+          style={{
+            fontSize: 12,
+            color: "var(--muted)",
+            marginBottom: 8,
+            fontWeight: 600,
+          }}
+        >
+          👥 عدد الأشخاص
+        </div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+            <button
+              key={n}
+              onClick={() => setGuestCount(n)}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 12,
+                border: "1px solid",
+                borderColor:
+                  guestCount === n ? "var(--accent)" : "var(--border)",
+                background:
+                  guestCount === n ? "rgba(0,212,170,0.12)" : "transparent",
+                color: guestCount === n ? "var(--accent)" : "var(--muted)",
+                fontSize: 15,
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+        {guestCount > 1 && (
+          <div
+            style={{
+              marginTop: 8,
+              padding: "6px 12px",
+              background: "rgba(0,212,170,0.06)",
+              borderRadius: 8,
+              fontSize: 12,
+              color: "var(--muted)",
+            }}
+          >
+            💡 التكلفة ستُحسب على {guestCount} أشخاص — النقاط كلها لصاحب الحساب
+          </div>
+        )}
+      </div>
       {/* Toggle Mode */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         {[

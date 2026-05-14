@@ -62,6 +62,16 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
         client : { name: user.name, phone: user.phone },
       });
     }
+    // لو في اكثر من عميل على حساب واحد
+    const { qr_code, space_key, guest_count = 1 } = req.body;
+
+    // عند check-in — احفظ guest_count في الـ session
+    await db.query(`
+      UPDATE sessions SET guest_count = $1 WHERE id = $2
+     `, [Math.max(1, parseInt(guest_count) || 1), session.id]);
+
+    // عند check-out — احسب التكلفة مضروبة في عدد الأشخاص
+    const totalCost = sessionCost * guestCount;
 
     const { rows: activeSessions } = await client.query(
       `SELECT * FROM sessions WHERE user_id = $1 AND status = 'active' LIMIT 1`,

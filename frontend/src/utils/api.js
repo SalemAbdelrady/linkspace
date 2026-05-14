@@ -38,6 +38,8 @@ export const sessionsAPI = {
   history: (page = 1)                      => api.get(`/sessions/history?page=${page}`),
   active:  ()                              => api.get('/sessions/active'),
   pay:     (body)                          => api.post('/sessions/pay', body),
+  scan: (qr_code, space_key, guest_count = 1) =>
+  api.post('/sessions/scan', { qr_code, space_key, guest_count }),
 };
 
 // Coupons

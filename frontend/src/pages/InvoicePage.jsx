@@ -618,6 +618,22 @@ export default function InvoicePage() {
                   ({session.durationMin} د فعلية)
                 </span>
               </span>
+              {session.guestCount > 1 && (
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: 12,
+                    color: "var(--muted)",
+                    marginBottom: 4,
+                  }}
+                >
+                  <span>👥 عدد الأشخاص</span>
+                  <span style={{ color: "var(--accent)", fontWeight: 600 }}>
+                    {session.guestCount} أشخاص
+                  </span>
+                </div>
+              )}
               {!isSubscription && (
                 <span>سعر الساعة: {session.pricePerHr || "—"} ج</span>
               )}

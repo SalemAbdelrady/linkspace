@@ -212,11 +212,17 @@ function UserModal({
                     }}
                   >
                     📅 عضو منذ{" "}
-                    {new Date(u.created_at).toLocaleDateString("ar-EG", {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })}
+                    <strong style={{ color: "var(--accent)" }}>
+                      {memberSince(u.created_at)}
+                    </strong>
+                    <span style={{ opacity: 0.6, marginRight: 4 }}>
+                      ·{" "}
+                      {new Date(u.created_at).toLocaleDateString("ar-EG", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </span>
                   </div>
                 )}
               </div>
@@ -1517,6 +1523,17 @@ function QuickSaleModal({ services: allServices, adminAPI, onClose, onDone }) {
 }
 
 // ── AdminDashboard ────────────────────────────────────────────────────
+// لعرض العضوية مثل (عضو منذ سنة و٣ أشهر)
+function memberSince(dateStr) {
+  const diff = Date.now() - new Date(dateStr);
+  const days = Math.floor(diff / 86400000);
+  if (days < 30) return `${days} يوم`;
+  if (days < 365) return `${Math.floor(days / 30)} شهر`;
+  const years = Math.floor(days / 365);
+  const months = Math.floor((days % 365) / 30);
+  return months > 0 ? `${years} سنة و${months} شهر` : `${years} سنة`;
+}
+
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -2936,12 +2953,18 @@ export default function AdminDashboard() {
                       )}
                       {u.created_at && (
                         <span style={{ fontSize: 11, color: "var(--muted)" }}>
-                          📅 عضو منذ{" "}
-                          {new Date(u.created_at).toLocaleDateString("ar-EG", {
-                            year: "numeric",
-                            month: "long",
-                            day: "numeric",
-                          })}
+                          📅 عضو منذ {memberSince(u.created_at)}
+                          <span style={{ opacity: 0.6, marginRight: 4 }}>
+                            ·{" "}
+                            {new Date(u.created_at).toLocaleDateString(
+                              "ar-EG",
+                              {
+                                year: "numeric",
+                                month: "short",
+                                day: "numeric",
+                              },
+                            )}
+                          </span>
                         </span>
                       )}
                     </div>
