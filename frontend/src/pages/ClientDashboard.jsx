@@ -1345,6 +1345,16 @@ export default function ClientDashboard() {
               ✉️ {user.email}
             </div>
           )}
+          {user?.created_at && (
+  <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
+    📅 عضو منذ{" "}
+    {new Date(user.created_at).toLocaleDateString("ar-EG", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    })}
+  </div>
+)}
         </div>
       </div>
 

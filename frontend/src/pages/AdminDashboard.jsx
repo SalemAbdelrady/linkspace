@@ -2653,7 +2653,7 @@ export default function AdminDashboard() {
                     "✨",
                   ],
                   [
-                    "📋 المشتركون",
+                    "المشتركون",
                     usersStats.active_subscribers || 0,
                     "#a78bfa",
                     "📋",
@@ -2673,7 +2673,7 @@ export default function AdminDashboard() {
                     <div style={{ fontSize: 14, marginBottom: 4 }}>{icon}</div>
                     <div
                       style={{
-                        fontSize: 9,
+                        fontSize: 10, // هذا هو حجم الخط لعنواين الإحصائية
                         color: "var(--muted)",
                         marginBottom: 4,
                       }}
@@ -2805,6 +2805,25 @@ export default function AdminDashboard() {
                             }}
                           >
                             {u.phone}
+                            {u.created_at && (
+                              <div
+                                style={{
+                                  fontSize: 11,
+                                  color: "var(--muted)",
+                                  marginTop: 2,
+                                }}
+                              >
+                                📅 عضو منذ{" "}
+                                {new Date(u.created_at).toLocaleDateString(
+                                  "ar-EG",
+                                  {
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                  },
+                                )}
+                              </div>
+                            )}
                           </div>
                           {u.email && (
                             <div
@@ -2916,6 +2935,16 @@ export default function AdminDashboard() {
                           }}
                         >
                           #{u.qr_code}
+                        </span>
+                      )}
+                      {u.created_at && (
+                        <span style={{ fontSize: 11, color: "var(--muted)" }}>
+                          📅 عضو منذ{" "}
+                          {new Date(u.created_at).toLocaleDateString("ar-EG", {
+                            year: "numeric",
+                            month: "long",
+                            day: "numeric",
+                          })}
                         </span>
                       )}
                     </div>
