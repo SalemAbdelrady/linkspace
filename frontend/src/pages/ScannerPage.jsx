@@ -14,6 +14,9 @@ function AddOrderModal({ session, onClose, onAdded }) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [orders, setOrders] = useState([]); // الطلبات الحالية
+  const [serviceSearch, setServiceSearch] = useState('');   // AddOrderModal
+
+
 
   useEffect(() => {
     // جيب الخدمات المتاحة
@@ -332,9 +335,6 @@ export default function ScannerPage() {
 
   // ✅ مودال إضافة الطلبات
   const [orderModal, setOrderModal] = useState(null); // session object
-  // AddOrderModal
-  const [serviceSearch, setServiceSearch] = useState('');
-
   // ✅ عداد الطلبات لكل جلسة
   const [sessionOrders, setSessionOrders] = useState({}); // { session_id: count }
 

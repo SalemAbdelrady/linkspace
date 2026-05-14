@@ -3825,7 +3825,7 @@ export default function AdminDashboard() {
                                 flexShrink: 0,
                               }}
                             >
-                              {index + 1}
+                              {s._index + 1}
                             </div>
 
                             <div style={{ flex: 1 }}>
