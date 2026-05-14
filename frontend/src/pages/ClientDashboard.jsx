@@ -1022,16 +1022,17 @@ export default function ClientDashboard() {
 
   async function loadData() {
     try {
-      const [histRes, couponRes] = await Promise.all([
+      const [histRes, couponRes, subRes] = await Promise.all([
         sessionsAPI.history(),
         couponsAPI.myCoupons(),
-        api.get("/subscriptions/my"), // ← جديد
+        api.get("/subscriptions/my"),
       ]);
       const allSessions = histRes.data.sessions;
       const active = allSessions.find((s) => s.status === "active");
       setActiveSession(active || null);
       setSessions(allSessions.filter((s) => s.status !== "active"));
       setCoupons(couponRes.data.coupons);
+      setSubscription(subRes.data.subscription || null); // ✅ هنا المهم
     } catch {
       toast.error("خطأ في تحميل البيانات");
     } finally {
@@ -1607,7 +1608,10 @@ export default function ClientDashboard() {
                   <div
                     style={{ fontSize: 18, fontWeight: 800, color: "#a78bfa" }}
                   >
-                    {parseFloat(subscription.plan_price_current || subscription.plan_price).toFixed(0)}
+                    {parseFloat(
+                      subscription.plan_price_current ||
+                        subscription.plan_price,
+                    ).toFixed(0)}
                   </div>
                   <div style={{ fontSize: 10, color: "var(--muted)" }}>
                     ج/شهر
