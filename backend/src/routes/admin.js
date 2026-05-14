@@ -19,13 +19,13 @@ const { rows } = await db.query(`
   SELECT 
     u.id, u.name, u.phone, u.email, u.role, u.balance, u.points,
     u.qr_code, u.is_active, u.created_at, u.avatar_url,
-    s.plan_name AS subscription_name,
-    s.end_date  AS subscription_end
+    us.plan_name       AS subscription_name,
+    us.end_date        AS subscription_end
   FROM users u
-  LEFT JOIN subscriptions s 
-    ON s.user_id = u.id 
-   AND s.status = 'active' 
-   AND s.end_date >= NOW()
+  LEFT JOIN user_subscriptions us 
+    ON us.user_id = u.id 
+   AND us.status = 'active' 
+   AND us.end_date >= NOW()
   WHERE (u.name ILIKE $1 OR u.phone ILIKE $1) AND u.role = 'client'
   ORDER BY u.created_at DESC
   LIMIT $2 OFFSET $3
@@ -48,7 +48,7 @@ const { rows: stats } = await db.query(`
     COUNT(*) FILTER (
       WHERE created_at >= date_trunc('month', NOW())
     )                                                            AS new_this_month,
-    (SELECT COUNT(DISTINCT user_id) FROM subscriptions 
+    (SELECT COUNT(DISTINCT user_id) FROM user_subscriptions 
      WHERE status = 'active' 
        AND end_date >= NOW())                                     AS active_subscribers
   FROM users WHERE role = 'client'
