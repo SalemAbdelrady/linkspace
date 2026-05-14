@@ -860,6 +860,8 @@ export default function ClientDashboard() {
 
   const [recentInvoices, setRecentInvoices] = useState([]);
   const [loadingRecentInvoices, setLoadingRecentInvoices] = useState(true);
+  //state لإظهار الاشتراك ومدته
+  const [subscription, setSubscription] = useState(null);
 
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [allOrdersCount, setAllOrdersCount] = useState(0);
@@ -993,7 +995,7 @@ export default function ClientDashboard() {
           </div>
         ),
         {
-          duration: 8000,  // يختفي لوحده بعد 8 ثواني
+          duration: 8000, // يختفي لوحده بعد 8 ثواني
           position: "top-center",
           style: {
             background: "#1a1a2e",
@@ -1023,6 +1025,7 @@ export default function ClientDashboard() {
       const [histRes, couponRes] = await Promise.all([
         sessionsAPI.history(),
         couponsAPI.myCoupons(),
+        api.get("/subscriptions/my"), // ← جديد
       ]);
       const allSessions = histRes.data.sessions;
       const active = allSessions.find((s) => s.status === "active");
@@ -1453,7 +1456,193 @@ export default function ClientDashboard() {
                 : `${100 - (user?.points || 0)} نقطة متبقية للحصول على خصم 20%`}
             </div>
           </div>
+          {/* ── كارت الاشتراك الشهري ── */}
+          {subscription ? (
+            <div
+              className="card fade-up"
+              style={{
+                marginBottom: 12,
+                background:
+                  "linear-gradient(135deg, rgba(167,139,250,0.08), rgba(167,139,250,0.03))",
+                border: "1px solid rgba(167,139,250,0.3)",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                }}
+              >
+                <div style={{ flex: 1 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      marginBottom: 6,
+                    }}
+                  >
+                    <span style={{ fontSize: 18 }}>📋</span>
+                    <span
+                      style={{
+                        fontWeight: 800,
+                        fontSize: 15,
+                        color: "#a78bfa",
+                      }}
+                    >
+                      {subscription.plan_name}
+                    </span>
+                    <span
+                      style={{
+                        padding: "2px 8px",
+                        borderRadius: 20,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        background: "rgba(167,139,250,0.15)",
+                        color: "#a78bfa",
+                        border: "1px solid rgba(167,139,250,0.3)",
+                      }}
+                    >
+                      نشط ✓
+                    </span>
+                  </div>
 
+                  {/* المميزات */}
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "var(--muted)",
+                      marginBottom: 10,
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    {subscription.covers_cowork && (
+                      <div>✅ دخول غير محدود لمنطقة العمل</div>
+                    )}
+                    {subscription.discount_rooms > 0 && (
+                      <div>✅ خصم {subscription.discount_rooms}% على الغرف</div>
+                    )}
+                  </div>
+
+                  {/* شريط انتهاء الصلاحية */}
+                  {(() => {
+                    const total =
+                      new Date(subscription.end_date) -
+                      new Date(subscription.start_date);
+                    const remaining =
+                      new Date(subscription.end_date) - new Date();
+                    const pct = Math.max(
+                      0,
+                      Math.min((remaining / total) * 100, 100),
+                    );
+                    const daysLeft = Math.ceil(remaining / 86400000);
+                    return (
+                      <div>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: 11,
+                            color: "var(--muted)",
+                            marginBottom: 4,
+                          }}
+                        >
+                          <span>
+                            متبقي {daysLeft > 0 ? `${daysLeft} يوم` : "انتهى"}
+                          </span>
+                          <span>
+                            ينتهي{" "}
+                            {new Date(subscription.end_date).toLocaleDateString(
+                              "ar-EG",
+                              { month: "long", day: "numeric" },
+                            )}
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            background: "rgba(255,255,255,0.08)",
+                            borderRadius: 10,
+                            height: 6,
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${pct}%`,
+                              height: "100%",
+                              borderRadius: 10,
+                              background:
+                                pct > 30
+                                  ? "linear-gradient(90deg, #a78bfa, #7c3aed)"
+                                  : "#ff4757",
+                              transition: "width 0.8s ease",
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div
+                  style={{
+                    textAlign: "center",
+                    marginRight: 12,
+                    flexShrink: 0,
+                    padding: "8px 12px",
+                    background: "rgba(167,139,250,0.1)",
+                    borderRadius: 12,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 10,
+                      color: "var(--muted)",
+                      marginBottom: 2,
+                    }}
+                  >
+                    السعر
+                  </div>
+                  <div
+                    style={{ fontSize: 18, fontWeight: 800, color: "#a78bfa" }}
+                  >
+                    {parseFloat(subscription.plan_price_current || subscription.plan_price).toFixed(0)}
+                  </div>
+                  <div style={{ fontSize: 10, color: "var(--muted)" }}>
+                    ج/شهر
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            // لو مفيش اشتراك — بطاقة ترويجية خفيفة
+            <div
+              className="card fade-up"
+              style={{
+                marginBottom: 12,
+                background: "rgba(167,139,250,0.04)",
+                border: "1px dashed rgba(167,139,250,0.2)",
+                textAlign: "center",
+                padding: "14px 16px",
+              }}
+            >
+              <div style={{ fontSize: 16, marginBottom: 6 }}>📋</div>
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: "#a78bfa",
+                  marginBottom: 4,
+                }}
+              >
+                اشترك في باقة شهرية
+              </div>
+              <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                وفّر أكثر مع دخول غير محدود وخصومات على الغرف
+              </div>
+            </div>
+          )}
           <div className="section-title">كود الدخول</div>
           <div
             className="card"
