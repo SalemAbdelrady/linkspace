@@ -203,6 +203,22 @@ function UserModal({
                 style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}
               >
                 {u.phone}
+                {u.created_at && (
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: "var(--muted)",
+                      marginTop: 2,
+                    }}
+                  >
+                    📅 عضو منذ{" "}
+                    {new Date(u.created_at).toLocaleDateString("ar-EG", {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })}
+                  </div>
+                )}
               </div>
               {u.email ? (
                 <div style={{ marginBottom: 12 }}>
@@ -2805,25 +2821,6 @@ export default function AdminDashboard() {
                             }}
                           >
                             {u.phone}
-                            {u.created_at && (
-                              <div
-                                style={{
-                                  fontSize: 11,
-                                  color: "var(--muted)",
-                                  marginTop: 2,
-                                }}
-                              >
-                                📅 عضو منذ{" "}
-                                {new Date(u.created_at).toLocaleDateString(
-                                  "ar-EG",
-                                  {
-                                    year: "numeric",
-                                    month: "long",
-                                    day: "numeric",
-                                  },
-                                )}
-                              </div>
-                            )}
                           </div>
                           {u.email && (
                             <div
