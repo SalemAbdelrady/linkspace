@@ -3714,10 +3714,19 @@ export default function AdminDashboard() {
                     .map((s) => (
                       <div
                         key={s.id}
+                        className="card"
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          padding: "10px 14px",
+                          cursor: "grab",
+                        }}
                         draggable
                         onDragStart={(e) =>
                           e.dataTransfer.setData("dragIndex", s._index)
                         }
+                        onDragOver={(e) => e.preventDefault()}
                         onDrop={(e) => {
                           e.preventDefault();
                           const from = parseInt(
@@ -3766,7 +3775,7 @@ export default function AdminDashboard() {
                           </>
                         ) : (
                           <>
-                            {/* ✅ مقبض السحب */}
+                            {/* مقبض السحب */}
                             <div
                               title="اسحب لتغيير الترتيب"
                               style={{
@@ -3788,10 +3797,7 @@ export default function AdminDashboard() {
                               {[0, 1, 2].map((i) => (
                                 <div
                                   key={i}
-                                  style={{
-                                    display: "flex",
-                                    gap: 3,
-                                  }}
+                                  style={{ display: "flex", gap: 3 }}
                                 >
                                   {[0, 1].map((j) => (
                                     <div
@@ -3811,8 +3817,8 @@ export default function AdminDashboard() {
                             {/* رقم الترتيب */}
                             <div
                               style={{
-                                width: 20,
-                                height: 20,
+                                width: 22,
+                                height: 22,
                                 borderRadius: "50%",
                                 background: "rgba(0,212,170,0.1)",
                                 border: "1px solid rgba(0,212,170,0.2)",
@@ -3828,6 +3834,7 @@ export default function AdminDashboard() {
                               {s._index + 1}
                             </div>
 
+                            {/* الاسم والسعر */}
                             <div style={{ flex: 1 }}>
                               <div style={{ fontWeight: 600, fontSize: 14 }}>
                                 {s.name}
@@ -3839,7 +3846,7 @@ export default function AdminDashboard() {
                               </div>
                             </div>
 
-                            {/* أزرار أعلى/أسفل للموبايل */}
+                            {/* أزرار أعلى/أسفل */}
                             <div
                               style={{
                                 display: "flex",
@@ -3859,7 +3866,7 @@ export default function AdminDashboard() {
                                 }}
                                 disabled={s._index === 0}
                                 style={{
-                                  width: 24,
+                                  width: 26,
                                   height: 22,
                                   borderRadius: 6,
                                   border: "1px solid var(--border)",
@@ -3887,7 +3894,7 @@ export default function AdminDashboard() {
                                 }}
                                 disabled={s._index === services.length - 1}
                                 style={{
-                                  width: 24,
+                                  width: 26,
                                   height: 22,
                                   borderRadius: 6,
                                   border: "1px solid var(--border)",
@@ -3907,6 +3914,7 @@ export default function AdminDashboard() {
                               </button>
                             </div>
 
+                            {/* تعديل وحذف */}
                             <button
                               onClick={() => setEditingService(s)}
                               style={{
