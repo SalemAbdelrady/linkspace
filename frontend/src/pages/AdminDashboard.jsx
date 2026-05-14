@@ -247,6 +247,41 @@ function UserModal({
                   ⚠️ لا يوجد بريد إلكتروني مسجل لهذا العميل
                 </div>
               )}
+              {u.subscription_name && (
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    marginTop: 6,
+                    padding: "4px 12px",
+                    borderRadius: 20,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    background: "rgba(167,139,250,0.12)",
+                    border: "1px solid rgba(167,139,250,0.3)",
+                    color: "#a78bfa",
+                  }}
+                >
+                  📋 مشترك — {u.subscription_name}
+                  {u.subscription_end && (
+                    <span
+                      style={{ opacity: 0.7, fontWeight: 400, fontSize: 10 }}
+                    >
+                      &nbsp;· ينتهي{" "}
+                      {new Date(u.subscription_end).toLocaleDateString(
+                        "ar-EG",
+                        {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        },
+                      )}
+                    </span>
+                  )}
+                </div>
+              )}
+              {/* بادج النشاط  */}
               <span
                 className={`badge badge-${isInSession ? "success" : "danger"}`}
                 style={{ marginTop: 6, display: "inline-block" }}
@@ -2593,26 +2628,49 @@ export default function AdminDashboard() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(4,1fr)",
+                  gridTemplateColumns: "repeat(5,1fr)", // ← من 4 إلى 5
                   gap: 8,
                   marginBottom: 14,
                 }}
               >
                 {[
-                  ["إجمالي العملاء", usersStats.total_clients, "var(--text)"],
-                  ["نشطون الآن", usersStats.active_clients, "var(--success)"],
-                  ["جدد هذا الشهر", usersStats.new_this_month, "var(--accent)"],
+                  [
+                    "إجمالي العملاء",
+                    usersStats.total_clients,
+                    "var(--text)",
+                    "👥",
+                  ],
+                  [
+                    "نشطون الآن",
+                    usersStats.active_clients,
+                    "var(--success)",
+                    "🟢",
+                  ],
+                  [
+                    "جدد هذا الشهر",
+                    usersStats.new_this_month,
+                    "var(--accent)",
+                    "✨",
+                  ],
+                  [
+                    "📋 المشتركون",
+                    usersStats.active_subscribers || 0,
+                    "#a78bfa",
+                    "📋",
+                  ],
                   [
                     "إجمالي الأرصدة",
                     `${parseFloat(usersStats.total_balance).toFixed(0)} ج`,
                     "var(--warning)",
+                    "💰",
                   ],
-                ].map(([label, val, color]) => (
+                ].map(([label, val, color, icon]) => (
                   <div
                     key={label}
                     className="card"
-                    style={{ padding: "10px 8px", textAlign: "center" }}
+                    style={{ padding: "10px 6px", textAlign: "center" }}
                   >
+                    <div style={{ fontSize: 14, marginBottom: 4 }}>{icon}</div>
                     <div
                       style={{
                         fontSize: 9,
@@ -2622,7 +2680,7 @@ export default function AdminDashboard() {
                     >
                       {label}
                     </div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color }}>
                       {val}
                     </div>
                   </div>
@@ -2760,6 +2818,37 @@ export default function AdminDashboard() {
                               }}
                             >
                               <span style={{ fontSize: 10 }}>✉️</span> {u.email}
+                            </div>
+                          )}
+                          {/*في كارت العميل  باقة الاشتراك عرض */}
+                          {u.subscription_name && (
+                            <div
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                marginTop: 4,
+                                padding: "2px 8px",
+                                borderRadius: 20,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                background: "rgba(167,139,250,0.12)",
+                                border: "1px solid rgba(167,139,250,0.3)",
+                                color: "#a78bfa",
+                              }}
+                            >
+                              📋 {u.subscription_name}
+                              {u.subscription_end && (
+                                <span style={{ opacity: 0.7, fontWeight: 400 }}>
+                                  · حتى{" "}
+                                  {new Date(
+                                    u.subscription_end,
+                                  ).toLocaleDateString("ar-EG", {
+                                    month: "short",
+                                    day: "numeric",
+                                  })}
+                                </span>
+                              )}
                             </div>
                           )}
                         </div>

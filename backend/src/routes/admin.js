@@ -15,14 +15,21 @@ router.get('/users', ...isStaffOrAdmin, async (req, res) => {
   const offset = (parseInt(page) - 1) * limit;
 
   try {
-    const { rows } = await db.query(`
-      SELECT id, name, phone, email, role, balance, points,
-             qr_code, is_active, created_at, avatar_url
-      FROM users
-      WHERE (name ILIKE $1 OR phone ILIKE $1) AND role = 'client'
-      ORDER BY created_at DESC
-      LIMIT $2 OFFSET $3
-    `, [`%${search}%`, limit, offset]);
+const { rows } = await db.query(`
+  SELECT 
+    u.id, u.name, u.phone, u.email, u.role, u.balance, u.points,
+    u.qr_code, u.is_active, u.created_at, u.avatar_url,
+    s.plan_name AS subscription_name,
+    s.end_date  AS subscription_end
+  FROM users u
+  LEFT JOIN subscriptions s 
+    ON s.user_id = u.id 
+   AND s.status = 'active' 
+   AND s.end_date >= NOW()
+  WHERE (u.name ILIKE $1 OR u.phone ILIKE $1) AND u.role = 'client'
+  ORDER BY u.created_at DESC
+  LIMIT $2 OFFSET $3
+`, [`%${search}%`, limit, offset]);
 
     const usersWithQR = await Promise.all(
       rows.map(async (u) => {
@@ -34,10 +41,16 @@ router.get('/users', ...isStaffOrAdmin, async (req, res) => {
 
 const { rows: stats } = await db.query(`
   SELECT
-    COUNT(*)                                                          AS total_clients,
-    (SELECT COUNT(DISTINCT user_id) FROM sessions WHERE status = 'active') AS active_clients,
-    COALESCE(SUM(balance), 0)                                        AS total_balance,
-    COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days') AS new_this_month
+    COUNT(*)                                                     AS total_clients,
+    (SELECT COUNT(DISTINCT user_id) FROM sessions 
+     WHERE status = 'active')                                    AS active_clients,
+    COALESCE(SUM(balance), 0)                                    AS total_balance,
+    COUNT(*) FILTER (
+      WHERE created_at >= date_trunc('month', NOW())
+    )                                                            AS new_this_month,
+    (SELECT COUNT(DISTINCT user_id) FROM subscriptions 
+     WHERE status = 'active' 
+       AND end_date >= NOW())                                     AS active_subscribers
   FROM users WHERE role = 'client'
 `);
 
