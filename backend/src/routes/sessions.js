@@ -32,14 +32,15 @@ async function getActiveSubscription(userId) {
 
 // POST /api/sessions/scan
 router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
-  const { qr_code, space_key = 'cowork' } = req.body;
+  const { qr_code, space_key = 'cowork', guest_count = 1 } = req.body;
   if (!qr_code) return res.status(400).json({ error: 'QR Code مطلوب' });
 
+  const guestCount = Math.max(1, parseInt(guest_count) || 1);
   const client = await db.pool.connect();
+
   try {
     await client.query('BEGIN');
 
-    // ✅ جيب العميل بدون شرط is_active عشان نقدر نميز بين "محظور" و"غير موجود"
     const { rows: userRows } = await client.query(
       `SELECT id, name, phone, email, balance, points, is_active
        FROM users WHERE qr_code = $1 FOR UPDATE`,
@@ -47,31 +48,19 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
     );
     const user = userRows[0];
 
-    // ✅ العميل غير موجود خالص
     if (!user) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'العميل غير موجود' });
     }
 
-    // ✅ العميل محظور — رسالة واضحة ومميزة
     if (!user.is_active) {
       await client.query('ROLLBACK');
       return res.status(403).json({
-        error  : '🚫 هذا العميل محظور من الدخول',
-        banned : true,
-        client : { name: user.name, phone: user.phone },
+        error : '🚫 هذا العميل محظور من الدخول',
+        banned: true,
+        client: { name: user.name, phone: user.phone },
       });
     }
-    // لو في اكثر من عميل على حساب واحد
-    const { qr_code, space_key, guest_count = 1 } = req.body;
-
-    // عند check-in — احفظ guest_count في الـ session
-    await db.query(`
-      UPDATE sessions SET guest_count = $1 WHERE id = $2
-     `, [Math.max(1, parseInt(guest_count) || 1), session.id]);
-
-    // عند check-out — احسب التكلفة مضروبة في عدد الأشخاص
-    const totalCost = sessionCost * guestCount;
 
     const { rows: activeSessions } = await client.query(
       `SELECT * FROM sessions WHERE user_id = $1 AND status = 'active' LIMIT 1`,
@@ -86,9 +75,13 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
       const checkIn     = new Date(session.check_in);
       const durationMin = Math.ceil((checkOut - checkIn) / 60000);
       const maxHours    = parseInt(session.max_hours) || 4;
+      const sessionGuests = parseInt(session.guest_count) || 1;
 
       const isSubSession = session.is_subscription_session || false;
-      const cost         = isSubSession ? 0 : calculateCost(durationMin, session.price_per_hr, maxHours);
+
+      // ✅ التكلفة مضروبة في عدد الأشخاص
+      const baseCost    = isSubSession ? 0 : calculateCost(durationMin, session.price_per_hr, maxHours);
+      const cost        = parseFloat((baseCost * sessionGuests).toFixed(2));
       const pointsEarned = isSubSession ? 0 : Math.floor(cost / 10);
 
       await client.query(`
@@ -111,7 +104,13 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
 
       return res.json({
         action : 'checkout',
-        client : { id: user.id, name: user.name, phone: user.phone, email: user.email, balance: parseFloat(user.balance) },
+        client : {
+          id     : user.id,
+          name   : user.name,
+          phone  : user.phone,
+          email  : user.email,
+          balance: parseFloat(user.balance),
+        },
         session: {
           id                   : session.id,
           durationMin,
@@ -121,6 +120,7 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
           spaceKey             : session.space_key,
           spaceName            : session.space_name,
           maxHours,
+          guestCount           : sessionGuests,       // ✅ جديد
           checkIn              : session.check_in,
           checkOut             : checkOutISO,
           isSubscriptionSession: isSubSession,
@@ -138,9 +138,9 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
 
       const { rows: newSession } = await client.query(`
         INSERT INTO sessions
-          (user_id, price_per_hr, space_key, space_name, max_hours, created_by,
-           is_subscription_session, subscription_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          (user_id, price_per_hr, space_key, space_name, max_hours,
+           created_by, is_subscription_session, subscription_id, guest_count)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING id
       `, [
         user.id,
@@ -151,22 +151,29 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
         req.user.id,
         isSubSession,
         subscription?.id || null,
+        guestCount,                                   // ✅ جديد
       ]);
 
       await client.query('COMMIT');
 
       return res.json({
         action    : 'checkin',
-        client    : { name: user.name, phone: user.phone, email: user.email, balance: user.balance },
+        client    : {
+          name   : user.name,
+          phone  : user.phone,
+          email  : user.email,
+          balance: user.balance,
+        },
         pricePerHr: effectivePrice,
         spaceKey  : space_key,
         spaceName : space.name,
         maxHours  : space.max_hours,
+        guestCount,                                   // ✅ جديد
         isSubscriptionSession: isSubSession,
         subscription: subscription ? {
-          id       : subscription.id,
-          planName : subscription.plan_name,
-          endDate  : subscription.end_date,
+          id      : subscription.id,
+          planName: subscription.plan_name,
+          endDate : subscription.end_date,
         } : null,
       });
     }
