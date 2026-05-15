@@ -651,6 +651,38 @@ function InvoiceDetailModal({ invoice, onClose }) {
               سعر الساعة: {invoice.price_per_hr} ج
             </div>
           )}
+          {invoice.guest_count > 1 && (
+            <div
+              style={{
+                marginTop: 8,
+                padding: "8px 12px",
+                background: "rgba(167,139,250,0.08)",
+                border: "1px solid rgba(167,139,250,0.2)",
+                borderRadius: 10,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: 12,
+                  marginBottom: 4,
+                }}
+              >
+                <span style={{ color: "var(--muted)" }}>👥 جلسة جماعية</span>
+                <span style={{ color: "#a78bfa", fontWeight: 700 }}>
+                  {invoice.guest_count} أشخاص
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                {parseFloat(invoice.session_cost / invoice.guest_count).toFixed(
+                  0,
+                )}{" "}
+                ج/شخص × {invoice.guest_count} ={" "}
+                {parseFloat(invoice.session_cost).toFixed(2)} ج
+              </div>
+            </div>
+          )}
         </div>
         {services.length > 0 && (
           <div

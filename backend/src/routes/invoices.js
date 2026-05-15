@@ -274,7 +274,7 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
 
   try {
     const { rows } = await db.query(`
-      SELECT i.*, u.name AS created_by_name, c.email AS client_email
+      SELECT i.*, u.name AS created_by_name, c.email AS client_email, s.guest_count
       FROM invoices i
       LEFT JOIN users u ON u.id = i.created_by
       LEFT JOIN users c ON c.id = i.user_id

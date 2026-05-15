@@ -8,6 +8,80 @@ const { requirePermission }   = require('../middleware/permissions');
 const isAdmin        = [auth, requireRole('admin')];
 const isStaffOrAdmin = [auth, requireRole('staff', 'admin')];
 
+// GET /api/admin/overview-stats
+router.get('/overview-stats', auth, requireRole('admin'), async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+
+    const [clients, invoices, sessions, ambassadors] = await Promise.all([
+
+      // إحصائيات العملاء
+      db.query(`
+        SELECT
+          COUNT(*) AS total_clients,
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days') AS new_this_month,
+          COALESCE(SUM(balance), 0) AS total_balance,
+          COUNT(*) FILTER (WHERE is_active = false) AS banned_count,
+          (SELECT COUNT(DISTINCT user_id) FROM sessions WHERE status = 'active') AS active_now
+        FROM users WHERE role = 'client'
+      `),
+
+      // إحصائيات الفواتير
+      db.query(`
+        SELECT
+          COUNT(*) AS total_invoices,
+          COALESCE(SUM(total), 0) AS total_revenue,
+          COALESCE(SUM(total) FILTER (WHERE DATE(created_at) = $1), 0) AS today_revenue,
+          COUNT(*) FILTER (WHERE DATE(created_at) = $1) AS today_invoices,
+          COALESCE(SUM(total) FILTER (WHERE created_at >= $2), 0) AS month_revenue,
+          COUNT(*) FILTER (WHERE invoice_type = 'quick_sale') AS quick_sale_count,
+          COUNT(*) FILTER (WHERE invoice_type = 'session' OR invoice_type IS NULL) AS session_count
+        FROM invoices
+      `, [today, firstOfMonth]),
+
+      // إحصائيات الجلسات
+      db.query(`
+        SELECT
+          COUNT(*) AS total_sessions,
+          COUNT(*) FILTER (WHERE DATE(check_in) = $1) AS today_sessions,
+          COALESCE(AVG(duration_min) FILTER (WHERE duration_min > 0), 0) AS avg_duration
+        FROM sessions WHERE status = 'completed'
+      `, [today]),
+
+      // أكثر عميل يجيب أصحابه
+      db.query(`
+        SELECT
+          u.id,
+          u.name,
+          u.phone,
+          u.avatar_url,
+          COUNT(DISTINCT g.id) AS guests_count,
+          COALESCE(SUM(i.total), 0) AS total_spent
+        FROM users u
+        JOIN sessions s ON s.user_id = u.id
+        JOIN sessions g ON g.group_session_id = s.id
+        LEFT JOIN invoices i ON i.user_id = u.id
+        WHERE u.role = 'client'
+        GROUP BY u.id, u.name, u.phone, u.avatar_url
+        HAVING COUNT(DISTINCT g.id) > 0
+        ORDER BY guests_count DESC
+        LIMIT 5
+      `),
+    ]);
+
+    res.json({
+      clients:     clients.rows[0],
+      invoices:    invoices.rows[0],
+      sessions:    sessions.rows[0],
+      ambassadors: ambassadors.rows,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'خطأ في جلب الإحصائيات' });
+  }
+});
+
 // GET /api/admin/users
 router.get('/users', ...isStaffOrAdmin, async (req, res) => {
   const { search = '', page = 1 } = req.query;
