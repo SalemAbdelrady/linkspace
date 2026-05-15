@@ -66,6 +66,8 @@ export const adminAPI = {
   // ✅ endpoint قائمة الموظفين لفلتر الفواتير
   staff:         ()                      => api.get('/admin/staff'),
   exportUsers: (search = '') => api.get(`/admin/users/export?search=${encodeURIComponent(search)}`),
+  overviewStats: () => api.get('/admin/overview-stats'),
+
 };
 
 // Spaces

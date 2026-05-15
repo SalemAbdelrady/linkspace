@@ -20,7 +20,7 @@ router.get("/overview-stats", auth, requireRole("admin"), async (req, res) => {
       .toISOString()
       .split("T")[0];
 
-    const [clients, invoices, sessions, ambassad, staff] = await Promise.all([
+    const [clients, invoices, sessions, ambassadors, staff] = await Promise.all([
       // إحصائيات العملاء
       db.query(`
         SELECT

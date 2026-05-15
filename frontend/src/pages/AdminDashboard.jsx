@@ -1671,20 +1671,20 @@ export default function AdminDashboard() {
     }
   }, [tab, invoicePage, invoiceSearch, invoiceDate, invoiceStaffId]);
 
-  async function loadOverview() {
-    try {
-      const [d, m] = await Promise.all([
-        adminAPI.dailyReport(today),
-        adminAPI.monthlyReport(now.getFullYear(), now.getMonth() + 1),
-        adminAPI.overviewStats().catch(() => ({ data: null })), // ✅ لو فشل ميوقفش الكل
-      ]);
-      setDaily(d.data);
-      setMonthly(m.data);
-      setOverviewStats(stats.data);
-    } catch {
-      toast.error("خطأ في تحميل البيانات");
-    }
+async function loadOverview() {
+  try {
+    const [d, m, stats] = await Promise.all([
+      adminAPI.dailyReport(today),
+      adminAPI.monthlyReport(now.getFullYear(), now.getMonth() + 1),
+      adminAPI.overviewStats().catch(() => ({ data: null })),
+    ]);
+    setDaily(d.data);
+    setMonthly(m.data);
+    setOverviewStats(stats?.data || null);
+  } catch {
+    toast.error("خطأ في تحميل البيانات");
   }
+}
 
   async function loadSpaces() {
     try {
