@@ -23,14 +23,132 @@ export const settingsAPI = {
 
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();
-  if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--accent)', marginBottom: 12 }}>Link Space</div>
-        <div style={{ color: 'var(--muted)', fontSize: 13 }}>جارٍ التحميل...</div>
+if (loading) return (
+  <div style={{
+    minHeight: '100vh',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'var(--bg)',
+    flexDirection: 'column',
+    gap: 0,
+  }}>
+    <style>{`
+      @keyframes ls-pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50%       { opacity: 0.5; transform: scale(0.96); }
+      }
+      @keyframes ls-spin {
+        to { transform: rotate(360deg); }
+      }
+      @keyframes ls-fade-in {
+        from { opacity: 0; transform: translateY(10px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes ls-bar {
+        0%   { width: 0%; opacity: 1; }
+        70%  { width: 85%; opacity: 1; }
+        100% { width: 95%; opacity: 0.7; }
+      }
+      .ls-logo   { animation: ls-pulse 2s ease-in-out infinite; }
+      .ls-ring   { animation: ls-spin 1.2s linear infinite; }
+      .ls-text   { animation: ls-fade-in 0.6s ease forwards; animation-delay: 0.2s; opacity: 0; }
+      .ls-sub    { animation: ls-fade-in 0.6s ease forwards; animation-delay: 0.5s; opacity: 0; }
+      .ls-bar    { animation: ls-bar 2.5s cubic-bezier(0.4,0,0.2,1) forwards; }
+    `}</style>
+
+    {/* الحلقة الدوارة */}
+    <div style={{ position: 'relative', width: 72, height: 72, marginBottom: 28 }}>
+      {/* الخلفية الدائرية */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        borderRadius: '50%',
+        background: 'rgba(0,212,170,0.06)',
+        border: '1px solid rgba(0,212,170,0.15)',
+      }} />
+      {/* الحلقة الدوارة */}
+      <svg
+        className="ls-ring"
+        width="72" height="72"
+        viewBox="0 0 72 72"
+        style={{ position: 'absolute', inset: 0 }}
+      >
+        <circle
+          cx="36" cy="36" r="32"
+          fill="none"
+          stroke="rgba(0,212,170,0.15)"
+          strokeWidth="2"
+        />
+        <circle
+          cx="36" cy="36" r="32"
+          fill="none"
+          stroke="var(--accent)"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeDasharray="50 150"
+          strokeDashoffset="0"
+        />
+      </svg>
+      {/* الأيقونة في المنتصف */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <div className="ls-logo" style={{
+          width: 36, height: 36,
+          borderRadius: 10,
+          background: 'rgba(0,212,170,0.1)',
+          border: '1px solid rgba(0,212,170,0.3)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 16, fontWeight: 800, color: 'var(--accent)',
+          fontFamily: 'Cairo, sans-serif',
+          letterSpacing: -0.5,
+        }}>
+          LS
+        </div>
       </div>
     </div>
-  );
+
+    {/* الاسم */}
+    <div className="ls-text" style={{
+      fontSize: 26,
+      fontWeight: 800,
+      color: 'var(--accent)',
+      fontFamily: 'Cairo, sans-serif',
+      letterSpacing: -0.5,
+      marginBottom: 8,
+    }}>
+      Link Space
+    </div>
+
+    {/* النص الصغير */}
+    <div className="ls-sub" style={{
+      fontSize: 12,
+      color: 'var(--muted)',
+      fontFamily: 'Cairo, sans-serif',
+      marginBottom: 32,
+      letterSpacing: 0.3,
+    }}>
+      نظام إدارة مساحة العمل
+    </div>
+
+    {/* شريط التحميل */}
+    <div style={{
+      width: 180,
+      height: 3,
+      background: 'rgba(0,212,170,0.1)',
+      borderRadius: 10,
+      overflow: 'hidden',
+    }}>
+      <div className="ls-bar" style={{
+        height: '100%',
+        background: 'linear-gradient(90deg, var(--accent), rgba(0,212,170,0.5))',
+        borderRadius: 10,
+        width: 0,
+      }} />
+    </div>
+  </div>
+);
   if (!user) return <Navigate to="/login" replace />;
   if (roles && !roles.includes(user.role)) return <Navigate to="/" replace />;
   return children;
