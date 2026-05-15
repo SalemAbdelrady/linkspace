@@ -852,6 +852,7 @@ function memberSince(dateStr) {
 
 export default function ClientDashboard() {
   const { user, logout } = useAuth();
+  console.log("user created_at:", user?.created_at);
   const navigate = useNavigate();
   const [tab, setTab] = useState("overview");
 

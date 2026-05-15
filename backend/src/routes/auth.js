@@ -151,7 +151,7 @@ router.get('/me', auth, async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT id, name, phone, email, role,
-             balance, points, qr_code, avatar_url, is_active
+             balance, points, qr_code, avatar_url, is_active, created_at
       FROM users
       WHERE id = $1 AND is_active = true
     `, [req.user.id]);
