@@ -618,6 +618,8 @@ export default function InvoicePage() {
                   ({session.durationMin} د فعلية)
                 </span>
               </span>
+              
+              {/*
               {session.guestCount > 1 && (
                 <div
                   style={{
@@ -634,6 +636,8 @@ export default function InvoicePage() {
                   </span>
                 </div>
               )}
+              */}
+
               {!isSubscription && (
                 <span>سعر الساعة: {session.pricePerHr || "—"} ج</span>
               )}

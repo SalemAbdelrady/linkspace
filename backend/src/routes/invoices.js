@@ -250,9 +250,12 @@ router.get('/my', auth, async (req, res) => {
   const offset = (page - 1) * limit;
   try {
     const { rows } = await db.query(`
-      SELECT * FROM invoices WHERE user_id = $1
-      ORDER BY created_at DESC LIMIT $2 OFFSET $3
-    `, [req.user.id, limit, offset]);
+    SELECT i.*, s.guest_count
+    FROM invoices i
+    LEFT JOIN sessions s ON s.id = i.session_id
+    WHERE i.user_id = $1
+    ORDER BY i.created_at DESC LIMIT $2 OFFSET $3
+  `, [req.user.id, limit, offset]);
     const { rows: countRows } = await db.query(
       'SELECT COUNT(*) FROM invoices WHERE user_id = $1', [req.user.id]
     );
