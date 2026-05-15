@@ -288,7 +288,7 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
     const { rows: countRows } = await db.query(`
       SELECT COUNT(*) FROM invoices i
       WHERE
-        ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%')
+        ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%' OR i.invoice_number ILIKE '%' || $1 || '%'))
         AND ($2 = '' OR DATE(i.created_at) = $2::date)
         AND ($3 = '' OR i.created_by = $3::integer)
     `, [search, date, staff_id]);

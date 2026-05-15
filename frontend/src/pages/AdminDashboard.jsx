@@ -1698,30 +1698,34 @@ export default function AdminDashboard() {
       const allUsers = data.users;
       if (!allUsers?.length) return toast.error("لا يوجد عملاء للتصدير");
 
-      const headers = [
-        "الاسم",
-        "الموبايل",
-        "البريد الإلكتروني",
-        "الرصيد",
-        "النقاط",
-        "الحالة",
-        "تاريخ التسجيل",
-      ];
-      const rows = allUsers.map((u) => [
-        u.name,
-        u.phone,
-        u.email || "",
-        parseFloat(u.balance).toFixed(2),
-        u.points,
-        u.is_active ? "نشط" : "معطل",
-        new Date(u.created_at).toLocaleDateString("ar-EG"),
-      ]);
+const headers = [
+  "الاسم",
+  "الموبايل",
+  "البريد الإلكتروني",
+  "الرصيد",
+  "النقاط",
+  "الحالة",
+  "الاشتراك",
+  "تاريخ التسجيل",
+  "مدة العضوية",
+];
+const rows = allUsers.map((u) => [
+  u.name,
+  u.phone,
+  u.email || "",
+  parseFloat(u.balance).toFixed(2),
+  u.points,
+  u.is_active ? "نشط" : "معطل",
+  u.subscription_name || "لا يوجد",
+  new Date(u.created_at).toLocaleDateString("ar-EG"),
+  memberSince(u.created_at),
+]);
 
       const totalBalance = allUsers.reduce(
         (s, u) => s + parseFloat(u.balance),
         0,
       );
-      rows.push(["الإجمالي", "", "", totalBalance.toFixed(2), "", "", ""]);
+rows.push(["الإجمالي", "", "", totalBalance.toFixed(2), "", "", "", "", ""]);
 
       const BOM = "\uFEFF";
       const csv = BOM + [headers, ...rows].map((r) => r.join(",")).join("\n");
@@ -1912,32 +1916,34 @@ export default function AdminDashboard() {
       ? staffList.find((s) => String(s.id) === staffId)?.name || ""
       : "الكل";
 
-    const headers = [
-      "رقم الفاتورة",
-      "العميل",
-      "الموبايل",
-      "الإجمالي",
-      "كاش",
-      "محفظة",
-      "الموظف",
-      "التاريخ",
-      "الوقت",
-    ];
+const headers = [
+  "رقم الفاتورة",
+  "نوع الفاتورة",
+  "العميل",
+  "الموبايل",
+  "الإجمالي",
+  "كاش",
+  "محفظة",
+  "الموظف",
+  "التاريخ",
+  "الوقت",
+];
 
-    const rows = allInvoices.map((inv) => [
-      inv.invoice_number,
-      inv.client_name,
-      inv.client_phone,
-      parseFloat(inv.total).toFixed(2),
-      parseFloat(inv.cash_paid || 0).toFixed(2),
-      parseFloat(inv.wallet_paid || 0).toFixed(2),
-      inv.created_by_name || "",
-      new Date(inv.created_at).toLocaleDateString("ar-EG"),
-      new Date(inv.created_at).toLocaleTimeString("ar-EG", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    ]);
+const rows = allInvoices.map((inv) => [
+  inv.invoice_number,
+  inv.invoice_type === "quick_sale" ? "⚡ بيع سريع" : "🖥️ جلسة",
+  inv.client_name,
+  inv.client_phone,
+  parseFloat(inv.total).toFixed(2),
+  parseFloat(inv.cash_paid || 0).toFixed(2),
+  parseFloat(inv.wallet_paid || 0).toFixed(2),
+  inv.created_by_name || "",
+  new Date(inv.created_at).toLocaleDateString("ar-EG"),
+  new Date(inv.created_at).toLocaleTimeString("ar-EG", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }),
+]);
 
     // سطر الإجماليات في الآخر
     const totalAmount = allInvoices.reduce(
@@ -1954,6 +1960,7 @@ export default function AdminDashboard() {
     );
     rows.push([
       "",
+      "", 
       "الإجمالي",
       "",
       totalAmount.toFixed(2),
