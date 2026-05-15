@@ -1676,7 +1676,7 @@ export default function AdminDashboard() {
       const [d, m] = await Promise.all([
         adminAPI.dailyReport(today),
         adminAPI.monthlyReport(now.getFullYear(), now.getMonth() + 1),
-        adminAPI.overviewStats(),
+        adminAPI.overviewStats().catch(() => ({ data: null })), // ✅ لو فشل ميوقفش الكل
       ]);
       setDaily(d.data);
       setMonthly(m.data);
@@ -2533,85 +2533,8 @@ export default function AdminDashboard() {
         {/* ══ OVERVIEW ══ */}
         {tab === "overview" && (
           <div className="fade-up">
-            {/* ── Hero Stats Bar ── */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(2,1fr)",
-                gap: 10,
-                marginBottom: 16,
-              }}
-            >
-              {[
-                [
-                  "💰",
-                  "إيرادات اليوم",
-                  `${parseFloat(daily?.summary?.total_revenue || 0).toFixed(0)} ج`,
-                  "var(--accent)",
-                ],
-                [
-                  "📊",
-                  "إيرادات الشهر",
-                  `${parseFloat(overviewStats?.invoices?.month_revenue || 0).toFixed(0)} ج`,
-                  "#3b82f6",
-                ],
-                [
-                  "👥",
-                  "إجمالي العملاء",
-                  overviewStats?.clients?.total_clients || 0,
-                  "var(--text)",
-                ],
-                [
-                  "🟢",
-                  "نشطون الآن",
-                  overviewStats?.clients?.active_now || 0,
-                  "var(--success)",
-                ],
-              ].map(([icon, label, val, color]) => (
-                <div
-                  key={label}
-                  className="card"
-                  style={{
-                    padding: "14px 16px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 40,
-                      height: 40,
-                      borderRadius: 10,
-                      background: "rgba(0,212,170,0.08)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: 18,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {icon}
-                  </div>
-                  <div>
-                    <div
-                      style={{
-                        fontSize: 11,
-                        color: "var(--muted)",
-                        marginBottom: 2,
-                      }}
-                    >
-                      {label}
-                    </div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color }}>
-                      {val}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* ── Stats Row 2 ── */}
+            {/* ══ إحصائيات اليوم ══ */}
+            <div className="section-title">📅 إحصائيات اليوم</div>
             <div
               style={{
                 display: "grid",
@@ -2622,30 +2545,32 @@ export default function AdminDashboard() {
             >
               {[
                 [
+                  "💰",
+                  "الإيرادات",
+                  `${parseFloat(daily?.summary?.total_revenue || 0).toFixed(0)} ج`,
+                  "var(--accent)",
+                ],
+                [
                   "🧾",
-                  "فواتير اليوم",
-                  overviewStats?.invoices?.today_invoices || 0,
+                  "الفواتير",
+                  overviewStats?.invoices?.today_invoices ||
+                    daily?.summary?.visits ||
+                    0,
                   "var(--warning)",
                 ],
                 [
-                  "⚡",
-                  "بيع سريع",
-                  overviewStats?.invoices?.quick_sale_count || 0,
-                  "#f59e0b",
-                ],
-                [
-                  "🖥️",
-                  "جلسات مكتملة",
-                  overviewStats?.invoices?.session_count || 0,
+                  "🟢",
+                  "نشط الآن",
+                  overviewStats?.clients?.active_now || daily?.active_now || 0,
                   "var(--success)",
                 ],
               ].map(([icon, label, val, color]) => (
                 <div
                   key={label}
                   className="card"
-                  style={{ padding: "12px 14px", textAlign: "center" }}
+                  style={{ padding: "14px 12px", textAlign: "center" }}
                 >
-                  <div style={{ fontSize: 20, marginBottom: 6 }}>{icon}</div>
+                  <div style={{ fontSize: 22, marginBottom: 6 }}>{icon}</div>
                   <div
                     style={{
                       fontSize: 11,
@@ -2662,8 +2587,8 @@ export default function AdminDashboard() {
               ))}
             </div>
 
-            {/* ── Chart ── */}
-            <div className="section-title">إيرادات آخر 7 أيام</div>
+            {/* ══ إيرادات آخر 7 أيام ══ */}
+            <div className="section-title">📈 إيرادات آخر 7 أيام</div>
             <div className="card" style={{ marginBottom: 16 }}>
               {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={180}>
@@ -2721,260 +2646,308 @@ export default function AdminDashboard() {
               )}
             </div>
 
-            {/* ── Row: Month Stats + Ambassadors ── */}
+            {/* ══ إحصائيات الشهر ══ */}
+            <div className="section-title">📊 إحصائيات الشهر الحالي</div>
             <div
               style={{
                 display: "grid",
                 gridTemplateColumns: "1fr 1fr",
-                gap: 12,
+                gap: 10,
                 marginBottom: 16,
               }}
             >
-              {/* إجماليات الشهر */}
-              <div>
-                <div className="section-title">إجماليات الشهر</div>
-                <div className="card">
-                  {[
-                    [
-                      "الإيرادات",
-                      `${parseFloat(monthly?.totals?.total_revenue || 0).toFixed(2)} ج`,
-                      "var(--accent)",
-                    ],
-                    [
-                      "الزيارات",
-                      monthly?.totals?.total_visits || 0,
-                      "var(--text)",
-                    ],
-                    [
-                      "متوسط المدة",
-                      `${Math.round(monthly?.totals?.avg_duration || 0)} د`,
-                      "var(--muted)",
-                    ],
-                    [
-                      "جدد هذا الشهر",
-                      overviewStats?.clients?.new_this_month || 0,
-                      "#3b82f6",
-                    ],
-                  ].map(([label, val, color], i, arr) => (
-                    <div
-                      key={label}
-                      className="stat-row"
-                      style={{
-                        border: i === arr.length - 1 ? "none" : undefined,
-                      }}
-                    >
-                      <span className="stat-label" style={{ fontSize: 12 }}>
-                        {label}
-                      </span>
-                      <span
-                        className="stat-val"
-                        style={{ color, fontSize: 14 }}
-                      >
-                        {val}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+              <div className="card">
+                {[
+                  [
+                    "الإيرادات",
+                    `${parseFloat(overviewStats?.invoices?.month_revenue || monthly?.totals?.total_revenue || 0).toFixed(0)} ج`,
+                    "var(--accent)",
+                  ],
+                  [
+                    "الزيارات",
+                    monthly?.totals?.total_visits || 0,
+                    "var(--text)",
+                  ],
+                  [
+                    "متوسط المدة",
+                    `${Math.round(monthly?.totals?.avg_duration || 0)} د`,
+                    "var(--muted)",
+                  ],
+                ].map(([label, val, color], i, arr) => (
+                  <div
+                    key={label}
+                    className="stat-row"
+                    style={{
+                      border: i === arr.length - 1 ? "none" : undefined,
+                    }}
+                  >
+                    <span className="stat-label" style={{ fontSize: 12 }}>
+                      {label}
+                    </span>
+                    <span className="stat-val" style={{ color, fontSize: 14 }}>
+                      {val}
+                    </span>
+                  </div>
+                ))}
               </div>
-
-              {/* إحصائيات العملاء */}
-              <div>
-                <div className="section-title">العملاء</div>
-                <div className="card">
-                  {[
-                    [
-                      "إجمالي الأرصدة",
-                      `${parseFloat(overviewStats?.clients?.total_balance || 0).toFixed(0)} ج`,
-                      "var(--warning)",
-                    ],
-                    [
-                      "جدد هذا الشهر",
-                      overviewStats?.clients?.new_this_month || 0,
-                      "var(--accent)",
-                    ],
-                    [
-                      "محظورون",
-                      overviewStats?.clients?.banned_count || 0,
-                      "#ff4757",
-                    ],
-                    [
-                      "متوسط مدة الجلسة",
-                      `${Math.round(overviewStats?.sessions?.avg_duration || 0)} د`,
-                      "var(--muted)",
-                    ],
-                  ].map(([label, val, color], i, arr) => (
-                    <div
-                      key={label}
-                      className="stat-row"
-                      style={{
-                        border: i === arr.length - 1 ? "none" : undefined,
-                      }}
-                    >
-                      <span className="stat-label" style={{ fontSize: 12 }}>
-                        {label}
-                      </span>
-                      <span
-                        className="stat-val"
-                        style={{ color, fontSize: 14 }}
-                      >
-                        {val}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+              <div className="card">
+                {[
+                  [
+                    "⚡ بيع سريع",
+                    overviewStats?.invoices?.quick_sale_count || 0,
+                    "var(--warning)",
+                  ],
+                  [
+                    "🖥️ جلسات",
+                    overviewStats?.invoices?.session_count || 0,
+                    "var(--success)",
+                  ],
+                  [
+                    "🆕 عملاء جدد",
+                    overviewStats?.clients?.new_this_month || 0,
+                    "#3b82f6",
+                  ],
+                ].map(([label, val, color], i, arr) => (
+                  <div
+                    key={label}
+                    className="stat-row"
+                    style={{
+                      border: i === arr.length - 1 ? "none" : undefined,
+                    }}
+                  >
+                    <span className="stat-label" style={{ fontSize: 12 }}>
+                      {label}
+                    </span>
+                    <span className="stat-val" style={{ color, fontSize: 14 }}>
+                      {val}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* ── 🏆 Top Ambassadors ── */}
-            <div className="section-title">
-              🏆 أكثر العملاء إحضاراً للأصدقاء
-            </div>
-            <div className="card" style={{ marginBottom: 16 }}>
-              {!overviewStats?.ambassadors?.length ? (
+            {/* ══ الإحصائيات الإجمالية ══ */}
+            <div className="section-title">🏆 إحصائيات إجمالية</div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2,1fr)",
+                gap: 10,
+                marginBottom: 16,
+              }}
+            >
+              {[
+                [
+                  "👥",
+                  "إجمالي العملاء",
+                  overviewStats?.clients?.total_clients || 0,
+                  "var(--text)",
+                ],
+                [
+                  "💼",
+                  "فريق العمل",
+                  overviewStats?.staff?.total_staff || 0,
+                  "#a78bfa",
+                ],
+                [
+                  "💰",
+                  "إجمالي الأرصدة",
+                  `${parseFloat(overviewStats?.clients?.total_balance || 0).toFixed(0)} ج`,
+                  "var(--warning)",
+                ],
+                [
+                  "🚫",
+                  "محظورون",
+                  overviewStats?.clients?.banned_count || 0,
+                  "#ff4757",
+                ],
+              ].map(([icon, label, val, color]) => (
                 <div
+                  key={label}
+                  className="card"
                   style={{
-                    textAlign: "center",
-                    color: "var(--muted)",
-                    padding: "20px 0",
-                    fontSize: 13,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "12px 14px",
                   }}
                 >
-                  لا توجد بيانات بعد — ستظهر هنا عند تسجيل جلسات جماعية
-                </div>
-              ) : (
-                <div
-                  style={{ display: "flex", flexDirection: "column", gap: 10 }}
-                >
-                  {overviewStats.ambassadors.map((a, i) => (
+                  <div
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 10,
+                      background: "rgba(0,212,170,0.08)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 16,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {icon}
+                  </div>
+                  <div>
                     <div
-                      key={a.id}
-                      style={{ display: "flex", alignItems: "center", gap: 12 }}
+                      style={{
+                        fontSize: 11,
+                        color: "var(--muted)",
+                        marginBottom: 2,
+                      }}
                     >
-                      {/* الترتيب */}
+                      {label}
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color }}>
+                      {val}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* ══ Top Ambassadors ══ */}
+            {overviewStats?.ambassadors?.length > 0 && (
+              <>
+                <div className="section-title">
+                  🏅 أكثر العملاء إحضاراً للأصدقاء
+                </div>
+                <div className="card" style={{ marginBottom: 16 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 12,
+                    }}
+                  >
+                    {overviewStats.ambassadors.map((a, i) => (
                       <div
+                        key={a.id}
                         style={{
-                          width: 28,
-                          height: 28,
-                          borderRadius: "50%",
-                          flexShrink: 0,
-                          background:
-                            i === 0
-                              ? "rgba(255,165,2,0.15)"
-                              : i === 1
-                                ? "rgba(192,192,192,0.15)"
-                                : i === 2
-                                  ? "rgba(205,127,50,0.15)"
-                                  : "rgba(255,255,255,0.05)",
-                          border: `1px solid ${i === 0 ? "rgba(255,165,2,0.4)" : i === 1 ? "rgba(192,192,192,0.3)" : i === 2 ? "rgba(205,127,50,0.3)" : "var(--border)"}`,
                           display: "flex",
                           alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: i < 3 ? 14 : 11,
-                          fontWeight: 700,
-                          color:
-                            i === 0
-                              ? "#ffa502"
-                              : i === 1
-                                ? "#a8a8a8"
-                                : i === 2
-                                  ? "#cd7f32"
-                                  : "var(--muted)",
+                          gap: 10,
                         }}
                       >
-                        {i === 0
-                          ? "🥇"
-                          : i === 1
-                            ? "🥈"
-                            : i === 2
-                              ? "🥉"
-                              : i + 1}
-                      </div>
-                      {/* الأفاتار */}
-                      {a.avatar_url ? (
-                        <img
-                          src={a.avatar_url}
-                          alt={a.name}
-                          style={{
-                            width: 36,
-                            height: 36,
-                            borderRadius: "50%",
-                            objectFit: "cover",
-                            border: "1.5px solid var(--accent)",
-                            flexShrink: 0,
-                          }}
-                        />
-                      ) : (
                         <div
                           style={{
-                            width: 36,
-                            height: 36,
+                            width: 26,
+                            height: 26,
                             borderRadius: "50%",
                             flexShrink: 0,
                             background:
-                              "linear-gradient(135deg, var(--accent), var(--accent2))",
+                              i === 0
+                                ? "rgba(255,165,2,0.15)"
+                                : i === 1
+                                  ? "rgba(180,180,180,0.15)"
+                                  : "rgba(205,127,50,0.1)",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
-                            fontWeight: 700,
                             fontSize: 13,
-                            color: "#fff",
                           }}
                         >
-                          {(a.name || "U")
-                            .split(" ")
-                            .slice(0, 2)
-                            .map((w) => w[0])
-                            .join("")}
+                          {i === 0 ? (
+                            "🥇"
+                          ) : i === 1 ? (
+                            "🥈"
+                          ) : i === 2 ? (
+                            "🥉"
+                          ) : (
+                            <span
+                              style={{
+                                fontSize: 11,
+                                color: "var(--muted)",
+                                fontWeight: 700,
+                              }}
+                            >
+                              {i + 1}
+                            </span>
+                          )}
                         </div>
-                      )}
-                      {/* البيانات */}
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 13 }}>
-                          {a.name}
+                        {a.avatar_url ? (
+                          <img
+                            src={a.avatar_url}
+                            alt={a.name}
+                            style={{
+                              width: 34,
+                              height: 34,
+                              borderRadius: "50%",
+                              objectFit: "cover",
+                              border: "1.5px solid var(--accent)",
+                              flexShrink: 0,
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: 34,
+                              height: 34,
+                              borderRadius: "50%",
+                              background:
+                                "linear-gradient(135deg, var(--accent), var(--accent2))",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontWeight: 700,
+                              fontSize: 12,
+                              color: "#fff",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {(a.name || "U")
+                              .split(" ")
+                              .slice(0, 2)
+                              .map((w) => w[0])
+                              .join("")}
+                          </div>
+                        )}
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 700, fontSize: 13 }}>
+                            {a.name}
+                          </div>
+                          <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                            {a.phone}
+                          </div>
                         </div>
-                        <div style={{ fontSize: 11, color: "var(--muted)" }}>
-                          {a.phone}
+                        <div style={{ textAlign: "center" }}>
+                          <div
+                            style={{
+                              fontSize: 17,
+                              fontWeight: 800,
+                              color: "var(--accent)",
+                            }}
+                          >
+                            {a.guests_count}
+                          </div>
+                          <div style={{ fontSize: 9, color: "var(--muted)" }}>
+                            صديق
+                          </div>
                         </div>
                       </div>
-                      {/* العدد */}
-                      <div style={{ textAlign: "center" }}>
-                        <div
-                          style={{
-                            fontSize: 18,
-                            fontWeight: 800,
-                            color: "var(--accent)",
-                          }}
-                        >
-                          {a.guests_count}
-                        </div>
-                        <div style={{ fontSize: 10, color: "var(--muted)" }}>
-                          صديق
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 12,
+                      padding: "8px 12px",
+                      background: "rgba(0,212,170,0.04)",
+                      border: "1px dashed rgba(0,212,170,0.2)",
+                      borderRadius: 10,
+                      fontSize: 11,
+                      color: "var(--muted)",
+                      textAlign: "center",
+                    }}
+                  >
+                    💡 قدّم عروضاً خاصة لأكثر العملاء تأثيراً لزيادة الزيارات
+                  </div>
                 </div>
-              )}
-              <div
-                style={{
-                  marginTop: 14,
-                  padding: "10px 12px",
-                  background: "rgba(0,212,170,0.04)",
-                  border: "1px dashed rgba(0,212,170,0.2)",
-                  borderRadius: 10,
-                  fontSize: 11,
-                  color: "var(--muted)",
-                  textAlign: "center",
-                }}
-              >
-                💡 استخدم هذه البيانات لتقديم عروض خاصة لأكثر العملاء تأثيراً
-              </div>
-            </div>
+              </>
+            )}
 
-            {/* ── Heatmap ── */}
+            {/* ══ Heatmap ══ */}
             {daily?.by_hour?.length > 0 && (
               <>
-                <div className="section-title">توزيع الزيارات بالساعة</div>
+                <div className="section-title">⏱️ توزيع الزيارات بالساعة</div>
                 <div className="card">
                   <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                     {Array.from({ length: 24 }, (_, h) => {
@@ -3024,7 +2997,6 @@ export default function AdminDashboard() {
             )}
           </div>
         )}
-
         {/* ══ USERS ══ */}
         {tab === "users" && (
           <div className="fade-up">
