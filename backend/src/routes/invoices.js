@@ -302,7 +302,9 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
         COUNT(*) FILTER (WHERE i.invoice_type = 'session' OR i.invoice_type IS NULL) AS session_count
       FROM invoices i
       WHERE
-        ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%')
+        ($1 = '' OR i.client_name ILIKE '%' || $1 || '%'
+          OR i.client_phone ILIKE '%' || $1 || '%'
+          OR i.invoice_number ILIKE '%' || $1 || '%')
         AND ($2 = '' OR DATE(i.created_at) = $2::date)
         AND ($3 = '' OR i.created_by = $3::integer)
     `, [search, date, staff_id]);
@@ -333,7 +335,9 @@ router.get('/export', auth, requireRole('staff', 'admin'), async (req, res) => {
       SELECT i.*, u.name AS created_by_name
       FROM invoices i LEFT JOIN users u ON u.id = i.created_by
       WHERE
-        ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%')
+        ($1 = '' OR i.client_name ILIKE '%' || $1 || '%'
+          OR i.client_phone ILIKE '%' || $1 || '%'
+          OR i.invoice_number ILIKE '%' || $1 || '%')
         AND ($2 = '' OR DATE(i.created_at) = $2::date)
         AND ($3 = '' OR i.created_by = $3::integer)
       ORDER BY i.created_at DESC
