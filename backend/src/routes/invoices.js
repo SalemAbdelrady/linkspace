@@ -278,6 +278,7 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
       FROM invoices i
       LEFT JOIN users u ON u.id = i.created_by
       LEFT JOIN users c ON c.id = i.user_id
+      LEFT JOIN sessions s ON s.id = i.session_id
       WHERE
         ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%'  OR i.invoice_number ILIKE '%' || $1 || '%')
         AND ($2 = '' OR DATE(i.created_at) = $2::date)
