@@ -1671,20 +1671,20 @@ export default function AdminDashboard() {
     }
   }, [tab, invoicePage, invoiceSearch, invoiceDate, invoiceStaffId]);
 
-async function loadOverview() {
-  try {
-    const [d, m, stats] = await Promise.all([
-      adminAPI.dailyReport(today),
-      adminAPI.monthlyReport(now.getFullYear(), now.getMonth() + 1),
-      adminAPI.overviewStats().catch(() => ({ data: null })),
-    ]);
-    setDaily(d.data);
-    setMonthly(m.data);
-    setOverviewStats(stats?.data || null);
-  } catch {
-    toast.error("خطأ في تحميل البيانات");
+  async function loadOverview() {
+    try {
+      const [d, m, stats] = await Promise.all([
+        adminAPI.dailyReport(today),
+        adminAPI.monthlyReport(now.getFullYear(), now.getMonth() + 1),
+        adminAPI.overviewStats().catch(() => ({ data: null })),
+      ]);
+      setDaily(d.data);
+      setMonthly(m.data);
+      setOverviewStats(stats?.data || null);
+    } catch {
+      toast.error("خطأ في تحميل البيانات");
+    }
   }
-}
 
   async function loadSpaces() {
     try {
@@ -2547,17 +2547,17 @@ async function loadOverview() {
                 [
                   "💰",
                   "الإيرادات",
-                  `${parseFloat(daily?.summary?.total_revenue || 0).toFixed(0)} ج`,
+                  `${parseFloat(overviewStats?.invoices?.today_revenue || 0).toFixed(0)} ج`,
                   "var(--accent)",
                 ],
+
                 [
                   "🧾",
                   "الفواتير",
-                  overviewStats?.invoices?.today_invoices ||
-                    daily?.summary?.visits ||
-                    0,
+                  overviewStats?.invoices?.today_invoices || 0,
                   "var(--warning)",
                 ],
+
                 [
                   "🟢",
                   "نشط الآن",

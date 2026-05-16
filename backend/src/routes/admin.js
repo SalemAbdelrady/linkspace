@@ -11,7 +11,9 @@ const isStaffOrAdmin = [auth, requireRole("staff", "admin")];
 // GET /api/admin/overview-stats
 router.get("/overview-stats", auth, requireRole("admin"), async (req, res) => {
   try {
-    const today = new Date().toISOString().split("T")[0];
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
+    const firstOfMonth = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Cairo' }));
+    const firstOfMonthStr = `${firstOfMonth.getFullYear()}-${String(firstOfMonth.getMonth() + 1).padStart(2, '0')}-01`;
     const firstOfMonth = new Date(
       new Date().getFullYear(),
       new Date().getMonth(),
@@ -33,20 +35,17 @@ router.get("/overview-stats", auth, requireRole("admin"), async (req, res) => {
       `),
 
       // إحصائيات الفواتير
-      db.query(
-        `
+      db.query(`
         SELECT
           COUNT(*) AS total_invoices,
           COALESCE(SUM(total), 0) AS total_revenue,
-          COALESCE(SUM(total) FILTER (WHERE DATE(created_at) = $1), 0) AS today_revenue,
-          COUNT(*) FILTER (WHERE DATE(created_at) = $1) AS today_invoices,
+          COALESCE(SUM(total) FILTER (WHERE DATE(created_at AT TIME ZONE 'Africa/Cairo') = $1), 0) AS today_revenue,
+          COUNT(*) FILTER (WHERE DATE(created_at AT TIME ZONE 'Africa/Cairo') = $1) AS today_invoices,
           COALESCE(SUM(total) FILTER (WHERE created_at >= $2), 0) AS month_revenue,
           COUNT(*) FILTER (WHERE invoice_type = 'quick_sale') AS quick_sale_count,
           COUNT(*) FILTER (WHERE invoice_type = 'session' OR invoice_type IS NULL) AS session_count
         FROM invoices
-      `,
-        [today, firstOfMonth],
-      ),
+      `, [today, firstOfMonthStr]),
 
       // إحصائيات الجلسات
       db.query(
@@ -67,14 +66,14 @@ router.get("/overview-stats", auth, requireRole("admin"), async (req, res) => {
           u.name,
           u.phone,
           u.avatar_url,
-          SUM(GREATEST(s.guest_count - 1, 0)) AS guests_count,
-          COALESCE(SUM(i.total), 0)           AS total_spent
+          SUM(GREATEST(s.guest_count - 1, 0)) AS guests_count
         FROM users u
         JOIN sessions s ON s.user_id = u.id
-        LEFT JOIN invoices i ON i.user_id = u.id
         WHERE u.role = 'client'
           AND s.guest_count > 1
+          AND s.status = 'completed'
         GROUP BY u.id, u.name, u.phone, u.avatar_url
+        HAVING SUM(GREATEST(s.guest_count - 1, 0)) > 0
         ORDER BY guests_count DESC
         LIMIT 5
       `),
