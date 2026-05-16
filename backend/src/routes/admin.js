@@ -239,18 +239,6 @@ router.patch("/users/:id/toggle", ...isAdmin, async (req, res) => {
 router.get("/reports/daily", ...isStaffOrAdmin, async (req, res) => {
   const date = req.query.date || new Date().toISOString().split("T")[0];
   try {
-    const { rows: revenue } = await db.query(
-      `
-      SELECT
-        COUNT(*) AS visits,
-        COALESCE(SUM(cost), 0) AS total_revenue,
-        COALESCE(AVG(duration_min), 0) AS avg_duration
-      FROM sessions
-      WHERE DATE(check_in) = $1 AND status = 'completed'
-    `,
-      [date],
-    );
-
     const { rows: revenue } = await db.query(`
       SELECT
         COUNT(*) AS visits,
@@ -259,6 +247,14 @@ router.get("/reports/daily", ...isStaffOrAdmin, async (req, res) => {
       FROM sessions
       WHERE DATE(check_in AT TIME ZONE 'Africa/Cairo') = $1
         AND status = 'completed'
+    `, [date]);
+
+    const { rows: byHour } = await db.query(`
+      SELECT EXTRACT(HOUR FROM check_in AT TIME ZONE 'Africa/Cairo') AS hour,
+            COUNT(*) AS visits
+      FROM sessions
+      WHERE DATE(check_in AT TIME ZONE 'Africa/Cairo') = $1
+      GROUP BY hour ORDER BY hour
     `, [date]);
 
     const { rows: activeNow } = await db.query(`
@@ -289,7 +285,7 @@ router.get("/reports/monthly", ...isStaffOrAdmin, async (req, res) => {
         COALESCE(SUM(cost), 0) AS revenue
       FROM sessions
       WHERE EXTRACT(YEAR  FROM check_in AT TIME ZONE 'Africa/Cairo') = $1
-        AND EXTRACT(MONTH FROM check_in AT TIME ZONE 'Africa/Cairo') = $2
+        AND EXTRACT(MONTH FROM check_in) = $2
         AND status = 'completed'
       GROUP BY day ORDER BY day
     `,
@@ -304,7 +300,7 @@ router.get("/reports/monthly", ...isStaffOrAdmin, async (req, res) => {
         COALESCE(AVG(duration_min), 0) AS avg_duration
       FROM sessions
       WHERE EXTRACT(YEAR  FROM check_in AT TIME ZONE 'Africa/Cairo') = $1
-        AND EXTRACT(MONTH FROM check_in AT TIME ZONE 'Africa/Cairo') = $2
+        AND EXTRACT(MONTH FROM check_in) = $2
         AND status = 'completed'
     `,
       [year, month],
