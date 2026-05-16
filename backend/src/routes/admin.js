@@ -48,7 +48,7 @@ router.get("/overview-stats", auth, requireRole("admin"), async (req, res) => {
               AND created_at >= $2
           )                                                               AS month_session_count
         FROM invoices
-      `, [today, firstOfMonth]),
+      `, [today, firstOfMonthStr]),
 
       // إحصائيات الجلسات
       db.query(`
@@ -87,8 +87,6 @@ router.get("/overview-stats", auth, requireRole("admin"), async (req, res) => {
     res.json({
       clients: clients.rows[0],
       invoices: invoices.rows[0],
-      quick_sale_count: parseInt(invoices.rows[0].month_quick_sale_count),
-      session_count:    parseInt(invoices.rows[0].month_session_count),
       sessions: sessions.rows[0],
       staff: staff.rows[0],
       ambassadors: ambassadors.rows,
