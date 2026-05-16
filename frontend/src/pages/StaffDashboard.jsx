@@ -140,6 +140,8 @@ function QuickSaleModal({ services: allServices, onClose, onDone }) {
   const [payMethod,   setPayMethod]   = useState('cash');
   const [note,        setNote]        = useState('');
   const [saving,      setSaving]      = useState(false);
+  const [svcSearch,   setSvcSearch]   = useState('');
+
 
   const total = cart.reduce((s, x) => s + x.price * x.qty, 0);
 
@@ -283,7 +285,12 @@ function QuickSaleModal({ services: allServices, onClose, onDone }) {
           />
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 12 }}>
-            {allServices.map(svc => (
+            {allServices
+              .filter(s =>
+                s.name.toLowerCase().includes(svcSearch.toLowerCase()) ||
+                String(s.price).includes(svcSearch)
+              )
+              .map(svc => (
               <button key={svc.id} onClick={() => addToCart(svc)}
                 style={{ padding: '12px 8px', borderRadius: 12, border: '1px solid var(--border)',
                   background: 'transparent', cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' }}
