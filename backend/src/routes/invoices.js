@@ -268,12 +268,13 @@ router.get('/my', auth, async (req, res) => {
 
 // GET /api/invoices — كل الفواتير [staff/admin]
 router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
-  const page     = parseInt(req.query.page) || 1;
-  const limit    = 20;
-  const offset   = (page - 1) * limit;
-  const search   = req.query.search   || '';
-  const date     = req.query.date     || '';
-  const staff_id = req.query.staff_id || '';
+  const page      = parseInt(req.query.page) || 1;
+  const limit     = 20;
+  const offset    = (page - 1) * limit;
+  const search    = req.query.search    || '';
+  const date_from = req.query.date_from || '';
+  const date_to   = req.query.date_to   || '';
+  const staff_id  = req.query.staff_id  || '';
 
   try {
     const { rows } = await db.query(`
@@ -283,19 +284,25 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
       LEFT JOIN users c ON c.id = i.user_id
       LEFT JOIN sessions s ON s.id = i.session_id
       WHERE
-        ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%'  OR i.invoice_number ILIKE '%' || $1 || '%')
-        AND ($2 = '' OR DATE(i.created_at AT TIME ZONE 'Africa/Cairo') = $2::date)
-        AND ($3 = '' OR i.created_by = $3::integer)
-      ORDER BY i.created_at DESC LIMIT $4 OFFSET $5
-    `, [search, date, staff_id, limit, offset]);
+        ($1 = '' OR i.client_name ILIKE '%' || $1 || '%'
+          OR i.client_phone ILIKE '%' || $1 || '%'
+          OR i.invoice_number ILIKE '%' || $1 || '%')
+        AND ($2 = '' OR DATE(i.created_at AT TIME ZONE 'Africa/Cairo') >= $2::date)
+        AND ($3 = '' OR DATE(i.created_at AT TIME ZONE 'Africa/Cairo') <= $3::date)
+        AND ($4 = '' OR i.created_by = $4::integer)
+      ORDER BY i.created_at DESC LIMIT $5 OFFSET $6
+    `, [search, date_from, date_to, staff_id, limit, offset]);
 
     const { rows: countRows } = await db.query(`
       SELECT COUNT(*) FROM invoices i
       WHERE
-        ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%' OR i.invoice_number ILIKE '%' || $1 || '%')
-        AND ($2 = '' OR DATE(i.created_at AT TIME ZONE 'Africa/Cairo') = $2::date)
-        AND ($3 = '' OR i.created_by = $3::integer)
-    `, [search, date, staff_id]);
+        ($1 = '' OR i.client_name ILIKE '%' || $1 || '%'
+          OR i.client_phone ILIKE '%' || $1 || '%'
+          OR i.invoice_number ILIKE '%' || $1 || '%')
+        AND ($2 = '' OR DATE(i.created_at AT TIME ZONE 'Africa/Cairo') >= $2::date)
+        AND ($3 = '' OR DATE(i.created_at AT TIME ZONE 'Africa/Cairo') <= $3::date)
+        AND ($4 = '' OR i.created_by = $4::integer)
+    `, [search, date_from, date_to, staff_id]);
 
     const { rows: summary } = await db.query(`
       SELECT
@@ -309,9 +316,10 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
         ($1 = '' OR i.client_name ILIKE '%' || $1 || '%'
           OR i.client_phone ILIKE '%' || $1 || '%'
           OR i.invoice_number ILIKE '%' || $1 || '%')
-        AND ($2 = '' OR DATE(i.created_at AT TIME ZONE 'Africa/Cairo') = $2::date)
-        AND ($3 = '' OR i.created_by = $3::integer)
-    `, [search, date, staff_id]);
+        AND ($2 = '' OR DATE(i.created_at AT TIME ZONE 'Africa/Cairo') >= $2::date)
+        AND ($3 = '' OR DATE(i.created_at AT TIME ZONE 'Africa/Cairo') <= $3::date)
+        AND ($4 = '' OR i.created_by = $4::integer)
+    `, [search, date_from, date_to, staff_id]);
 
     res.json({
       invoices    : rows,
@@ -331,9 +339,10 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
 
 // GET /api/invoices/export
 router.get('/export', auth, requireRole('staff', 'admin'), async (req, res) => {
-  const search   = req.query.search   || '';
-  const date     = req.query.date     || '';
-  const staff_id = req.query.staff_id || '';
+  const search    = req.query.search    || '';
+  const date_from = req.query.date_from || '';
+  const date_to   = req.query.date_to   || '';
+  const staff_id  = req.query.staff_id  || '';
   try {
     const { rows } = await db.query(`
       SELECT i.*, u.name AS created_by_name
@@ -342,10 +351,11 @@ router.get('/export', auth, requireRole('staff', 'admin'), async (req, res) => {
         ($1 = '' OR i.client_name ILIKE '%' || $1 || '%'
           OR i.client_phone ILIKE '%' || $1 || '%'
           OR i.invoice_number ILIKE '%' || $1 || '%')
-        AND ($2 = '' OR DATE(i.created_at AT TIME ZONE 'Africa/Cairo') = $2::date)
-        AND ($3 = '' OR i.created_by = $3::integer)
+        AND ($2 = '' OR DATE(i.created_at AT TIME ZONE 'Africa/Cairo') >= $2::date)
+        AND ($3 = '' OR DATE(i.created_at AT TIME ZONE 'Africa/Cairo') <= $3::date)
+        AND ($4 = '' OR i.created_by = $4::integer)
       ORDER BY i.created_at DESC
-    `, [search, date, staff_id]);
+    `, [search, date_from, date_to, staff_id]);
     res.json({ invoices: rows });
   } catch (err) {
     console.error(err);

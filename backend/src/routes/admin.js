@@ -285,7 +285,7 @@ router.get("/reports/monthly", ...isStaffOrAdmin, async (req, res) => {
         COALESCE(SUM(cost), 0) AS revenue
       FROM sessions
       WHERE EXTRACT(YEAR  FROM check_in AT TIME ZONE 'Africa/Cairo') = $1
-        AND EXTRACT(MONTH FROM check_in) = $2
+        AND EXTRACT(MONTH FROM check_in AT TIME ZONE 'Africa/Cairo') = $2
         AND status = 'completed'
       GROUP BY day ORDER BY day
     `,
@@ -300,7 +300,7 @@ router.get("/reports/monthly", ...isStaffOrAdmin, async (req, res) => {
         COALESCE(AVG(duration_min), 0) AS avg_duration
       FROM sessions
       WHERE EXTRACT(YEAR  FROM check_in AT TIME ZONE 'Africa/Cairo') = $1
-        AND EXTRACT(MONTH FROM check_in) = $2
+        AND EXTRACT(MONTH FROM check_in AT TIME ZONE 'Africa/Cairo') = $2
         AND status = 'completed'
     `,
       [year, month],

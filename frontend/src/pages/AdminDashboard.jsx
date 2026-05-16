@@ -1570,6 +1570,9 @@ export default function AdminDashboard() {
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
   const [amounts, setAmounts] = useState({});
+  // state للفلترة بالتاريخ
+  const [userDateFrom, setUserDateFrom] = useState("");
+  const [userDateTo, setUserDateTo] = useState("");
 
   const [priceTab, setPriceTab] = useState("cowork");
   const [spaces, setSpaces] = useState({
@@ -1615,6 +1618,8 @@ export default function AdminDashboard() {
   const [invoicePage, setInvoicePage] = useState(1);
   const [invoiceSearch, setInvoiceSearch] = useState("");
   const [invoiceDate, setInvoiceDate] = useState("");
+  const [invoiceDateFrom, setInvoiceDateFrom] = useState("");
+  const [invoiceDateTo, setInvoiceDateTo] = useState("");
   // state  لعرض احصائيات صفحة النظرة العامة
   const [overviewStats, setOverviewStats] = useState(null);
 
@@ -1669,7 +1674,7 @@ export default function AdminDashboard() {
     if (tab === "invoices") {
       loadInvoices();
     }
-  }, [tab, invoicePage, invoiceSearch, invoiceDate, invoiceStaffId]);
+  }, [tab, invoicePage, invoiceSearch, invoiceDateFrom, invoiceDateTo, invoiceStaffId]);
 
   async function loadOverview() {
     try {
@@ -1717,6 +1722,7 @@ export default function AdminDashboard() {
       toast.error("خطأ في تحميل العملاء");
     }
   }
+  
 
   // دالة تصدير العملاء لملف اكسيل
   async function exportUsersToExcel() {
@@ -1909,14 +1915,16 @@ export default function AdminDashboard() {
     session_count: 0,
   });
 
-  async function loadInvoices() {
-    try {
-      const { data } = await invoicesAPI.getAll({
-        page: invoicePage,
-        search: invoiceSearch,
-        date: invoiceDate,
-        staff_id: invoiceStaffId || undefined,
-      });
+async function loadInvoices() {
+  try {
+    const { data } = await invoicesAPI.getAll({
+      page: invoicePage,
+      search: invoiceSearch,
+      date_from: invoiceDateFrom || undefined,
+      date_to:   invoiceDateTo   || undefined,
+      staff_id:  invoiceStaffId  || undefined,
+    });
+
       setInvoices(data.invoices);
       setInvoiceTotal(data.total);
       setInvoiceSummary({
@@ -2959,8 +2967,15 @@ export default function AdminDashboard() {
               <>
                 <div className="section-title">⏱️ توزيع الزيارات بالساعة</div>
                 <div className="card">
-                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", direction: "ltr" }}>
-                  {Array.from({ length: 24 }, (_, h) => {
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 4,
+                      flexWrap: "wrap",
+                      direction: "ltr",
+                    }}
+                  >
+                    {Array.from({ length: 24 }, (_, h) => {
                       const found = daily.by_hour.find(
                         (r) => parseInt(r.hour) === h,
                       );
@@ -3102,6 +3117,60 @@ export default function AdminDashboard() {
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="بحث بالاسم أو الموبايل..."
               />
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  marginBottom: 12,
+                  alignItems: "center",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: "var(--muted)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  📅 تسجيل من:
+                </span>
+                <input
+                  type="date"
+                  className="input-field"
+                  style={{ flex: 1 }}
+                  value={userDateFrom}
+                  onChange={(e) => setUserDateFrom(e.target.value)}
+                />
+                <span style={{ fontSize: 11, color: "var(--muted)" }}>
+                  إلى:
+                </span>
+                <input
+                  type="date"
+                  className="input-field"
+                  style={{ flex: 1 }}
+                  value={userDateTo}
+                  onChange={(e) => setUserDateTo(e.target.value)}
+                />
+                {(userDateFrom || userDateTo) && (
+                  <button
+                    onClick={() => {
+                      setUserDateFrom("");
+                      setUserDateTo("");
+                    }}
+                    style={{
+                      background: "transparent",
+                      border: "1px solid rgba(255,71,87,0.3)",
+                      color: "#ff4757",
+                      padding: "6px 10px",
+                      borderRadius: 8,
+                      fontSize: 11,
+                      cursor: "pointer",
+                    }}
+                  >
+                    ✕ مسح
+                  </button>
+                )}
+              </div>
             </div>
             <div
               style={{
@@ -4923,10 +4992,22 @@ export default function AdminDashboard() {
               <input
                 type="date"
                 className="input-field"
-                style={{ width: 150 }}
-                value={invoiceDate}
+                style={{ width: 140 }}
+                placeholder="من"
+                value={invoiceDateFrom}
                 onChange={(e) => {
-                  setInvoiceDate(e.target.value);
+                  setInvoiceDateFrom(e.target.value);
+                  setInvoicePage(1);
+                }}
+              />
+              <input
+                type="date"
+                className="input-field"
+                style={{ width: 140 }}
+                placeholder="إلى"
+                value={invoiceDateTo}
+                onChange={(e) => {
+                  setInvoiceDateTo(e.target.value);
                   setInvoicePage(1);
                 }}
               />
@@ -5098,12 +5179,15 @@ export default function AdminDashboard() {
               >
                 📥 تصدير Excel
               </button>
+
               {invoiceTotal} فاتورة{" "}
-              {invoiceDate &&
-                `— ${new Date(invoiceDate).toLocaleDateString("ar-EG", {
-                  month: "long",
-                  day: "numeric",
-                })}`}
+              {(invoiceDateFrom || invoiceDateTo) && (
+                <span>
+                  {invoiceDateFrom && `من ${new Date(invoiceDateFrom).toLocaleDateString("ar-EG", { month: "short", day: "numeric" })}`}
+                  {invoiceDateTo && ` إلى ${new Date(invoiceDateTo).toLocaleDateString("ar-EG", { month: "short", day: "numeric" })}`}
+                </span>
+              )}
+
               {invoiceStaffId &&
                 staffList.find((s) => String(s.id) === invoiceStaffId) && (
                   <span style={{ marginRight: 6, color: "var(--accent)" }}>
