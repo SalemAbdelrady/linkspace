@@ -34,19 +34,25 @@ router.get("/overview-stats", auth, requireRole("admin"), async (req, res) => {
       // إحصائيات الفواتير — الشهر الحالي فقط للجلسات والبيع السريع
       db.query(`
         SELECT
-          COUNT(*)                                                        AS total_invoices,
-          COALESCE(SUM(total), 0)                                         AS total_revenue,
-          COALESCE(SUM(total) FILTER (WHERE DATE(created_at) = $1), 0)   AS today_revenue,
-          COUNT(*)          FILTER (WHERE DATE(created_at) = $1)          AS today_invoices,
-          COALESCE(SUM(total) FILTER (WHERE created_at >= $2), 0)         AS month_revenue,
+          COUNT(*)                                                         AS total_invoices,
+          COALESCE(SUM(total), 0)                                          AS total_revenue,
+          COALESCE(SUM(total) FILTER (
+            WHERE DATE(created_at AT TIME ZONE 'Africa/Cairo') = $1::date
+          ), 0)                                                            AS today_revenue,
+          COUNT(*) FILTER (
+            WHERE DATE(created_at AT TIME ZONE 'Africa/Cairo') = $1::date
+          )                                                                AS today_invoices,
+          COALESCE(SUM(total) FILTER (
+            WHERE created_at AT TIME ZONE 'Africa/Cairo' >= $2::date
+          ), 0)                                                            AS month_revenue,
           COUNT(*) FILTER (
             WHERE invoice_type = 'quick_sale'
-              AND created_at >= $2
-          )                                                               AS month_quick_sale_count,
+              AND created_at AT TIME ZONE 'Africa/Cairo' >= $2::date
+          )                                                                AS month_quick_sale_count,
           COUNT(*) FILTER (
             WHERE (invoice_type = 'session' OR invoice_type IS NULL)
-              AND created_at >= $2
-          )                                                               AS month_session_count
+              AND created_at AT TIME ZONE 'Africa/Cairo' >= $2::date
+          )                                                                AS month_session_count
         FROM invoices
       `, [today, firstOfMonthStr]),
 

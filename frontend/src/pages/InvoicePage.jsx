@@ -618,7 +618,26 @@ export default function InvoicePage() {
                   ({session.durationMin} د فعلية)
                 </span>
               </span>
-              
+              {session.guestCount > 1 && (
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    fontSize: 12,
+                    color: "var(--muted)",
+                    marginBottom: 4,
+                    padding: "6px 10px",
+                    background: "rgba(0,212,170,0.06)",
+                    borderRadius: 8,
+                    marginTop: 6,
+                  }}
+                >
+                  <span>👥 عدد الأشخاص</span>
+                  <span style={{ color: "var(--accent)", fontWeight: 700 }}>
+                    × {session.guestCount} أشخاص
+                  </span>
+                </div>
+              )}
               {/*
               {session.guestCount > 1 && (
                 <div
@@ -640,26 +659,6 @@ export default function InvoicePage() {
 
               {!isSubscription && (
                 <span>سعر الساعة: {session.pricePerHr || "—"} ج</span>
-              )}
-              {session.guestCount > 1 && (
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    fontSize: 12,
-                    color: "var(--muted)",
-                    marginBottom: 4,
-                    padding: "6px 10px",
-                    background: "rgba(0,212,170,0.06)",
-                    borderRadius: 8,
-                    marginTop: 6,
-                  }}
-                >
-                  <span>👥 عدد الأشخاص</span>
-                  <span style={{ color: "var(--accent)", fontWeight: 700 }}>
-                    × {session.guestCount} أشخاص
-                  </span>
-                </div>
               )}
             </div>
             {session.checkIn && (
