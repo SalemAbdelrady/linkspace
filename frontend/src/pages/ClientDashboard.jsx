@@ -138,6 +138,7 @@ function ClientOrderModal({ sessionId, onClose, onOrderAdded }) {
   const [confirmItem, setConfirmItem] = useState(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [svcSearch, setSvcSearch] = useState('');
 
   useEffect(() => {
     Promise.all([servicesAPI.getAll(), api.get(`/orders/session/${sessionId}`)])
@@ -312,6 +313,13 @@ function ClientOrderModal({ sessionId, onClose, onOrderAdded }) {
             <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
               سيظهر في فاتورتك النهائية
             </div>
+            <input
+              className="input-field"
+              placeholder="🔍 بحث باسم الخدمة أو السعر..."
+              value={svcSearch}
+              onChange={(e) => setSvcSearch(e.target.value)}
+              style={{ marginBottom: 10 }}
+            />
           </div>
           <button
             onClick={onClose}
@@ -454,7 +462,13 @@ function ClientOrderModal({ sessionId, onClose, onOrderAdded }) {
               gap: 8,
             }}
           >
-            {services.map((s) => (
+            {services
+              .filter(
+                (s) =>
+                  s.name.toLowerCase().includes(svcSearch.toLowerCase()) ||
+                  String(s.price).includes(svcSearch)
+              )
+              .map((s) => (
               <button
                 key={s.id}
                 onClick={() => setConfirmItem(s)}

@@ -67,18 +67,19 @@ router.get("/overview-stats", auth, requireRole("admin"), async (req, res) => {
 
       // أكثر عميل يجيب أصحابه
       db.query(`
-        SELECT
-          u.id, u.name, u.phone, u.avatar_url,
-          SUM(GREATEST(s.guest_count - 1, 0)) AS guests_count
-        FROM users u
-        JOIN sessions s ON s.user_id = u.id
-        WHERE u.role = 'client'
-          AND s.guest_count > 1
-          AND s.status = 'completed'
-        GROUP BY u.id, u.name, u.phone, u.avatar_url
-        HAVING SUM(GREATEST(s.guest_count - 1, 0)) > 0
-        ORDER BY guests_count DESC
-        LIMIT 5
+      SELECT
+        u.id, u.name, u.phone, u.avatar_url,
+        SUM(GREATEST(s.guest_count - 1, 0)) AS guests_count,
+        MIN(s.check_in) AS first_guest_session
+      FROM users u
+      JOIN sessions s ON s.user_id = u.id
+      WHERE u.role = 'client'
+        AND s.guest_count > 1
+        AND s.status = 'completed'
+      GROUP BY u.id, u.name, u.phone, u.avatar_url
+      HAVING SUM(GREATEST(s.guest_count - 1, 0)) > 0
+      ORDER BY guests_count DESC, first_guest_session ASC
+      LIMIT 5
       `),
 
       // عدد الموظفين

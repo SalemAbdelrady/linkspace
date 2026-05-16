@@ -273,6 +273,15 @@ function QuickSaleModal({ services: allServices, onClose, onDone }) {
         {/* الخدمات */}
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', marginBottom: 10 }}>☕ اختر الخدمات</div>
+          {/* ✅ شريط البحث */}
+          <input
+            className="input-field"
+            placeholder="🔍 بحث باسم الخدمة أو السعر..."
+            value={svcSearch}
+            onChange={(e) => setSvcSearch(e.target.value)}
+            style={{ marginBottom: 10 }}
+          />
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 12 }}>
             {allServices.map(svc => (
               <button key={svc.id} onClick={() => addToCart(svc)}
