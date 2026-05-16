@@ -284,7 +284,7 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
       LEFT JOIN sessions s ON s.id = i.session_id
       WHERE
         ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%'  OR i.invoice_number ILIKE '%' || $1 || '%')
-        AND ($2 = '' OR DATE(i.created_at) = $2::date)
+        AND ($2 = '' OR DATE(i.created_at AT TIME ZONE 'Africa/Cairo') = $2::date)
         AND ($3 = '' OR i.created_by = $3::integer)
       ORDER BY i.created_at DESC LIMIT $4 OFFSET $5
     `, [search, date, staff_id, limit, offset]);
@@ -293,7 +293,7 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
       SELECT COUNT(*) FROM invoices i
       WHERE
         ($1 = '' OR i.client_name ILIKE '%' || $1 || '%' OR i.client_phone ILIKE '%' || $1 || '%' OR i.invoice_number ILIKE '%' || $1 || '%')
-        AND ($2 = '' OR DATE(i.created_at) = $2::date)
+        AND ($2 = '' OR DATE(i.created_at AT TIME ZONE 'Africa/Cairo') = $2::date)
         AND ($3 = '' OR i.created_by = $3::integer)
     `, [search, date, staff_id]);
 
@@ -309,7 +309,7 @@ router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
         ($1 = '' OR i.client_name ILIKE '%' || $1 || '%'
           OR i.client_phone ILIKE '%' || $1 || '%'
           OR i.invoice_number ILIKE '%' || $1 || '%')
-        AND ($2 = '' OR DATE(i.created_at) = $2::date)
+        AND ($2 = '' OR DATE(i.created_at AT TIME ZONE 'Africa/Cairo') = $2::date)
         AND ($3 = '' OR i.created_by = $3::integer)
     `, [search, date, staff_id]);
 
@@ -342,7 +342,7 @@ router.get('/export', auth, requireRole('staff', 'admin'), async (req, res) => {
         ($1 = '' OR i.client_name ILIKE '%' || $1 || '%'
           OR i.client_phone ILIKE '%' || $1 || '%'
           OR i.invoice_number ILIKE '%' || $1 || '%')
-        AND ($2 = '' OR DATE(i.created_at) = $2::date)
+        AND ($2 = '' OR DATE(i.created_at AT TIME ZONE 'Africa/Cairo') = $2::date)
         AND ($3 = '' OR i.created_by = $3::integer)
       ORDER BY i.created_at DESC
     `, [search, date, staff_id]);

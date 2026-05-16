@@ -2647,7 +2647,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* ══ إحصائيات الشهر ══ */}
-
+            <div className="section-title">📊 إحصائيات الشهر الحالي</div>
             <div
               style={{
                 display: "grid",

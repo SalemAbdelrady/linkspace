@@ -80,7 +80,7 @@ router.get("/overview-stats", auth, requireRole("admin"), async (req, res) => {
       HAVING SUM(GREATEST(s.guest_count - 1, 0)) > 0
       ORDER BY guests_count DESC, first_guest_session ASC
       LIMIT 5
-      `),
+        `),
 
       // عدد الموظفين
       db.query(`
@@ -251,15 +251,15 @@ router.get("/reports/daily", ...isStaffOrAdmin, async (req, res) => {
       [date],
     );
 
-    const { rows: byHour } = await db.query(
-      `
-      SELECT EXTRACT(HOUR FROM check_in) AS hour, COUNT(*) AS visits
+    const { rows: revenue } = await db.query(`
+      SELECT
+        COUNT(*) AS visits,
+        COALESCE(SUM(cost), 0) AS total_revenue,
+        COALESCE(AVG(duration_min), 0) AS avg_duration
       FROM sessions
-      WHERE DATE(check_in) = $1
-      GROUP BY hour ORDER BY hour
-    `,
-      [date],
-    );
+      WHERE DATE(check_in AT TIME ZONE 'Africa/Cairo') = $1
+        AND status = 'completed'
+    `, [date]);
 
     const { rows: activeNow } = await db.query(`
       SELECT COUNT(*) AS count FROM sessions WHERE status = 'active'
@@ -288,8 +288,8 @@ router.get("/reports/monthly", ...isStaffOrAdmin, async (req, res) => {
         COUNT(*) AS visits,
         COALESCE(SUM(cost), 0) AS revenue
       FROM sessions
-      WHERE EXTRACT(YEAR  FROM check_in) = $1
-        AND EXTRACT(MONTH FROM check_in) = $2
+      WHERE EXTRACT(YEAR  FROM check_in AT TIME ZONE 'Africa/Cairo') = $1
+        AND EXTRACT(MONTH FROM check_in AT TIME ZONE 'Africa/Cairo') = $2
         AND status = 'completed'
       GROUP BY day ORDER BY day
     `,
@@ -303,8 +303,8 @@ router.get("/reports/monthly", ...isStaffOrAdmin, async (req, res) => {
         COALESCE(SUM(cost), 0) AS total_revenue,
         COALESCE(AVG(duration_min), 0) AS avg_duration
       FROM sessions
-      WHERE EXTRACT(YEAR  FROM check_in) = $1
-        AND EXTRACT(MONTH FROM check_in) = $2
+      WHERE EXTRACT(YEAR  FROM check_in AT TIME ZONE 'Africa/Cairo') = $1
+        AND EXTRACT(MONTH FROM check_in AT TIME ZONE 'Africa/Cairo') = $2
         AND status = 'completed'
     `,
       [year, month],
