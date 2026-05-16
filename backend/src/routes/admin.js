@@ -20,26 +20,35 @@ router.get("/overview-stats", auth, requireRole("admin"), async (req, res) => {
       // إحصائيات العملاء
       db.query(`
         SELECT
-          COUNT(*) AS total_clients,
+          COUNT(*)                                                           AS total_clients,
           COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days') AS new_this_month,
-          COALESCE(SUM(balance), 0) AS total_balance,
-          COUNT(*) FILTER (WHERE is_active = false) AS banned_count,
-          (SELECT COUNT(DISTINCT user_id) FROM sessions WHERE status = 'active') AS active_now
+          COALESCE(SUM(balance), 0)                                         AS total_balance,
+          COUNT(*) FILTER (WHERE is_active = false)                         AS banned_count,
+          (SELECT COUNT(DISTINCT user_id) FROM sessions
+          WHERE status = 'active')                                         AS active_now,
+          (SELECT COUNT(DISTINCT user_id) FROM user_subscriptions
+          WHERE status = 'active' AND end_date > NOW())                    AS active_subscribers
         FROM users WHERE role = 'client'
       `),
 
-      // إحصائيات الفواتير
+      // إحصائيات الفواتير — الشهر الحالي فقط للجلسات والبيع السريع
       db.query(`
         SELECT
-          COUNT(*) AS total_invoices,
-          COALESCE(SUM(total), 0) AS total_revenue,
-          COALESCE(SUM(total) FILTER (WHERE DATE(created_at AT TIME ZONE 'Africa/Cairo') = $1), 0) AS today_revenue,
-          COUNT(*) FILTER (WHERE DATE(created_at AT TIME ZONE 'Africa/Cairo') = $1) AS today_invoices,
-          COALESCE(SUM(total) FILTER (WHERE created_at >= $2), 0) AS month_revenue,
-          COUNT(*) FILTER (WHERE invoice_type = 'quick_sale') AS quick_sale_count,
-          COUNT(*) FILTER (WHERE invoice_type = 'session' OR invoice_type IS NULL) AS session_count
+          COUNT(*)                                                        AS total_invoices,
+          COALESCE(SUM(total), 0)                                         AS total_revenue,
+          COALESCE(SUM(total) FILTER (WHERE DATE(created_at) = $1), 0)   AS today_revenue,
+          COUNT(*)          FILTER (WHERE DATE(created_at) = $1)          AS today_invoices,
+          COALESCE(SUM(total) FILTER (WHERE created_at >= $2), 0)         AS month_revenue,
+          COUNT(*) FILTER (
+            WHERE invoice_type = 'quick_sale'
+              AND created_at >= $2
+          )                                                               AS month_quick_sale_count,
+          COUNT(*) FILTER (
+            WHERE (invoice_type = 'session' OR invoice_type IS NULL)
+              AND created_at >= $2
+          )                                                               AS month_session_count
         FROM invoices
-      `, [today, firstOfMonthStr]),
+      `, [today, firstOfMonth]),
 
       // إحصائيات الجلسات
       db.query(`
@@ -78,6 +87,8 @@ router.get("/overview-stats", auth, requireRole("admin"), async (req, res) => {
     res.json({
       clients: clients.rows[0],
       invoices: invoices.rows[0],
+      quick_sale_count: parseInt(invoices.rows[0].month_quick_sale_count),
+      session_count:    parseInt(invoices.rows[0].month_session_count),
       sessions: sessions.rows[0],
       staff: staff.rows[0],
       ambassadors: ambassadors.rows,

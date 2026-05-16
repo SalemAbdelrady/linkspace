@@ -2647,7 +2647,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* ══ إحصائيات الشهر ══ */}
-            <div className="section-title">📊 إحصائيات الشهر الحالي</div>
+
             <div
               style={{
                 display: "grid",
@@ -2693,13 +2693,13 @@ export default function AdminDashboard() {
               <div className="card">
                 {[
                   [
-                    "⚡ بيع سريع",
-                    overviewStats?.invoices?.quick_sale_count || 0,
+                    "⚡ بيع سريع هذا الشهر",
+                    overviewStats?.invoices?.month_quick_sale_count || 0,
                     "var(--warning)",
                   ],
                   [
-                    "🖥️ جلسات",
-                    overviewStats?.invoices?.session_count || 0,
+                    "🖥️ جلسات هذا الشهر",
+                    overviewStats?.invoices?.month_session_count || 0,
                     "var(--success)",
                   ],
                   [
@@ -2725,7 +2725,6 @@ export default function AdminDashboard() {
                 ))}
               </div>
             </div>
-
             {/* ══ الإحصائيات الإجمالية ══ */}
             <div className="section-title">🏆 إحصائيات إجمالية</div>
             <div
@@ -2754,6 +2753,18 @@ export default function AdminDashboard() {
                   "إجمالي الأرصدة",
                   `${parseFloat(overviewStats?.clients?.total_balance || 0).toFixed(0)} ج`,
                   "var(--warning)",
+                ],
+                [
+                  "📋",
+                  "مشتركون نشطون",
+                  overviewStats?.clients?.active_subscribers || 0,
+                  "#06b6d4",
+                ],
+                [
+                  "🧾",
+                  "إجمالي الفواتير",
+                  overviewStats?.invoices?.total_invoices || 0,
+                  "var(--accent)",
                 ],
                 [
                   "🚫",
@@ -2804,7 +2815,6 @@ export default function AdminDashboard() {
                 </div>
               ))}
             </div>
-
             {/* ══ Top Ambassadors ══ */}
             {overviewStats?.ambassadors?.length > 0 && (
               <>
