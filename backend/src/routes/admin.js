@@ -12,17 +12,11 @@ const isStaffOrAdmin = [auth, requireRole("staff", "admin")];
 router.get("/overview-stats", auth, requireRole("admin"), async (req, res) => {
   try {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
-    const firstOfMonth = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Cairo' }));
-    const firstOfMonthStr = `${firstOfMonth.getFullYear()}-${String(firstOfMonth.getMonth() + 1).padStart(2, '0')}-01`;
-    const firstOfMonth = new Date(
-      new Date().getFullYear(),
-      new Date().getMonth(),
-      1,
-    )
-      .toISOString()
-      .split("T")[0];
+    const cairoNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Cairo' }));
+    const firstOfMonthStr = `${cairoNow.getFullYear()}-${String(cairoNow.getMonth() + 1).padStart(2, '0')}-01`;
 
     const [clients, invoices, sessions, ambassadors, staff] = await Promise.all([
+
       // إحصائيات العملاء
       db.query(`
         SELECT
@@ -48,24 +42,18 @@ router.get("/overview-stats", auth, requireRole("admin"), async (req, res) => {
       `, [today, firstOfMonthStr]),
 
       // إحصائيات الجلسات
-      db.query(
-        `
+      db.query(`
         SELECT
           COUNT(*) AS total_sessions,
-          COUNT(*) FILTER (WHERE DATE(check_in) = $1) AS today_sessions,
+          COUNT(*) FILTER (WHERE DATE(check_in AT TIME ZONE 'Africa/Cairo') = $1) AS today_sessions,
           COALESCE(AVG(duration_min) FILTER (WHERE duration_min > 0), 0) AS avg_duration
         FROM sessions WHERE status = 'completed'
-      `,
-        [today],
-      ),
+      `, [today]),
 
       // أكثر عميل يجيب أصحابه
       db.query(`
         SELECT
-          u.id,
-          u.name,
-          u.phone,
-          u.avatar_url,
+          u.id, u.name, u.phone, u.avatar_url,
           SUM(GREATEST(s.guest_count - 1, 0)) AS guests_count
         FROM users u
         JOIN sessions s ON s.user_id = u.id
