@@ -618,6 +618,7 @@ export default function InvoicePage() {
                   ({session.durationMin} د فعلية)
                 </span>
               </span>
+              
               {session.guestCount > 1 && (
                 <div
                   style={{

@@ -2959,8 +2959,8 @@ export default function AdminDashboard() {
               <>
                 <div className="section-title">⏱️ توزيع الزيارات بالساعة</div>
                 <div className="card">
-                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                    {Array.from({ length: 24 }, (_, h) => {
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", direction: "ltr" }}>
+                  {Array.from({ length: 24 }, (_, h) => {
                       const found = daily.by_hour.find(
                         (r) => parseInt(r.hour) === h,
                       );
