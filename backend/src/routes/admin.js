@@ -106,29 +106,29 @@ router.get("/overview-stats", auth, requireRole("admin"), async (req, res) => {
 
 // GET /api/admin/users
 router.get("/users", ...isStaffOrAdmin, async (req, res) => {
-  const { search = "", page = 1 } = req.query;
+  const { search = "", page = 1, date_from = "", date_to = "" } = req.query;
   const limit = 20;
   const offset = (parseInt(page) - 1) * limit;
 
   try {
-    const { rows } = await db.query(
-      `
-  SELECT 
-    u.id, u.name, u.phone, u.email, u.role, u.balance, u.points,
-    u.qr_code, u.is_active, u.created_at, u.avatar_url,
-    us.plan_name       AS subscription_name,
-    us.end_date        AS subscription_end
-  FROM users u
-  LEFT JOIN user_subscriptions us 
-    ON us.user_id = u.id 
-   AND us.status = 'active' 
-   AND us.end_date >= NOW()
-  WHERE (u.name ILIKE $1 OR u.phone ILIKE $1) AND u.role = 'client'
-  ORDER BY u.created_at DESC
-  LIMIT $2 OFFSET $3
-`,
-      [`%${search}%`, limit, offset],
-    );
+    const { rows } = await db.query(`
+      SELECT 
+        u.id, u.name, u.phone, u.email, u.role, u.balance, u.points,
+        u.qr_code, u.is_active, u.created_at, u.avatar_url,
+        us.plan_name AS subscription_name,
+        us.end_date  AS subscription_end
+      FROM users u
+      LEFT JOIN user_subscriptions us 
+        ON us.user_id = u.id 
+       AND us.status = 'active' 
+       AND us.end_date >= NOW()
+      WHERE (u.name ILIKE $1 OR u.phone ILIKE $1)
+        AND u.role = 'client'
+        AND ($2 = '' OR u.created_at >= $2::date)
+        AND ($3 = '' OR u.created_at <  ($3::date + INTERVAL '1 day'))
+      ORDER BY u.created_at DESC
+      LIMIT $4 OFFSET $5
+    `, [`%${search}%`, date_from, date_to, limit, offset]);
 
     const usersWithQR = await Promise.all(
       rows.map(async (u) => {

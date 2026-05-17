@@ -55,8 +55,8 @@ export const couponsAPI = {
 
 // Admin
 export const adminAPI = {
-  users:         (search = '', page = 1) => api.get(`/admin/users?search=${search}&page=${page}`),
-  chargeWallet:  (id, amount, note)      => api.patch(`/admin/users/${id}/wallet`, { amount, note }),
+users: (search = '', page = 1, filters = {}) =>
+  api.get('/admin/users', { params: { search, page, ...filters } }),  chargeWallet:  (id, amount, note)      => api.patch(`/admin/users/${id}/wallet`, { amount, note }),
   addPoints:     (id, points)            => api.patch(`/admin/users/${id}/points`, { points }),
   toggleUser:    (id)                    => api.patch(`/admin/users/${id}/toggle`),
   dailyReport:   (date)                  => api.get(`/admin/reports/daily?date=${date}`),

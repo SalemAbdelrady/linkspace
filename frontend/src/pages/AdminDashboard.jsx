@@ -1659,7 +1659,7 @@ export default function AdminDashboard() {
       loadUsers();
       loadActiveSessions();
     }
-  }, [tab, search]);
+  }, [tab, search, userDateFrom, userDateTo]);
   useEffect(() => {
     if (tab === "coupons") {
       loadAllCoupons();
@@ -1674,7 +1674,14 @@ export default function AdminDashboard() {
     if (tab === "invoices") {
       loadInvoices();
     }
-  }, [tab, invoicePage, invoiceSearch, invoiceDateFrom, invoiceDateTo, invoiceStaffId]);
+  }, [
+    tab,
+    invoicePage,
+    invoiceSearch,
+    invoiceDateFrom,
+    invoiceDateTo,
+    invoiceStaffId,
+  ]);
 
   async function loadOverview() {
     try {
@@ -1715,14 +1722,16 @@ export default function AdminDashboard() {
 
   async function loadUsers() {
     try {
-      const { data } = await adminAPI.users(search);
+      const { data } = await adminAPI.users(search, 1, {
+        date_from: userDateFrom || undefined,
+        date_to: userDateTo || undefined,
+      });
       setUsers(data.users);
-      setUsersStats(data.stats); // ← جديد
+      setUsersStats(data.stats);
     } catch {
       toast.error("خطأ في تحميل العملاء");
     }
   }
-  
 
   // دالة تصدير العملاء لملف اكسيل
   async function exportUsersToExcel() {
@@ -1915,15 +1924,15 @@ export default function AdminDashboard() {
     session_count: 0,
   });
 
-async function loadInvoices() {
-  try {
-    const { data } = await invoicesAPI.getAll({
-      page: invoicePage,
-      search: invoiceSearch,
-      date_from: invoiceDateFrom || undefined,
-      date_to:   invoiceDateTo   || undefined,
-      staff_id:  invoiceStaffId  || undefined,
-    });
+  async function loadInvoices() {
+    try {
+      const { data } = await invoicesAPI.getAll({
+        page: invoicePage,
+        search: invoiceSearch,
+        date_from: invoiceDateFrom || undefined,
+        date_to: invoiceDateTo || undefined,
+        staff_id: invoiceStaffId || undefined,
+      });
 
       setInvoices(data.invoices);
       setInvoiceTotal(data.total);
@@ -4971,15 +4980,16 @@ async function loadInvoices() {
         {/* ══ INVOICES ══ */}
         {tab === "invoices" && (
           <div className="fade-up">
-            {/* صف البحث والتاريخ */}
+            {/* ── صف البحث والتواريخ ── */}
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: "1fr auto",
+                display: "flex",
+                flexDirection: "column",
                 gap: 8,
                 marginBottom: 8,
               }}
             >
+              {/* البحث */}
               <input
                 className="input-field"
                 placeholder="بحث باسم العميل أو موبايله أو رقم الفاتورة..."
@@ -4989,30 +4999,70 @@ async function loadInvoices() {
                   setInvoicePage(1);
                 }}
               />
-              <input
-                type="date"
-                className="input-field"
-                style={{ width: 140 }}
-                placeholder="من"
-                value={invoiceDateFrom}
-                onChange={(e) => {
-                  setInvoiceDateFrom(e.target.value);
-                  setInvoicePage(1);
-                }}
-              />
-              <input
-                type="date"
-                className="input-field"
-                style={{ width: 140 }}
-                placeholder="إلى"
-                value={invoiceDateTo}
-                onChange={(e) => {
-                  setInvoiceDateTo(e.target.value);
-                  setInvoicePage(1);
-                }}
-              />
-            </div>
 
+              {/* من / إلى */}
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: "var(--muted)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  📅 من:
+                </span>
+                <input
+                  type="date"
+                  className="input-field"
+                  style={{ flex: 1 }}
+                  value={invoiceDateFrom}
+                  onChange={(e) => {
+                    setInvoiceDateFrom(e.target.value);
+                    setInvoicePage(1);
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: "var(--muted)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  إلى:
+                </span>
+                <input
+                  type="date"
+                  className="input-field"
+                  style={{ flex: 1 }}
+                  value={invoiceDateTo}
+                  onChange={(e) => {
+                    setInvoiceDateTo(e.target.value);
+                    setInvoicePage(1);
+                  }}
+                />
+                {(invoiceDateFrom || invoiceDateTo) && (
+                  <button
+                    onClick={() => {
+                      setInvoiceDateFrom("");
+                      setInvoiceDateTo("");
+                      setInvoicePage(1);
+                    }}
+                    style={{
+                      background: "transparent",
+                      border: "1px solid rgba(255,71,87,0.3)",
+                      color: "#ff4757",
+                      padding: "6px 10px",
+                      borderRadius: 8,
+                      fontSize: 11,
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    ✕ مسح
+                  </button>
+                )}
+              </div>
+            </div>
             {/* فلتر الموظف — ✅ يُخفى تلقائياً لو staffList فاضية */}
             {staffList.length > 0 && (
               <div
@@ -5179,15 +5229,15 @@ async function loadInvoices() {
               >
                 📥 تصدير Excel
               </button>
-
               {invoiceTotal} فاتورة{" "}
               {(invoiceDateFrom || invoiceDateTo) && (
                 <span>
-                  {invoiceDateFrom && `من ${new Date(invoiceDateFrom).toLocaleDateString("ar-EG", { month: "short", day: "numeric" })}`}
-                  {invoiceDateTo && ` إلى ${new Date(invoiceDateTo).toLocaleDateString("ar-EG", { month: "short", day: "numeric" })}`}
+                  {invoiceDateFrom &&
+                    `من ${new Date(invoiceDateFrom).toLocaleDateString("ar-EG", { month: "short", day: "numeric" })}`}
+                  {invoiceDateTo &&
+                    ` إلى ${new Date(invoiceDateTo).toLocaleDateString("ar-EG", { month: "short", day: "numeric" })}`}
                 </span>
               )}
-
               {invoiceStaffId &&
                 staffList.find((s) => String(s.id) === invoiceStaffId) && (
                   <span style={{ marginRight: 6, color: "var(--accent)" }}>
