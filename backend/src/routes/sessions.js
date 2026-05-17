@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const db = require('../config/db');
+const db     = require('../config/db');
 const { auth, requireRole } = require('../middleware/auth');
 
 async function getSpaceSettings(spaceKey = 'cowork') {
@@ -30,13 +30,50 @@ async function getActiveSubscription(userId) {
   return rows[0] || null;
 }
 
-// POST /api/sessions/scan
+// ── دالة منح نقاط الدعوة عند أول جلسة ───────────────────────────────
+async function giveReferralBonusIfFirstSession(userId) {
+  try {
+    const { rows: countRows } = await db.query(
+      `SELECT COUNT(*) FROM sessions WHERE user_id = $1 AND status = 'completed'`,
+      [userId]
+    );
+    // لو دي أول جلسة مكتملة بالظبط
+    if (parseInt(countRows[0].count) !== 1) return;
+
+    const { rows: userRows } = await db.query(
+      'SELECT referred_by FROM users WHERE id = $1',
+      [userId]
+    );
+    const referrerId = userRows[0]?.referred_by;
+    if (!referrerId) return;
+
+    const FIRST_SESSION_POINTS = 100;
+
+    await db.query(`
+      UPDATE users
+      SET points                 = points + $1,
+          referral_earned_points = referral_earned_points + $1
+      WHERE id = $2
+    `, [FIRST_SESSION_POINTS, referrerId]);
+
+    await db.query(`
+      INSERT INTO referral_logs (referrer_id, referred_id, points_given, reason)
+      VALUES ($1, $2, $3, 'first_session')
+    `, [referrerId, userId, FIRST_SESSION_POINTS]);
+
+  } catch (err) {
+    // مش هنوقف العملية لو الـ referral bonus فشل
+    console.error('Referral bonus error:', err.message);
+  }
+}
+
+// ── POST /api/sessions/scan ───────────────────────────────────────────
 router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
   const { qr_code, space_key = 'cowork', guest_count = 1 } = req.body;
   if (!qr_code) return res.status(400).json({ error: 'QR Code مطلوب' });
 
   const guestCount = Math.max(1, parseInt(guest_count) || 1);
-  const client = await db.pool.connect();
+  const client     = await db.pool.connect();
 
   try {
     await client.query('BEGIN');
@@ -68,45 +105,18 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
     );
 
     if (activeSessions[0]) {
-
-
       // ─── CHECK-OUT ────────────────────────────────────────────────
-      await client.query('COMMIT');
-
-      // لو العميل عنده referred_by وده أول جلسة مكتملة
-      const { rows: sessionCount } = await db.query(
-        `SELECT COUNT(*) FROM sessions WHERE user_id = $1 AND status = 'completed'`,
-        [user_id]
-      );
-      if (parseInt(sessionCount[0].count) === 1) {
-        const { rows: userInfo } = await db.query(
-          'SELECT referred_by FROM users WHERE id = $1', [user_id]
-        );
-        if (userInfo[0]?.referred_by) {
-          const FIRST_SESSION_POINTS = 100;
-          await db.query(
-            'UPDATE users SET points = points + $1, referral_earned_points = referral_earned_points + $1 WHERE id = $2',
-            [FIRST_SESSION_POINTS, userInfo[0].referred_by]
-          );
-          await db.query(
-            'INSERT INTO referral_logs (referrer_id, referred_id, points_given, reason) VALUES ($1,$2,$3,$4)',
-            [userInfo[0].referred_by, user_id, FIRST_SESSION_POINTS, 'first_session']
-          );
-        }
-      }
-      const session     = activeSessions[0];
-      const checkOut    = new Date();
-      const checkOutISO = checkOut.toISOString();
-      const checkIn     = new Date(session.check_in);
-      const durationMin = Math.ceil((checkOut - checkIn) / 60000);
-      const maxHours    = parseInt(session.max_hours) || 4;
+      const session       = activeSessions[0];
+      const checkOut      = new Date();
+      const checkOutISO   = checkOut.toISOString();
+      const checkIn       = new Date(session.check_in);
+      const durationMin   = Math.ceil((checkOut - checkIn) / 60000);
+      const maxHours      = parseInt(session.max_hours) || 4;
       const sessionGuests = parseInt(session.guest_count) || 1;
+      const isSubSession  = session.is_subscription_session || false;
 
-      const isSubSession = session.is_subscription_session || false;
-
-      // ✅ التكلفة مضروبة في عدد الأشخاص
-      const baseCost    = isSubSession ? 0 : calculateCost(durationMin, session.price_per_hr, maxHours);
-      const cost        = parseFloat((baseCost * sessionGuests).toFixed(2));
+      const baseCost     = isSubSession ? 0 : calculateCost(durationMin, session.price_per_hr, maxHours);
+      const cost         = parseFloat((baseCost * sessionGuests).toFixed(2));
       const pointsEarned = isSubSession ? 0 : Math.floor(cost / 10);
 
       await client.query(`
@@ -124,6 +134,11 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
           [pointsEarned, user.id]
         );
       }
+
+      await client.query('COMMIT');
+
+      // ✅ بعد COMMIT — نقاط الدعوة عند أول جلسة (بدون transaction منفصلة)
+      await giveReferralBonusIfFirstSession(user.id);
 
       return res.json({
         action : 'checkout',
@@ -143,7 +158,7 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
           spaceKey             : session.space_key,
           spaceName            : session.space_name,
           maxHours,
-          guestCount           : sessionGuests,       // ✅ جديد
+          guestCount           : sessionGuests,
           checkIn              : session.check_in,
           checkOut             : checkOutISO,
           isSubscriptionSession: isSubSession,
@@ -159,7 +174,7 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
       const isSubSession   = !!(subscription && subscription.covers_cowork && space_key === 'cowork');
       const effectivePrice = isSubSession ? 0 : space.first_hour;
 
-      const { rows: newSession } = await client.query(`
+      await client.query(`
         INSERT INTO sessions
           (user_id, price_per_hr, space_key, space_name, max_hours,
            created_by, is_subscription_session, subscription_id, guest_count)
@@ -174,7 +189,7 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
         req.user.id,
         isSubSession,
         subscription?.id || null,
-        guestCount,                                   // ✅ جديد
+        guestCount,
       ]);
 
       await client.query('COMMIT');
@@ -187,11 +202,11 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
           email  : user.email,
           balance: user.balance,
         },
-        pricePerHr: effectivePrice,
-        spaceKey  : space_key,
-        spaceName : space.name,
-        maxHours  : space.max_hours,
-        guestCount,                                   // ✅ جديد
+        pricePerHr           : effectivePrice,
+        spaceKey             : space_key,
+        spaceName            : space.name,
+        maxHours             : space.max_hours,
+        guestCount,
         isSubscriptionSession: isSubSession,
         subscription: subscription ? {
           id      : subscription.id,
@@ -210,7 +225,7 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
   }
 });
 
-// POST /api/sessions/pay
+// ── POST /api/sessions/pay ────────────────────────────────────────────
 router.post('/pay', auth, requireRole('staff', 'admin'), async (req, res) => {
   const { session_id, user_id, payment_method, cost } = req.body;
   if (!session_id || !user_id || !payment_method || cost === undefined) {
@@ -218,7 +233,10 @@ router.post('/pay', auth, requireRole('staff', 'admin'), async (req, res) => {
   }
 
   if (parseFloat(cost) === 0) {
-    await db.query(`UPDATE sessions SET payment_method = 'subscription' WHERE id = $1`, [session_id]);
+    await db.query(
+      `UPDATE sessions SET payment_method = 'subscription' WHERE id = $1`,
+      [session_id]
+    );
     return res.json({ success: true, payment_method: 'subscription', wallet_debit: 0, cash_amount: 0 });
   }
 
@@ -230,7 +248,10 @@ router.post('/pay', auth, requireRole('staff', 'admin'), async (req, res) => {
       'SELECT id, balance FROM users WHERE id = $1 FOR UPDATE', [user_id]
     );
     const user = userRows[0];
-    if (!user) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'العميل غير موجود' }); }
+    if (!user) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'العميل غير موجود' });
+    }
 
     const balance   = parseFloat(user.balance);
     const totalCost = parseFloat(cost);
@@ -240,24 +261,33 @@ router.post('/pay', auth, requireRole('staff', 'admin'), async (req, res) => {
     if (payment_method === 'wallet') {
       if (balance < totalCost) {
         await client.query('ROLLBACK');
-        return res.status(400).json({ error: `الرصيد غير كافٍ — الرصيد الحالي: ${balance.toFixed(2)} ج` });
+        return res.status(400).json({
+          error: `الرصيد غير كافٍ — الرصيد الحالي: ${balance.toFixed(2)} ج`
+        });
       }
       walletDebit = totalCost;
     } else if (payment_method === 'partial') {
       walletDebit = Math.min(balance, totalCost);
     } else {
-      walletDebit = 0; finalMethod = 'cash';
+      walletDebit = 0;
+      finalMethod = 'cash';
     }
 
     if (walletDebit > 0) {
-      await client.query('UPDATE users SET balance = balance - $1 WHERE id = $2', [walletDebit, user_id]);
+      await client.query(
+        'UPDATE users SET balance = balance - $1 WHERE id = $2',
+        [walletDebit, user_id]
+      );
       await client.query(`
         INSERT INTO wallet_transactions (user_id, type, amount, description)
         VALUES ($1, 'debit', $2, 'خصم تكلفة جلسة')
       `, [user_id, walletDebit]);
     }
 
-    await client.query(`UPDATE sessions SET payment_method = $1 WHERE id = $2`, [finalMethod, session_id]);
+    await client.query(
+      `UPDATE sessions SET payment_method = $1 WHERE id = $2`,
+      [finalMethod, session_id]
+    );
     await client.query('COMMIT');
 
     res.json({
@@ -277,7 +307,7 @@ router.post('/pay', auth, requireRole('staff', 'admin'), async (req, res) => {
   }
 });
 
-// GET /api/sessions/history
+// ── GET /api/sessions/history ─────────────────────────────────────────
 router.get('/history', auth, async (req, res) => {
   const page   = parseInt(req.query.page) || 1;
   const limit  = 10;
@@ -285,14 +315,18 @@ router.get('/history', auth, async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT s.*, u.email AS client_email
-          FROM sessions s
-          LEFT JOIN users u ON s.user_id = u.id
-          WHERE s.user_id = $1
-          ORDER BY s.check_in DESC LIMIT $2 OFFSET $3
+      FROM sessions s
+      LEFT JOIN users u ON s.user_id = u.id
+      WHERE s.user_id = $1
+      ORDER BY s.check_in DESC
+      LIMIT $2 OFFSET $3
     `, [req.user.id, limit, offset]);
+
     const { rows: countRows } = await db.query(
-      'SELECT COUNT(*) FROM sessions WHERE user_id = $1', [req.user.id]
+      'SELECT COUNT(*) FROM sessions WHERE user_id = $1',
+      [req.user.id]
     );
+
     res.json({ sessions: rows, total: parseInt(countRows[0].count), page, limit });
   } catch (err) {
     console.error(err);
@@ -300,15 +334,15 @@ router.get('/history', auth, async (req, res) => {
   }
 });
 
-// GET /api/sessions/active
+// ── GET /api/sessions/active ──────────────────────────────────────────
 router.get('/active', auth, requireRole('staff', 'admin'), async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT s.id, s.check_in, s.price_per_hr,
              s.space_key, s.space_name, s.max_hours,
              s.is_subscription_session, s.subscription_id,
-             u.id as user_id, u.name, u.phone, u.email, u.balance,
-             EXTRACT(EPOCH FROM (NOW() - s.check_in))/60 AS elapsed_min
+             u.id AS user_id, u.name, u.phone, u.email, u.balance,
+             EXTRACT(EPOCH FROM (NOW() - s.check_in)) / 60 AS elapsed_min
       FROM sessions s
       JOIN users u ON u.id = s.user_id
       WHERE s.status = 'active'
