@@ -5,8 +5,6 @@ const QRCode  = require('qrcode');
 const { body, validationResult } = require('express-validator');
 const db      = require('../config/db');
 const { auth } = require('../middleware/auth');
-
-// ✅ في الأعلى — مش في آخر الملف
 const { uploadAvatar } = require('../utils/cloudinary');
 
 // ── Resend email client ───────────────────────────────────────────────
@@ -20,14 +18,26 @@ const FROM_EMAIL = 'onboarding@resend.dev';
 function generateQrCode() {
   return Math.floor(1000000 + Math.random() * 9000000).toString();
 }
+
 function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
+
 function isValidName(name) {
   return /^[\u0600-\u06FF\u0750-\u077F a-zA-Z\s'-]{2,100}$/.test(name.trim());
 }
 
-// ✅ helper آمن — يرجع null لو مفيش qr_code
+function generateReferralCode(name) {
+  const prefix = (name || '')
+    .trim()
+    .split(' ')[0]
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '')
+    .slice(0, 4) || 'REF';
+  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `${prefix}-${suffix}`;
+}
+
 async function safeQRCode(qr_code) {
   if (!qr_code) return null;
   try {
@@ -54,35 +64,70 @@ router.post('/register', [
   body('phone').matches(/^01[0125][0-9]{8}$/).withMessage('رقم موبايل غير صحيح'),
   body('password').isLength({ min: 6 }).withMessage('كلمة السر 6 أحرف على الأقل'),
   body('email').isEmail().withMessage('البريد الإلكتروني مطلوب وغير صحيح'),
-  ], async (req, res) => {
+], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-  const { name, phone, password, email } = req.body;
+  const { name, phone, password, email, referral_code: referralCodeUsed } = req.body;
 
   if (!isValidName(name)) {
     return res.status(400).json({ error: 'الاسم يجب أن يحتوي على حروف فقط وليس أرقاماً' });
   }
 
   try {
+    // تحقق من تكرار الموبايل
     const existing = await db.query('SELECT id FROM users WHERE phone = $1', [phone]);
     if (existing.rows[0]) return res.status(409).json({ error: 'رقم الموبايل مسجل بالفعل' });
 
+    // تحقق من تكرار الإيميل
     if (email) {
       const emailExists = await db.query('SELECT id FROM users WHERE email = $1', [email]);
       if (emailExists.rows[0]) return res.status(409).json({ error: 'البريد الإلكتروني مسجل بالفعل' });
     }
 
-    const hash    = await bcrypt.hash(password, 12);
-    const qrToken = generateQrCode();
+    // تحقق من كود الدعوة لو موجود
+    let referrerId = null;
+    if (referralCodeUsed && referralCodeUsed.trim()) {
+      const { rows: referrerRows } = await db.query(
+        `SELECT id FROM users WHERE referral_code = $1 AND role = 'client'`,
+        [referralCodeUsed.trim().toUpperCase()]
+      );
+      if (referrerRows[0]) {
+        referrerId = referrerRows[0].id;
+      }
+    }
 
+    const hash      = await bcrypt.hash(password, 12);
+    const qrToken   = generateQrCode();
+    const myRefCode = generateReferralCode(name);
+
+    // إنشاء الحساب مع referral_code و referred_by
     const { rows } = await db.query(`
-      INSERT INTO users (name, phone, password, role, qr_code, email)
-      VALUES ($1, $2, $3, 'client', $4, $5)
-      RETURNING id, name, phone, email, role, balance, points, qr_code, avatar_url
-    `, [name.trim(), phone, hash, qrToken, email || null]);
+      INSERT INTO users (name, phone, password, role, qr_code, email, referral_code, referred_by)
+      VALUES ($1, $2, $3, 'client', $4, $5, $6, $7)
+      RETURNING id, name, phone, email, role, balance, points, qr_code, avatar_url,
+                referral_code, referral_count, referral_earned_points
+    `, [name.trim(), phone, hash, qrToken, email || null, myRefCode, referrerId]);
 
-    const user      = rows[0];
+    const user = rows[0];
+
+    // لو في referrer — أعطيه نقاط على التسجيل
+    if (referrerId) {
+      const SIGNUP_POINTS = 50;
+      await db.query(`
+        UPDATE users
+        SET points                 = points + $1,
+            referral_count         = referral_count + 1,
+            referral_earned_points = referral_earned_points + $1
+        WHERE id = $2
+      `, [SIGNUP_POINTS, referrerId]);
+
+      await db.query(`
+        INSERT INTO referral_logs (referrer_id, referred_id, points_given, reason)
+        VALUES ($1, $2, $3, 'signup')
+      `, [referrerId, user.id, SIGNUP_POINTS]);
+    }
+
     const qrDataUrl = await safeQRCode(user.qr_code);
     const token     = jwt.sign(
       { id: user.id, role: user.role },
@@ -96,7 +141,12 @@ router.post('/register', [
           <h2 style="color: #00d4aa;">مرحباً ${name}! 👋</h2>
           <p>تم تسجيلك بنجاح في نظام <strong>${APP_NAME}</strong></p>
           <p>رقم موبايلك: <strong>${phone}</strong></p>
-          <p style="color: #666;">يمكنك الآن الدخول باستخدام رقم موبايلك وكلمة السر.</p>
+          <p>كود الدعوة الخاص بك:
+            <strong style="color: #00d4aa; font-size: 18px; letter-spacing: 2px;">
+              ${myRefCode}
+            </strong>
+          </p>
+          <p style="color: #666;">شارك كودك مع أصدقائك واكسب 50 نقطة عند كل تسجيل!</p>
           <hr style="border-color: #00d4aa;">
           <p style="color: #999; font-size: 12px;">هذا بريد تلقائي، يرجى عدم الرد عليه.</p>
         </div>
@@ -109,47 +159,6 @@ router.post('/register', [
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
-
-// دالة توليد الكود
-function generateReferralCode(name) {
-  const prefix = name.trim().split(' ')[0]
-    .toUpperCase()
-    .replace(/[^A-Z]/g, '')
-    .slice(0, 4) || 'REF';
-  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
-  return `${prefix}-${suffix}`;
-}
-
-// في route التسجيل POST /api/auth/register
-// بعد إنشاء الحساب:
-const referralCode = generateReferralCode(name);
-await db.query(
-  'UPDATE users SET referral_code = $1 WHERE id = $2',
-  [referralCode, newUser.id]
-);
-
-// لو بعت referral_code في الـ body:
-if (referralCodeUsed) {
-  const { rows: referrer } = await db.query(
-    'SELECT id, points FROM users WHERE referral_code = $1 AND role = $2',
-    [referralCodeUsed, 'client']
-  );
-  if (referrer[0]) {
-    const SIGNUP_POINTS = 50; // نقاط التسجيل
-    await db.query(
-      'UPDATE users SET points = points + $1, referral_count = referral_count + 1, referred_by = $2 WHERE id = $3',
-      [SIGNUP_POINTS, referrer[0].id, newUser.id]  // referred_by على الجديد
-    );
-    await db.query(
-      'UPDATE users SET points = points + $1, referral_earned_points = referral_earned_points + $1 WHERE id = $2',
-      [SIGNUP_POINTS, referrer[0].id]
-    );
-    await db.query(
-      'INSERT INTO referral_logs (referrer_id, referred_id, points_given, reason) VALUES ($1,$2,$3,$4)',
-      [referrer[0].id, newUser.id, SIGNUP_POINTS, 'signup']
-    );
-  }
-}
 
 // ── POST /api/auth/login ──────────────────────────────────────────────
 router.post('/login', [
@@ -186,21 +195,30 @@ router.post('/login', [
 });
 
 // ── GET /api/auth/me ──────────────────────────────────────────────────
-// ✅ الإصلاح الجذري — يجيب البيانات من DB مش من req.user
-// req.user جاي من الـ middleware وممكن يكون قديم أو ناقص email/avatar_url
 router.get('/me', auth, async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT id, name, phone, email, role,
-             balance, points, qr_code, avatar_url, is_active, created_at
+             balance, points, qr_code, avatar_url, is_active, created_at,
+             referral_code, referral_count, referral_earned_points,
+             referred_by
       FROM users
       WHERE id = $1 AND is_active = true
     `, [req.user.id]);
 
     if (!rows[0]) return res.status(404).json({ error: 'المستخدم غير موجود' });
 
+    // جيب اسم من دعاك لو موجود
+    let referred_by_name = null;
+    if (rows[0].referred_by) {
+      const { rows: refRows } = await db.query(
+        'SELECT name FROM users WHERE id = $1', [rows[0].referred_by]
+      );
+      referred_by_name = refRows[0]?.name || null;
+    }
+
     const qrDataUrl = await safeQRCode(rows[0].qr_code);
-    res.json({ user: { ...rows[0], qr_image: qrDataUrl } });
+    res.json({ user: { ...rows[0], qr_image: qrDataUrl, referred_by_name } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'خطأ في الخادم' });
@@ -243,10 +261,10 @@ router.patch('/settings', auth, async (req, res) => {
 
   try {
     const { rows } = await db.query(
-      // ✅ avatar_url مضاف في الـ RETURNING
       `UPDATE users SET ${updates.join(', ')}
        WHERE id = $${idx}
-       RETURNING id, name, phone, email, role, balance, points, qr_code, avatar_url`,
+       RETURNING id, name, phone, email, role, balance, points, qr_code, avatar_url,
+                 referral_code, referral_count, referral_earned_points`,
       values
     );
     const qrDataUrl = await safeQRCode(rows[0].qr_code);
