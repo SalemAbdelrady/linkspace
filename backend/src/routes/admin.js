@@ -488,4 +488,17 @@ router.get("/users/export", ...isStaffOrAdmin, async (req, res) => {
   }
 });
 
+// GET /api/admin/users/:id/referrals — من سجّل من خلال العميل
+router.get("/users/:id/referrals", ...isStaffOrAdmin, async (req, res) => {
+  const { rows } = await db.query(`
+    SELECT u.id, u.name, u.phone, u.created_at,
+           rl.points_given, rl.reason, rl.created_at AS log_date
+    FROM users u
+    LEFT JOIN referral_logs rl ON rl.referred_id = u.id AND rl.referrer_id = $1
+    WHERE u.referred_by = $1
+    ORDER BY u.created_at DESC
+  `, [req.params.id]);
+  res.json({ referrals: rows });
+});
+
 module.exports = router;

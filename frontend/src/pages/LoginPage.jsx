@@ -467,6 +467,15 @@ export default function LoginPage() {
               />
             </div>
 
+            {/* ادخال كود الدعوة */}
+            <input
+              className="input-field"
+              placeholder="كود دعوة (اختياري)..."
+              value={referralCode}
+              onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+              style={{ marginBottom: 12 }}
+            />
+
             {/* كلمة السر */}
             <div style={fieldWrap}>
               <label style={labelStyle}>

@@ -2958,6 +2958,36 @@ export default function AdminDashboard() {
                               صديق
                             </div>
                           </div>
+
+                          {/* ══ أضف عمود "دعوات" جنب "أصدقاء ══ */}
+                          <div style={{ textAlign: "center" }}>
+                            <div
+                              style={{
+                                fontSize: 17,
+                                fontWeight: 800,
+                                color: "var(--accent)",
+                              }}
+                            >
+                              {a.guests_count}
+                            </div>
+                            <div style={{ fontSize: 9, color: "var(--muted)" }}>
+                              صديق
+                            </div>
+                          </div>
+                          <div style={{ textAlign: "center" }}>
+                            <div
+                              style={{
+                                fontSize: 17,
+                                fontWeight: 800,
+                                color: "#a78bfa",
+                              }}
+                            >
+                              {a.referral_count || 0}
+                            </div>
+                            <div style={{ fontSize: 9, color: "var(--muted)" }}>
+                              دعوة
+                            </div>
+                          </div>
                         </div>
                       ))}
                   </div>

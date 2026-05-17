@@ -110,6 +110,47 @@ router.post('/register', [
   }
 });
 
+// دالة توليد الكود
+function generateReferralCode(name) {
+  const prefix = name.trim().split(' ')[0]
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '')
+    .slice(0, 4) || 'REF';
+  const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `${prefix}-${suffix}`;
+}
+
+// في route التسجيل POST /api/auth/register
+// بعد إنشاء الحساب:
+const referralCode = generateReferralCode(name);
+await db.query(
+  'UPDATE users SET referral_code = $1 WHERE id = $2',
+  [referralCode, newUser.id]
+);
+
+// لو بعت referral_code في الـ body:
+if (referralCodeUsed) {
+  const { rows: referrer } = await db.query(
+    'SELECT id, points FROM users WHERE referral_code = $1 AND role = $2',
+    [referralCodeUsed, 'client']
+  );
+  if (referrer[0]) {
+    const SIGNUP_POINTS = 50; // نقاط التسجيل
+    await db.query(
+      'UPDATE users SET points = points + $1, referral_count = referral_count + 1, referred_by = $2 WHERE id = $3',
+      [SIGNUP_POINTS, referrer[0].id, newUser.id]  // referred_by على الجديد
+    );
+    await db.query(
+      'UPDATE users SET points = points + $1, referral_earned_points = referral_earned_points + $1 WHERE id = $2',
+      [SIGNUP_POINTS, referrer[0].id]
+    );
+    await db.query(
+      'INSERT INTO referral_logs (referrer_id, referred_id, points_given, reason) VALUES ($1,$2,$3,$4)',
+      [referrer[0].id, newUser.id, SIGNUP_POINTS, 'signup']
+    );
+  }
+}
+
 // ── POST /api/auth/login ──────────────────────────────────────────────
 router.post('/login', [
   body('phone').notEmpty().withMessage('رقم الموبايل مطلوب'),

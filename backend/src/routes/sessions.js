@@ -68,6 +68,28 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
     );
 
     if (activeSessions[0]) {
+      
+// لو العميل عنده referred_by وده أول جلسة مكتملة
+const { rows: sessionCount } = await db.query(
+  `SELECT COUNT(*) FROM sessions WHERE user_id = $1 AND status = 'completed'`,
+  [user_id]
+);
+if (parseInt(sessionCount[0].count) === 1) {
+  const { rows: userInfo } = await db.query(
+    'SELECT referred_by FROM users WHERE id = $1', [user_id]
+  );
+  if (userInfo[0]?.referred_by) {
+    const FIRST_SESSION_POINTS = 100;
+    await db.query(
+      'UPDATE users SET points = points + $1, referral_earned_points = referral_earned_points + $1 WHERE id = $2',
+      [FIRST_SESSION_POINTS, userInfo[0].referred_by]
+    );
+    await db.query(
+      'INSERT INTO referral_logs (referrer_id, referred_id, points_given, reason) VALUES ($1,$2,$3,$4)',
+      [userInfo[0].referred_by, user_id, FIRST_SESSION_POINTS, 'first_session']
+    );
+  }
+}
       // ─── CHECK-OUT ────────────────────────────────────────────────
       const session     = activeSessions[0];
       const checkOut    = new Date();
