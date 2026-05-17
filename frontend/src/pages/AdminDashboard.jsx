@@ -1570,6 +1570,10 @@ export default function AdminDashboard() {
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
   const [amounts, setAmounts] = useState({});
+
+  // state لتمديد قائمة اكثر الاصدئاء إحضارا لأصدقائه
+  const [showAllAmbassadors, setShowAllAmbassadors] = useState(false);
+
   // state للفلترة بالتاريخ
   const [userDateFrom, setUserDateFrom] = useState("");
   const [userDateTo, setUserDateTo] = useState("");
@@ -2846,113 +2850,146 @@ export default function AdminDashboard() {
                       gap: 12,
                     }}
                   >
-                    {overviewStats.ambassadors.map((a, i) => (
-                      <div
-                        key={a.id}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                        }}
-                      >
+                    {overviewStats.ambassadors
+                      .slice(0, showAllAmbassadors ? undefined : 3)
+                      .map((a, i) => (
                         <div
+                          key={a.id}
                           style={{
-                            width: 26,
-                            height: 26,
-                            borderRadius: "50%",
-                            flexShrink: 0,
-                            background:
-                              i === 0
-                                ? "rgba(255,165,2,0.15)"
-                                : i === 1
-                                  ? "rgba(180,180,180,0.15)"
-                                  : "rgba(205,127,50,0.1)",
                             display: "flex",
                             alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: 13,
+                            gap: 10,
                           }}
                         >
-                          {i === 0 ? (
-                            "🥇"
-                          ) : i === 1 ? (
-                            "🥈"
-                          ) : i === 2 ? (
-                            "🥉"
-                          ) : (
-                            <span
-                              style={{
-                                fontSize: 11,
-                                color: "var(--muted)",
-                                fontWeight: 700,
-                              }}
-                            >
-                              {i + 1}
-                            </span>
-                          )}
-                        </div>
-                        {a.avatar_url ? (
-                          <img
-                            src={a.avatar_url}
-                            alt={a.name}
-                            style={{
-                              width: 34,
-                              height: 34,
-                              borderRadius: "50%",
-                              objectFit: "cover",
-                              border: "1.5px solid var(--accent)",
-                              flexShrink: 0,
-                            }}
-                          />
-                        ) : (
                           <div
                             style={{
-                              width: 34,
-                              height: 34,
+                              width: 26,
+                              height: 26,
                               borderRadius: "50%",
+                              flexShrink: 0,
                               background:
-                                "linear-gradient(135deg, var(--accent), var(--accent2))",
+                                i === 0
+                                  ? "rgba(255,165,2,0.15)"
+                                  : i === 1
+                                    ? "rgba(180,180,180,0.15)"
+                                    : "rgba(205,127,50,0.1)",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
-                              fontWeight: 700,
-                              fontSize: 12,
-                              color: "#fff",
-                              flexShrink: 0,
+                              fontSize: 13,
                             }}
                           >
-                            {(a.name || "U")
-                              .split(" ")
-                              .slice(0, 2)
-                              .map((w) => w[0])
-                              .join("")}
+                            {i === 0 ? (
+                              "🥇"
+                            ) : i === 1 ? (
+                              "🥈"
+                            ) : i === 2 ? (
+                              "🥉"
+                            ) : (
+                              <span
+                                style={{
+                                  fontSize: 11,
+                                  color: "var(--muted)",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {i + 1}
+                              </span>
+                            )}
                           </div>
-                        )}
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 700, fontSize: 13 }}>
-                            {a.name}
+                          {a.avatar_url ? (
+                            <img
+                              src={a.avatar_url}
+                              alt={a.name}
+                              style={{
+                                width: 34,
+                                height: 34,
+                                borderRadius: "50%",
+                                objectFit: "cover",
+                                border: "1.5px solid var(--accent)",
+                                flexShrink: 0,
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: 34,
+                                height: 34,
+                                borderRadius: "50%",
+                                background:
+                                  "linear-gradient(135deg, var(--accent), var(--accent2))",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontWeight: 700,
+                                fontSize: 12,
+                                color: "#fff",
+                                flexShrink: 0,
+                              }}
+                            >
+                              {(a.name || "U")
+                                .split(" ")
+                                .slice(0, 2)
+                                .map((w) => w[0])
+                                .join("")}
+                            </div>
+                          )}
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 700, fontSize: 13 }}>
+                              {a.name}
+                            </div>
+                            <div
+                              style={{ fontSize: 11, color: "var(--muted)" }}
+                            >
+                              {a.phone}
+                            </div>
                           </div>
-                          <div style={{ fontSize: 11, color: "var(--muted)" }}>
-                            {a.phone}
+                          <div style={{ textAlign: "center" }}>
+                            <div
+                              style={{
+                                fontSize: 17,
+                                fontWeight: 800,
+                                color: "var(--accent)",
+                              }}
+                            >
+                              {a.guests_count}
+                            </div>
+                            <div style={{ fontSize: 9, color: "var(--muted)" }}>
+                              صديق
+                            </div>
                           </div>
                         </div>
-                        <div style={{ textAlign: "center" }}>
-                          <div
-                            style={{
-                              fontSize: 17,
-                              fontWeight: 800,
-                              color: "var(--accent)",
-                            }}
-                          >
-                            {a.guests_count}
-                          </div>
-                          <div style={{ fontSize: 9, color: "var(--muted)" }}>
-                            صديق
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
                   </div>
+
+                  {/* زر عرض المزيد */}
+                  {overviewStats.ambassadors.length > 3 && (
+                    <button
+                      onClick={() => setShowAllAmbassadors((prev) => !prev)}
+                      style={{
+                        width: "100%",
+                        marginTop: 10,
+                        padding: "8px",
+                        borderRadius: 10,
+                        border: "1px dashed var(--border)",
+                        background: "transparent",
+                        color: "var(--muted)",
+                        fontSize: 12,
+                        cursor: "pointer",
+                        transition: "all 0.2s",
+                      }}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.borderColor = "var(--accent)")
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.borderColor = "var(--border)")
+                      }
+                    >
+                      {showAllAmbassadors
+                        ? "▲ عرض أقل"
+                        : `▼ عرض المزيد (${overviewStats.ambassadors.length - 3} آخرين)`}
+                    </button>
+                  )}
                   <div
                     style={{
                       marginTop: 12,
