@@ -1305,114 +1305,6 @@ export default function ClientDashboard() {
           onOrderAdded={refreshOrdersCount}
         />
       )}
-      {/* قسم كود الدعوة */}
-
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ fontWeight: 700, marginBottom: 12 }}>
-          🎁 برنامج الدعوة
-        </div>
-
-        {/* كود الدعوة مع زر نسخ */}
-        <div
-          style={{
-            background: "rgba(0,212,170,0.08)",
-            borderRadius: 10,
-            padding: 12,
-            marginBottom: 10,
-          }}
-        >
-          <div style={{ fontSize: 11, color: "var(--muted)", marginBottom: 6 }}>
-            كود الدعوة الخاص بك
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div
-              style={{
-                fontFamily: "var(--mono)",
-                fontSize: 18,
-                fontWeight: 800,
-                color: "var(--accent)",
-                flex: 1,
-              }}
-            >
-              {user?.referral_code}
-            </div>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(user.referral_code);
-                toast.success("تم النسخ!");
-              }}
-              style={{
-                padding: "6px 12px",
-                borderRadius: 8,
-                border: "1px solid var(--accent)",
-                background: "transparent",
-                color: "var(--accent)",
-                fontSize: 12,
-                cursor: "pointer",
-              }}
-            >
-              📋 نسخ
-            </button>
-          </div>
-        </div>
-
-        {/* إحصائيات */}
-        <div
-          style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}
-        >
-          <div
-            style={{
-              textAlign: "center",
-              padding: "10px",
-              background: "rgba(0,0,0,0.15)",
-              borderRadius: 10,
-            }}
-          >
-            <div
-              style={{ fontSize: 22, fontWeight: 800, color: "var(--accent)" }}
-            >
-              {user?.referral_count || 0}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--muted)" }}>
-              دعوة ناجحة
-            </div>
-          </div>
-          <div
-            style={{
-              textAlign: "center",
-              padding: "10px",
-              background: "rgba(0,0,0,0.15)",
-              borderRadius: 10,
-            }}
-          >
-            <div
-              style={{ fontSize: 22, fontWeight: 800, color: "var(--warning)" }}
-            >
-              {user?.referral_earned_points || 0}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--muted)" }}>
-              نقطة مكسوبة
-            </div>
-          </div>
-        </div>
-
-        {/* مين دعاك */}
-        {user?.referred_by_name && (
-          <div
-            style={{
-              marginTop: 10,
-              fontSize: 12,
-              color: "var(--muted)",
-              textAlign: "center",
-            }}
-          >
-            💌 انضممت عن طريق{" "}
-            <strong style={{ color: "var(--accent)" }}>
-              {user.referred_by_name}
-            </strong>
-          </div>
-        )}
-      </div>
 
       {/* Header */}
       <div
@@ -1886,7 +1778,134 @@ export default function ClientDashboard() {
               اعرض هذا الكود عند الدخول والخروج
             </div>
           </div>
+          {/* ── كارت برنامج الدعوة ── */}
+          {user?.referral_code && (
+            <div className="card fade-up" style={{ marginBottom: 12 }}>
+              <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 14 }}>
+                🎁 برنامج الدعوة
+              </div>
 
+              <div
+                style={{
+                  background: "rgba(0,212,170,0.08)",
+                  borderRadius: 10,
+                  padding: 12,
+                  marginBottom: 10,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "var(--muted)",
+                    marginBottom: 6,
+                  }}
+                >
+                  كود الدعوة الخاص بك
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div
+                    style={{
+                      fontFamily: "var(--mono)",
+                      fontSize: 18,
+                      fontWeight: 800,
+                      color: "var(--accent)",
+                      flex: 1,
+                      letterSpacing: 2,
+                    }}
+                  >
+                    {user.referral_code}
+                  </div>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(user.referral_code);
+                      toast.success("✅ تم نسخ الكود!");
+                    }}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: 8,
+                      border: "1px solid var(--accent)",
+                      background: "transparent",
+                      color: "var(--accent)",
+                      fontSize: 12,
+                      cursor: "pointer",
+                    }}
+                  >
+                    📋 نسخ
+                  </button>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 1fr",
+                  gap: 8,
+                }}
+              >
+                <div
+                  style={{
+                    textAlign: "center",
+                    padding: "10px",
+                    background: "rgba(0,0,0,0.15)",
+                    borderRadius: 10,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 22,
+                      fontWeight: 800,
+                      color: "var(--accent)",
+                    }}
+                  >
+                    {user?.referral_count || 0}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                    دعوة ناجحة
+                  </div>
+                </div>
+                <div
+                  style={{
+                    textAlign: "center",
+                    padding: "10px",
+                    background: "rgba(0,0,0,0.15)",
+                    borderRadius: 10,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 22,
+                      fontWeight: 800,
+                      color: "var(--warning)",
+                    }}
+                  >
+                    {user?.referral_earned_points || 0}
+                  </div>
+                  <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                    نقطة مكسوبة
+                  </div>
+                </div>
+              </div>
+
+              {user?.referred_by_name && (
+                <div
+                  style={{
+                    marginTop: 10,
+                    fontSize: 12,
+                    color: "var(--muted)",
+                    textAlign: "center",
+                    padding: "8px",
+                    background: "rgba(0,212,170,0.04)",
+                    borderRadius: 8,
+                  }}
+                >
+                  💌 انضممت عن طريق{" "}
+                  <strong style={{ color: "var(--accent)" }}>
+                    {user.referred_by_name}
+                  </strong>
+                </div>
+              )}
+            </div>
+          )}
           {activeSession && (
             <>
               <div className="section-title">الجلسة الحالية</div>

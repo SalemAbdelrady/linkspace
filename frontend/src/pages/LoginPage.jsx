@@ -193,12 +193,13 @@ export default function LoginPage() {
           user = await login(form.phone, form.password);
         } else {
           const fullName = `${form.firstName.trim()} ${form.lastName.trim()}`;
-          user = await register(
-            fullName,
-            form.phone,
-            form.password,
-            form.email.trim(),
-          );
+        user = await register(
+          fullName,
+          form.phone,
+          form.password,
+          form.email.trim(),
+          referralCode.trim() || null,
+        );
         }
         // ✅ نجح
         if (user.role === "admin" || user.role === "staff") navigate("/admin");
@@ -555,15 +556,32 @@ export default function LoginPage() {
                   )}
               </div>
             )}
-            
+
             {/* ادخال كود الدعوة */}
-            <input
-              className="input-field"
-              placeholder="كود دعوة (اختياري)..."
-              value={referralCode}
-              onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
-              style={{ marginBottom: 12 }}
-            />
+            {mode === "register" && (
+              <div style={fieldWrap}>
+                <label style={labelStyle}>كود الدعوة</label>
+                <input
+                  className="input-field"
+                  placeholder="أدخل كود دعوة (اختياري)..."
+                  value={referralCode}
+                  onChange={(e) =>
+                    setReferralCode(e.target.value.toUpperCase())
+                  }
+                />
+                {referralCode && (
+                  <div
+                    style={{
+                      fontSize: 10,
+                      color: "var(--accent)",
+                      marginTop: 4,
+                    }}
+                  >
+                    🎁 ستحصل على مزايا إضافية عند التسجيل
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* الموافقة على سياسة الخصوصية */}
             {mode === "register" && (

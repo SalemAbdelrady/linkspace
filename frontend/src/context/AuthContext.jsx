@@ -31,8 +31,8 @@ export function AuthProvider({ children }) {
   };
 
   // ✅ register يقبل email إجباري الآن
-  const register = async (name, phone, password, email) => {
-    const { data } = await authAPI.register({ name, phone, password, email });
+  async function register(name, phone, password, email, referral_code = null) {
+    const { data } = await authAPI.register({ name, phone, password, email, referral_code });
     localStorage.setItem('ls_token', data.token);
     setUser(data.user);
     return data.user;

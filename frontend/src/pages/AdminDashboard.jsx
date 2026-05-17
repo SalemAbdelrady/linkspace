@@ -2861,6 +2861,7 @@ export default function AdminDashboard() {
                             gap: 10,
                           }}
                         >
+                          {/* الميدالية */}
                           <div
                             style={{
                               width: 26,
@@ -2897,6 +2898,8 @@ export default function AdminDashboard() {
                               </span>
                             )}
                           </div>
+
+                          {/* الصورة */}
                           {a.avatar_url ? (
                             <img
                               src={a.avatar_url}
@@ -2934,6 +2937,8 @@ export default function AdminDashboard() {
                                 .join("")}
                             </div>
                           )}
+
+                          {/* الاسم */}
                           <div style={{ flex: 1 }}>
                             <div style={{ fontWeight: 700, fontSize: 13 }}>
                               {a.name}
@@ -2944,7 +2949,9 @@ export default function AdminDashboard() {
                               {a.phone}
                             </div>
                           </div>
-                          <div style={{ textAlign: "center" }}>
+
+                          {/* ✅ أصدقاء فقط بدون تكرار */}
+                          <div style={{ textAlign: "center", minWidth: 40 }}>
                             <div
                               style={{
                                 fontSize: 17,
@@ -2959,22 +2966,8 @@ export default function AdminDashboard() {
                             </div>
                           </div>
 
-                          {/* ══ أضف عمود "دعوات" جنب "أصدقاء ══ */}
-                          <div style={{ textAlign: "center" }}>
-                            <div
-                              style={{
-                                fontSize: 17,
-                                fontWeight: 800,
-                                color: "var(--accent)",
-                              }}
-                            >
-                              {a.guests_count}
-                            </div>
-                            <div style={{ fontSize: 9, color: "var(--muted)" }}>
-                              صديق
-                            </div>
-                          </div>
-                          <div style={{ textAlign: "center" }}>
+                          {/* ✅ دعوات */}
+                          <div style={{ textAlign: "center", minWidth: 40 }}>
                             <div
                               style={{
                                 fontSize: 17,
@@ -2991,7 +2984,6 @@ export default function AdminDashboard() {
                         </div>
                       ))}
                   </div>
-
                   {/* زر عرض المزيد */}
                   {overviewStats.ambassadors.length > 3 && (
                     <button
