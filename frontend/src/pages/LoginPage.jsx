@@ -142,6 +142,8 @@ export default function LoginPage() {
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  const [referralCode, setReferralCode] = useState("");
+  
   const { login, register } = useAuth();
   const navigate = useNavigate();
 
