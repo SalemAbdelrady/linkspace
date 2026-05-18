@@ -127,9 +127,9 @@ export default function InvoicePage() {
   const subtotal = sessionCost + servicesCost;
   const discountPct = couponData ? parseFloat(couponData.discount_pct) : 0;
   const discountAmount = parseFloat(
-    ((subtotal * discountPct) / 100).toFixed(2),
+    ((sessionCost * discountPct) / 100).toFixed(2),
   );
-  const total = parseFloat((subtotal - discountAmount).toFixed(2));
+  const total = parseFloat((sessionCost - discountAmount + servicesCost ).toFixed(2));
   const billedHours = getBilledHours(session.durationMin, maxHours);
   const clientBalance = parseFloat(client.balance || 0);
 

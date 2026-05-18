@@ -325,7 +325,7 @@ router.put(
   requirePermission("can_edit_prices"),
   async (req, res) => {
     const { price_per_hr } = req.body;
-    if (!price_per_hr || isNaN(price_per_hr) || price_per_hr <= 0) {
+    if (price_per_hr === undefined || isNaN(price_per_hr) || price_per_hr < 0) {
       return res.status(400).json({ error: "السعر غير صحيح" });
     }
     try {

@@ -2075,7 +2075,7 @@ export default function AdminDashboard() {
   }
 
   async function addService() {
-    if (!newService.name || !newService.price)
+    if (!newService.name || newService.price === "")
       return toast.error("أدخل الاسم والسعر");
     try {
       const { data } = await servicesAPI.create({
@@ -2861,7 +2861,7 @@ export default function AdminDashboard() {
             {overviewStats?.ambassadors?.length > 0 && (
               <>
                 <div className="section-title">
-                  🏅 أكثر العملاء إحضاراً للأصدقاء
+                  🏅 أكثر العملاء دعوة للأصدقاء
                 </div>
                 <div className="card" style={{ marginBottom: 16 }}>
                   <div
@@ -4592,6 +4592,32 @@ export default function AdminDashboard() {
                               }}
                             >
                               🗑️
+                            </button>
+                            <button
+                              onClick={async () => {
+                                await servicesAPI.update(s.id, {
+                                  hidden_from_client: !s.hidden_from_client,
+                                });
+                                loadServices();
+                              }}
+                              title={
+                                s.hidden_from_client
+                                  ? "مخفي عن العميل"
+                                  : "ظاهر للعميل"
+                              }
+                              style={{
+                                background: "transparent",
+                                border: `1px solid ${s.hidden_from_client ? "rgba(255,71,87,0.3)" : "rgba(0,212,170,0.3)"}`,
+                                color: s.hidden_from_client
+                                  ? "#ff4757"
+                                  : "var(--success)",
+                                padding: "5px 10px",
+                                borderRadius: 8,
+                                fontSize: 12,
+                                cursor: "pointer",
+                              }}
+                            >
+                              {s.hidden_from_client ? "🙈" : "👁️"}
                             </button>
                           </>
                         )}

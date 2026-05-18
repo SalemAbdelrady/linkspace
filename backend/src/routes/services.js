@@ -9,7 +9,7 @@ const isStaffOrAdmin = [auth, requireRole('staff', 'admin')];
 router.get('/', auth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT * FROM services ORDER BY sort_order ASC, id ASC'
+      'SELECT * FROM services WHERE hidden_from_client = false ORDER BY sort_order ASC, id ASC'
     );
     res.json({ services: rows });
   } catch (err) {
