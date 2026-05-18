@@ -65,22 +65,22 @@ router.get("/overview-stats", auth, requireRole("admin"), async (req, res) => {
         FROM sessions WHERE status = 'completed'
       `, [today]),
 
-      // أكثر عميل يجيب أصحابه
+      // أكثر العملاء دعوةً — مرتبة على referral_count
       db.query(`
-      SELECT
-        u.id, u.name, u.phone, u.avatar_url,
-        SUM(GREATEST(s.guest_count - 1, 0)) AS guests_count,
-        MIN(s.check_in) AS first_guest_session
-      FROM users u
-      JOIN sessions s ON s.user_id = u.id
-      WHERE u.role = 'client'
-        AND s.guest_count > 1
-        AND s.status = 'completed'
-      GROUP BY u.id, u.name, u.phone, u.avatar_url
-      HAVING SUM(GREATEST(s.guest_count - 1, 0)) > 0
-      ORDER BY guests_count DESC, first_guest_session ASC
-      LIMIT 5
-        `),
+        SELECT
+          u.id, u.name, u.phone, u.avatar_url,
+          u.referral_count,
+          COALESCE(SUM(GREATEST(s.guest_count - 1, 0)), 0) AS guests_count
+        FROM users u
+        LEFT JOIN sessions s ON s.user_id = u.id 
+          AND s.guest_count > 1 
+          AND s.status = 'completed'
+        WHERE u.role = 'client'
+          AND u.referral_count > 0
+        GROUP BY u.id, u.name, u.phone, u.avatar_url, u.referral_count
+        ORDER BY u.referral_count DESC
+        LIMIT 5
+      `),
 
       // عدد الموظفين
       db.query(`
@@ -499,6 +499,32 @@ router.get("/users/:id/referrals", ...isStaffOrAdmin, async (req, res) => {
     ORDER BY u.created_at DESC
   `, [req.params.id]);
   res.json({ referrals: rows });
+});
+
+// GET /api/admin/referrals — صفحة برنامج الدعوات
+router.get('/referrals', ...isStaffOrAdmin, async (req, res) => {
+  try {
+    const { rows } = await db.query(`
+      SELECT 
+        u.id, u.name, u.phone, u.avatar_url,
+        u.referral_code, u.referral_count,
+        u.referral_earned_points,
+        u.created_at,
+        ref.name AS referred_by_name,
+        ref.phone AS referred_by_phone,
+        COUNT(invited.id) AS actual_invites
+      FROM users u
+      LEFT JOIN users ref ON ref.id = u.referred_by
+      LEFT JOIN users invited ON invited.referred_by = u.id
+      WHERE u.role = 'client'
+      GROUP BY u.id, ref.name, ref.phone
+      ORDER BY u.referral_count DESC, actual_invites DESC
+    `);
+    res.json({ referrals: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
 });
 
 module.exports = router;

@@ -1577,6 +1577,10 @@ export default function AdminDashboard() {
   // state للفلترة بالتاريخ
   const [userDateFrom, setUserDateFrom] = useState("");
   const [userDateTo, setUserDateTo] = useState("");
+  // state خاص بصفحة الدعوات
+  const [referrals, setReferrals] = useState([]);
+  const [referralSearch, setReferralSearch] = useState("");
+  const [loadingReferrals, setLoadingReferrals] = useState(false);
 
   const [priceTab, setPriceTab] = useState("cowork");
   const [spaces, setSpaces] = useState({
@@ -1674,6 +1678,11 @@ export default function AdminDashboard() {
       loadStaffMgmt();
     }
   }, [tab]);
+  // useEffect صفحة الدعوات
+  useEffect(() => {
+    if (tab === "referrals") loadReferrals();
+  }, [tab]);
+
   useEffect(() => {
     if (tab === "invoices") {
       loadInvoices();
@@ -1687,6 +1696,17 @@ export default function AdminDashboard() {
     invoiceStaffId,
   ]);
 
+  async function loadReferrals() {
+    setLoadingReferrals(true);
+    try {
+      const { data } = await adminAPI.referrals();
+      setReferrals(data.referrals || []);
+    } catch {
+      toast.error("خطأ في تحميل بيانات الدعوات");
+    } finally {
+      setLoadingReferrals(false);
+    }
+  }
   async function loadOverview() {
     try {
       const [d, m, stats] = await Promise.all([
@@ -2527,6 +2547,7 @@ export default function AdminDashboard() {
           ["prices", "الأسعار"],
           ["coupons", "🎫 الكوبونات"],
           ["invoices", "🧾 الفواتير"],
+          ["referrals", "🎁 الدعوات"],
         ].map(([k, label]) => (
           <button
             key={k}
@@ -5494,6 +5515,270 @@ export default function AdminDashboard() {
                 >
                   التالي
                 </button>
+              </div>
+            )}
+          </div>
+        )}
+        {/* ══ REFERRALS ══ */}
+        {tab === "referrals" && (
+          <div className="fade-up">
+            <input
+              className="input-field"
+              placeholder="🔍 بحث بالاسم أو الموبايل أو كود الدعوة..."
+              value={referralSearch}
+              onChange={(e) => setReferralSearch(e.target.value)}
+              style={{ marginBottom: 14 }}
+            />
+
+            {/* إحصائية سريعة */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3,1fr)",
+                gap: 10,
+                marginBottom: 16,
+              }}
+            >
+              {[
+                ["إجمالي المسجلين", referrals.length, "var(--text)"],
+                [
+                  "عندهم دعوات",
+                  referrals.filter((r) => r.referral_count > 0).length,
+                  "var(--accent)",
+                ],
+                [
+                  "إجمالي الدعوات",
+                  referrals.reduce(
+                    (s, r) => s + parseInt(r.referral_count || 0),
+                    0,
+                  ),
+                  "var(--warning)",
+                ],
+              ].map(([label, val, color]) => (
+                <div
+                  key={label}
+                  className="card"
+                  style={{ textAlign: "center", padding: "12px 8px" }}
+                >
+                  <div style={{ fontSize: 22, fontWeight: 800, color }}>
+                    {val}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 10,
+                      color: "var(--muted)",
+                      marginTop: 4,
+                    }}
+                  >
+                    {label}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {loadingReferrals ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  color: "var(--muted)",
+                  padding: 40,
+                }}
+              >
+                جارٍ التحميل...
+              </div>
+            ) : (
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 10 }}
+              >
+                {referrals
+                  .filter(
+                    (r) =>
+                      r.name
+                        ?.toLowerCase()
+                        .includes(referralSearch.toLowerCase()) ||
+                      r.phone?.includes(referralSearch) ||
+                      r.referral_code
+                        ?.toLowerCase()
+                        .includes(referralSearch.toLowerCase()),
+                  )
+                  .map((r, i) => (
+                    <div key={r.id} className="card">
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                        }}
+                      >
+                        {/* الترتيب */}
+                        <div
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: "50%",
+                            flexShrink: 0,
+                            background:
+                              i === 0
+                                ? "rgba(255,165,2,0.15)"
+                                : i === 1
+                                  ? "rgba(180,180,180,0.15)"
+                                  : "rgba(0,212,170,0.08)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 13,
+                          }}
+                        >
+                          {i === 0 ? (
+                            "🥇"
+                          ) : i === 1 ? (
+                            "🥈"
+                          ) : i === 2 ? (
+                            "🥉"
+                          ) : (
+                            <span
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: "var(--muted)",
+                              }}
+                            >
+                              {i + 1}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* الصورة */}
+                        {r.avatar_url ? (
+                          <img
+                            src={r.avatar_url}
+                            alt={r.name}
+                            style={{
+                              width: 38,
+                              height: 38,
+                              borderRadius: "50%",
+                              objectFit: "cover",
+                              border: "1.5px solid var(--accent)",
+                              flexShrink: 0,
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: 38,
+                              height: 38,
+                              borderRadius: "50%",
+                              background:
+                                "linear-gradient(135deg, var(--accent), var(--accent2))",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontWeight: 700,
+                              fontSize: 13,
+                              color: "#fff",
+                              flexShrink: 0,
+                            }}
+                          >
+                            {(r.name || "U")
+                              .split(" ")
+                              .slice(0, 2)
+                              .map((w) => w[0])
+                              .join("")}
+                          </div>
+                        )}
+
+                        {/* البيانات */}
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 700, fontSize: 14 }}>
+                            {r.name}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color: "var(--muted)",
+                              marginTop: 2,
+                            }}
+                          >
+                            {r.phone}
+                          </div>
+                          {r.referred_by_name && (
+                            <div
+                              style={{
+                                fontSize: 11,
+                                color: "var(--accent)",
+                                marginTop: 2,
+                              }}
+                            >
+                              💌 دُعي عن طريق:{" "}
+                              <strong>{r.referred_by_name}</strong>
+                            </div>
+                          )}
+                          <div
+                            style={{
+                              display: "inline-block",
+                              marginTop: 4,
+                              padding: "2px 8px",
+                              borderRadius: 6,
+                              background: "rgba(0,212,170,0.08)",
+                              border: "1px solid rgba(0,212,170,0.2)",
+                              fontFamily: "var(--mono)",
+                              fontSize: 12,
+                              color: "var(--accent)",
+                              letterSpacing: 1,
+                            }}
+                          >
+                            {r.referral_code || "—"}
+                          </div>
+                        </div>
+
+                        {/* الإحصائيات */}
+                        <div
+                          style={{ display: "flex", gap: 12, flexShrink: 0 }}
+                        >
+                          <div style={{ textAlign: "center" }}>
+                            <div
+                              style={{
+                                fontSize: 20,
+                                fontWeight: 800,
+                                color: "#a78bfa",
+                              }}
+                            >
+                              {r.referral_count || 0}
+                            </div>
+                            <div style={{ fontSize: 9, color: "var(--muted)" }}>
+                              دعوة
+                            </div>
+                          </div>
+                          <div style={{ textAlign: "center" }}>
+                            <div
+                              style={{
+                                fontSize: 20,
+                                fontWeight: 800,
+                                color: "var(--accent)",
+                              }}
+                            >
+                              {r.guests_count || 0}
+                            </div>
+                            <div style={{ fontSize: 9, color: "var(--muted)" }}>
+                              صديق
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                {referrals.length === 0 && (
+                  <div
+                    style={{
+                      textAlign: "center",
+                      color: "var(--muted)",
+                      padding: 40,
+                      fontSize: 13,
+                    }}
+                  >
+                    لا توجد بيانات دعوات بعد
+                  </div>
+                )}
               </div>
             )}
           </div>

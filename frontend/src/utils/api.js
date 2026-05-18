@@ -67,7 +67,7 @@ users: (search = '', page = 1, filters = {}) =>
   staff:         ()                      => api.get('/admin/staff'),
   exportUsers: (search = '') => api.get(`/admin/users/export?search=${encodeURIComponent(search)}`),
   overviewStats: () => api.get('/admin/overview-stats'),
-
+  referrals: () => api.get('/admin/referrals'),
 };
 
 // Spaces
