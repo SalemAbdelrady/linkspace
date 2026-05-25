@@ -41,8 +41,6 @@ function ProgressBar({ value, max }) {
 
 const SPACE_ICONS = { cowork: "🖥️", meeting: "🤝", lessons: "📚" };
 
-const [pastSubscription, setPastSubscription] = useState(null);
-
 // ── LiveTimer ─────────────────────────────────────────────────────────
 function LiveTimer({ checkIn, pricePerHr, maxHours = 4, spaceName, spaceKey }) {
   const [elapsed, setElapsed] = useState(0);
@@ -918,6 +916,8 @@ export default function ClientDashboard() {
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
 
+  const [pastSubscription, setPastSubscription] = useState(null);
+  
   const [recentInvoices, setRecentInvoices] = useState([]);
   const [loadingRecentInvoices, setLoadingRecentInvoices] = useState(true);
   //state لإظهار الاشتراك ومدته
@@ -1694,9 +1694,44 @@ export default function ClientDashboard() {
                   <div style={{ fontSize: 10, color: "var(--muted)" }}>
                     ج/شهر
                   </div>
+                  
+                        {!subscription && pastSubscription && (
+        <div className="card fade-up" style={{ marginBottom: 12,
+          background: "rgba(255,71,87,0.04)", border: "1px dashed rgba(255,71,87,0.2)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: "var(--muted)" }}>
+              📋 {pastSubscription.plan_name}
+            </div>
+            <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, fontWeight: 700,
+              background: pastSubscription.status === "cancelled" ? "rgba(255,71,87,0.12)" : "rgba(255,165,2,0.12)",
+              color: pastSubscription.status === "cancelled" ? "#ff4757" : "var(--warning)",
+              border: `1px solid ${pastSubscription.status === "cancelled" ? "rgba(255,71,87,0.3)" : "rgba(255,165,2,0.3)"}` }}>
+              {pastSubscription.status === "cancelled" ? "🚫 ملغي" : "⏰ منتهي"}
+            </span>
+          </div>
+          <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>
+            انتهى في: <strong style={{ color: "var(--text)" }}>
+              {new Date(pastSubscription.end_date).toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" })}
+            </strong>
+          </div>
+          {pastSubscription.cancel_reason && (
+            <div style={{ padding: "8px 12px", background: "rgba(255,71,87,0.06)",
+              border: "1px solid rgba(255,71,87,0.15)", borderRadius: 8,
+              fontSize: 12, color: "#ff4757", marginBottom: 8 }}>
+              💬 سبب الإلغاء: {pastSubscription.cancel_reason}
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: "var(--muted)", textAlign: "center",
+            padding: "8px", background: "rgba(167,139,250,0.04)", borderRadius: 8 }}>
+            تواصل معنا لتجديد اشتراكك 📞
+          </div>
+        </div>
+      )}
+
                 </div>
               </div>
             </div>
+            
           ) : (
             // لو مفيش اشتراك — بطاقة ترويجية خفيفة
             <div
@@ -2093,39 +2128,6 @@ export default function ClientDashboard() {
               استبدال 100 نقطة بكوبون خصم 20%
             </button>
           )}
-        </div>
-      )}
-      
-      {!subscription && pastSubscription && (
-        <div className="card fade-up" style={{ marginBottom: 12,
-          background: "rgba(255,71,87,0.04)", border: "1px dashed rgba(255,71,87,0.2)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: "var(--muted)" }}>
-              📋 {pastSubscription.plan_name}
-            </div>
-            <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, fontWeight: 700,
-              background: pastSubscription.status === "cancelled" ? "rgba(255,71,87,0.12)" : "rgba(255,165,2,0.12)",
-              color: pastSubscription.status === "cancelled" ? "#ff4757" : "var(--warning)",
-              border: `1px solid ${pastSubscription.status === "cancelled" ? "rgba(255,71,87,0.3)" : "rgba(255,165,2,0.3)"}` }}>
-              {pastSubscription.status === "cancelled" ? "🚫 ملغي" : "⏰ منتهي"}
-            </span>
-          </div>
-          <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>
-            انتهى في: <strong style={{ color: "var(--text)" }}>
-              {new Date(pastSubscription.end_date).toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" })}
-            </strong>
-          </div>
-          {pastSubscription.cancel_reason && (
-            <div style={{ padding: "8px 12px", background: "rgba(255,71,87,0.06)",
-              border: "1px solid rgba(255,71,87,0.15)", borderRadius: 8,
-              fontSize: 12, color: "#ff4757", marginBottom: 8 }}>
-              💬 سبب الإلغاء: {pastSubscription.cancel_reason}
-            </div>
-          )}
-          <div style={{ fontSize: 11, color: "var(--muted)", textAlign: "center",
-            padding: "8px", background: "rgba(167,139,250,0.04)", borderRadius: 8 }}>
-            تواصل معنا لتجديد اشتراكك 📞
-          </div>
         </div>
       )}
 
