@@ -1545,37 +1545,6 @@ function QuickSaleModal({ services: allServices, adminAPI, onClose, onDone }) {
   );
 }
 
-// state تحسين شكل نافذة تأكيد الحذف
-const [confirmDialog, setConfirmDialog] = useState({
-  isOpen: false,
-  title: "",
-  message: "",
-  onConfirm: null,
-  confirmLabel: "تأكيد",
-  confirmColor: "#ff4757",
-});
-
-function showConfirm({
-  title,
-  message,
-  onConfirm,
-  confirmLabel,
-  confirmColor,
-}) {
-  setConfirmDialog({
-    isOpen: true,
-    title,
-    message,
-    onConfirm,
-    confirmLabel,
-    confirmColor: confirmColor || "#ff4757",
-  });
-}
-
-function closeConfirm() {
-  setConfirmDialog((prev) => ({ ...prev, isOpen: false, onConfirm: null }));
-}
-
 // ─────────────────────────────────────────────
 // ConfirmDialog — بديل احترافي لـ window.confirm
 // ─────────────────────────────────────────────
@@ -1740,6 +1709,37 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const [tab, setTab] = useState("overview");
   const [showQuickSale, setShowQuickSale] = useState(false);
+
+  // state تحسين شكل نافذة تأكيد الحذف
+  const [confirmDialog, setConfirmDialog] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: null,
+    confirmLabel: "تأكيد",
+    confirmColor: "#ff4757",
+  });
+
+  function showConfirm({
+    title,
+    message,
+    onConfirm,
+    confirmLabel,
+    confirmColor,
+  }) {
+    setConfirmDialog({
+      isOpen: true,
+      title,
+      message,
+      onConfirm,
+      confirmLabel,
+      confirmColor: confirmColor || "#ff4757",
+    });
+  }
+
+  function closeConfirm() {
+    setConfirmDialog((prev) => ({ ...prev, isOpen: false, onConfirm: null }));
+  }
 
   const [daily, setDaily] = useState(null);
   const [monthly, setMonthly] = useState(null);
