@@ -1545,6 +1545,184 @@ function QuickSaleModal({ services: allServices, adminAPI, onClose, onDone }) {
   );
 }
 
+// state تحسين شكل نافذة تأكيد الحذف
+const [confirmDialog, setConfirmDialog] = useState({
+  isOpen: false,
+  title: "",
+  message: "",
+  onConfirm: null,
+  confirmLabel: "تأكيد",
+  confirmColor: "#ff4757",
+});
+
+function showConfirm({
+  title,
+  message,
+  onConfirm,
+  confirmLabel,
+  confirmColor,
+}) {
+  setConfirmDialog({
+    isOpen: true,
+    title,
+    message,
+    onConfirm,
+    confirmLabel,
+    confirmColor: confirmColor || "#ff4757",
+  });
+}
+
+function closeConfirm() {
+  setConfirmDialog((prev) => ({ ...prev, isOpen: false, onConfirm: null }));
+}
+
+// ─────────────────────────────────────────────
+// ConfirmDialog — بديل احترافي لـ window.confirm
+// ─────────────────────────────────────────────
+function ConfirmDialog({
+  isOpen,
+  onConfirm,
+  onCancel,
+  title,
+  message,
+  confirmLabel = "تأكيد",
+  confirmColor = "#ff4757",
+}) {
+  if (!isOpen) return null;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 500,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+        backdropFilter: "blur(8px)",
+        background: "rgba(0,0,0,0.7)",
+        animation: "fadeIn 0.15s ease",
+      }}
+      onClick={onCancel}
+    >
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+      `}</style>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "var(--surface)",
+          borderRadius: 20,
+          padding: "28px 24px",
+          maxWidth: 360,
+          width: "100%",
+          border: "1px solid var(--border)",
+          boxShadow:
+            "0 32px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04)",
+          animation: "slideUp 0.2s cubic-bezier(0.34,1.56,0.64,1)",
+          textAlign: "center",
+        }}
+      >
+        {/* أيقونة التحذير */}
+        <div
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: "50%",
+            background: `${confirmColor}18`,
+            border: `1.5px solid ${confirmColor}40`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 24,
+            margin: "0 auto 16px",
+          }}
+        >
+          🗑️
+        </div>
+
+        {/* العنوان */}
+        <div
+          style={{
+            fontWeight: 800,
+            fontSize: 17,
+            marginBottom: 8,
+            color: "var(--text)",
+          }}
+        >
+          {title}
+        </div>
+
+        {/* الرسالة */}
+        <div
+          style={{
+            fontSize: 13,
+            color: "var(--muted)",
+            lineHeight: 1.6,
+            marginBottom: 24,
+          }}
+        >
+          {message}
+        </div>
+
+        {/* الأزرار */}
+        <div style={{ display: "flex", gap: 10 }}>
+          <button
+            onClick={onCancel}
+            style={{
+              flex: 1,
+              padding: "11px",
+              borderRadius: 12,
+              border: "1px solid var(--border)",
+              background: "transparent",
+              color: "var(--muted)",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = "var(--text)";
+              e.currentTarget.style.color = "var(--text)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = "var(--border)";
+              e.currentTarget.style.color = "var(--muted)";
+            }}
+          >
+            إلغاء
+          </button>
+          <button
+            onClick={onConfirm}
+            style={{
+              flex: 1,
+              padding: "11px",
+              borderRadius: 12,
+              border: `1px solid ${confirmColor}60`,
+              background: `${confirmColor}15`,
+              color: confirmColor,
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = `${confirmColor}25`;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = `${confirmColor}15`;
+            }}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── AdminDashboard ────────────────────────────────────────────────────
 // لعرض العضوية مثل (عضو منذ سنة و٣ أشهر)
 function memberSince(dateStr) {
@@ -1918,18 +2096,6 @@ export default function AdminDashboard() {
     }
   }
 
-  async function deleteStaff(id) {
-    if (!window.confirm("هل أنت متأكد من حذف هذا الموظف؟")) return;
-    try {
-      await staffAPI.delete(id);
-      toast.success("تم الحذف");
-      loadStaffMgmt();
-      loadStaff();
-    } catch {
-      toast.error("خطأ في الحذف");
-    }
-  }
-
   async function saveEditStaff() {
     if (!editingStaff.name || !editingStaff.phone)
       return toast.error("الاسم والموبايل مطلوبان");
@@ -2127,22 +2293,6 @@ export default function AdminDashboard() {
     }
   }
 
-  async function deleteService(id) {
-    if (!window.confirm("هل أنت متأكد من حذف هذه الخدمة؟")) return;
-    try {
-      const { data } = await servicesAPI.delete(id);
-      // ✅ تحقق من الـ response قبل التحديث
-      if (data?.success !== false) {
-        setServices((prev) => prev.filter((x) => x.id !== id));
-        toast.success("تم الحذف ✅");
-      }
-    } catch (err) {
-      console.error("deleteService error:", err);
-      toast.error(err.response?.data?.error || "خطأ في الحذف");
-      // ✅ لا تحذف من الـ state لو فشل الـ request
-    }
-  }
-
   function getAmount(userId, type) {
     return amounts[userId]?.[type] ?? "";
   }
@@ -2153,6 +2303,75 @@ export default function AdminDashboard() {
     }));
   }
 
+  // ── حذف خدمة ──
+  async function deleteService(id) {
+    showConfirm({
+      title: "حذف الخدمة",
+      message:
+        "هل أنت متأكد من حذف هذه الخدمة؟ لا يمكن التراجع عن هذا الإجراء.",
+      confirmLabel: "🗑️ حذف",
+      onConfirm: async () => {
+        try {
+          await servicesAPI.delete(id);
+          setServices((prev) => prev.filter((x) => x.id !== id));
+          toast.success("تم الحذف ✅");
+        } catch {
+          toast.error("خطأ في الحذف");
+        }
+      },
+    });
+  }
+
+  // ── حذف موظف ──
+  async function deleteStaff(id) {
+    showConfirm({
+      title: "حذف الموظف",
+      message: "هل أنت متأكد من حذف هذا الموظف؟ سيتم مسح حسابه نهائياً.",
+      confirmLabel: "🗑️ حذف",
+      onConfirm: async () => {
+        try {
+          await staffAPI.delete(id);
+          toast.success("تم الحذف");
+          loadStaffMgmt();
+          loadStaff();
+        } catch {
+          toast.error("خطأ في الحذف");
+        }
+      },
+    });
+  }
+
+  // ── حظر / رفع حظر عميل ──
+  async function toggleBan(u) {
+    const isBanning = u.is_active;
+    showConfirm({
+      title: isBanning ? `حظر ${u.name}` : `رفع الحظر عن ${u.name}`,
+      message: isBanning
+        ? "لن يتمكن هذا العميل من الدخول أو استخدام الخدمات."
+        : "سيتمكن العميل من الدخول والاستخدام مجدداً.",
+      confirmLabel: isBanning ? "🚫 حظر" : "✅ رفع الحظر",
+      confirmColor: isBanning ? "#ff4757" : "var(--success)",
+      onConfirm: async () => {
+        try {
+          await adminAPI.toggleUser(u.id);
+          const newStatus = !isBanning;
+          toast.success(
+            isBanning ? `🚫 تم حظر ${u.name}` : `✅ تم رفع الحظر عن ${u.name}`,
+          );
+          setUsers((prev) =>
+            prev.map((x) =>
+              x.id === u.id ? { ...x, is_active: newStatus } : x,
+            ),
+          );
+          setSelectedUser((prev) =>
+            prev ? { ...prev, is_active: newStatus } : prev,
+          );
+        } catch (err) {
+          toast.error(err.response?.data?.error || "خطأ");
+        }
+      },
+    });
+  }
   async function chargeWallet(u) {
     const amount = getAmount(u.id, "wallet");
     if (!amount || parseFloat(amount) <= 0)
@@ -2195,31 +2414,6 @@ export default function AdminDashboard() {
       );
     } catch (err) {
       toast.error(err.response?.data?.error || "خطأ");
-    }
-  }
-
-  // ✅ دالة الحظر / رفع الحظر
-  async function toggleBan(u) {
-    const isBanning = u.is_active;
-    const confirmMsg = isBanning
-      ? `هل تريد حظر ${u.name}؟ لن يتمكن من الدخول.`
-      : `هل تريد رفع الحظر عن ${u.name}؟`;
-    if (!window.confirm(confirmMsg)) return;
-    try {
-      await adminAPI.toggleUser(u.id);
-      const newStatus = !isBanning;
-      toast.success(
-        isBanning ? `🚫 تم حظر ${u.name}` : `✅ تم رفع الحظر عن ${u.name}`,
-      );
-      // تحديث القائمة والمودال بدون إغلاقه
-      setUsers((prev) =>
-        prev.map((x) => (x.id === u.id ? { ...x, is_active: newStatus } : x)),
-      );
-      setSelectedUser((prev) =>
-        prev ? { ...prev, is_active: newStatus } : prev,
-      );
-    } catch (err) {
-      toast.error(err.response?.data?.error || "خطأ في تغيير الحالة");
     }
   }
 
@@ -6587,6 +6781,18 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmLabel={confirmDialog.confirmLabel}
+        confirmColor={confirmDialog.confirmColor}
+        onConfirm={() => {
+          confirmDialog.onConfirm?.();
+          closeConfirm();
+        }}
+        onCancel={closeConfirm}
+      />
     </div>
   );
 }
