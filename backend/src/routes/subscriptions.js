@@ -65,21 +65,34 @@ router.delete('/plans/:id', ...isAdmin, async (req, res) => {
 // USER SUBSCRIPTIONS — اشتراكات العملاء
 // ─────────────────────────────────────────────────────────────────────
 
-// GET /api/subscriptions/my
+// GET /api/subscriptions/my — اشتراكي الحالي + السابق
 router.get('/my', auth, async (req, res) => {
   try {
-    const { rows } = await db.query(`
-      SELECT us.*, sp.name as plan_name_current, sp.features, sp.price as plan_price_current
+    // الاشتراك النشط
+    const { rows: active } = await db.query(`
+      SELECT us.*, sp.name AS plan_name, sp.price AS plan_price,
+             sp.covers_cowork, sp.discount_rooms, sp.features
       FROM user_subscriptions us
       JOIN subscription_plans sp ON sp.id = us.plan_id
-      WHERE us.user_id = $1
-        AND us.status = 'active'
-        AND us.end_date > NOW()
-      ORDER BY us.created_at DESC
-      LIMIT 1
+      WHERE us.user_id = $1 AND us.status = 'active' AND us.end_date > NOW()
+      ORDER BY us.created_at DESC LIMIT 1
     `, [req.user.id]);
-    res.json({ subscription: rows[0] || null });
+
+    // آخر اشتراك منتهي أو ملغي
+    const { rows: past } = await db.query(`
+      SELECT us.*, sp.name AS plan_name, sp.price AS plan_price
+      FROM user_subscriptions us
+      JOIN subscription_plans sp ON sp.id = us.plan_id
+      WHERE us.user_id = $1 AND us.status IN ('cancelled', 'expired')
+      ORDER BY us.cancelled_at DESC, us.end_date DESC LIMIT 1
+    `, [req.user.id]);
+
+    res.json({
+      subscription: active[0] || null,
+      past_subscription: past[0] || null,
+    });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });

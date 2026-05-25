@@ -106,8 +106,7 @@ export const subscriptionsAPI = {
   updatePlan: (id, data)   => api.put(`/subscriptions/plans/${id}`, data),
   deletePlan: (id)         => api.delete(`/subscriptions/plans/${id}`),
   subscribe:  (body)       => api.post('/subscriptions/subscribe', body),
-  cancel:     (id)         => api.post(`/subscriptions/cancel/${id}`),
-  getAll:     ()           => api.get('/subscriptions/all'),
+  cancel: (id, reason) => api.post(`/subscriptions/cancel/${id}`, { cancel_reason: reason }),  getAll:     ()           => api.get('/subscriptions/all'),
 };
 
 // Invoices
