@@ -83,7 +83,11 @@ router.get('/my', auth, async (req, res) => {
       SELECT us.*, sp.name AS plan_name, sp.price AS plan_price
       FROM user_subscriptions us
       JOIN subscription_plans sp ON sp.id = us.plan_id
-      WHERE us.user_id = $1 AND us.status IN ('cancelled', 'expired')
+      WHERE us.user_id = $1 
+        AND (
+          us.status IN ('cancelled', 'expired')
+          OR (us.status = 'active' AND us.end_date < NOW())
+        )
       ORDER BY COALESCE(us.cancelled_at, us.end_date) DESC LIMIT 1
     `, [req.user.id]);
 
