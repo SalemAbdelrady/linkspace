@@ -62,6 +62,7 @@ function LiveTimer({ checkIn, pricePerHr, maxHours = 4, spaceName, spaceKey }) {
   );
   const cost = (billedHours * pricePerHr).toFixed(2);
   const isMaxed = billedHours >= maxHours;
+
   return (
     <div
       style={{
@@ -146,9 +147,7 @@ function ClientOrderModal({ sessionId, onClose, onOrderAdded }) {
         setServices(svcRes.data.services || []);
         setMyOrders(ordRes.data.orders || []);
       })
-      .catch(() => {
-        toast.error("خطأ في تحميل البيانات");
-      })
+      .catch(() => toast.error("خطأ في تحميل البيانات"))
       .finally(() => setLoading(false));
   }, [sessionId]);
 
@@ -205,6 +204,7 @@ function ClientOrderModal({ sessionId, onClose, onOrderAdded }) {
         }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* ── مودال تأكيد الطلب ── */}
         {confirmItem && (
           <div
             style={{
@@ -614,6 +614,7 @@ function InvoiceDetailModal({ invoice, onClose }) {
             ✕
           </button>
         </div>
+
         <div
           style={{
             marginBottom: 12,
@@ -629,6 +630,7 @@ function InvoiceDetailModal({ invoice, onClose }) {
             {spaceName}
           </span>
         </div>
+
         <div
           style={{
             marginBottom: 12,
@@ -698,6 +700,7 @@ function InvoiceDetailModal({ invoice, onClose }) {
             </div>
           )}
         </div>
+
         {services.length > 0 && (
           <div
             style={{
@@ -729,6 +732,7 @@ function InvoiceDetailModal({ invoice, onClose }) {
             ))}
           </div>
         )}
+
         {invoice.coupon_code && (
           <div
             style={{
@@ -751,12 +755,14 @@ function InvoiceDetailModal({ invoice, onClose }) {
               }}
             >
               <span>
-                🎫 {invoice.coupon_code} ( خصم من الجلسة{invoice.discount_pct}%)
+                🎫 {invoice.coupon_code} ( خصم من الجلسة {invoice.discount_pct}
+                %)
               </span>
               <span>− {parseFloat(invoice.discount_amount).toFixed(2)} ج</span>
             </div>
           </div>
         )}
+
         <div
           style={{
             marginBottom: 12,
@@ -796,6 +802,7 @@ function InvoiceDetailModal({ invoice, onClose }) {
             </span>
           </div>
         </div>
+
         <div
           style={{
             background: "rgba(0,0,0,0.15)",
@@ -874,6 +881,7 @@ function InvoiceDetailModal({ invoice, onClose }) {
             </div>
           )}
         </div>
+
         {invoice.note && (
           <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 10 }}>
             📝 {invoice.note}
@@ -884,8 +892,7 @@ function InvoiceDetailModal({ invoice, onClose }) {
   );
 }
 
-// ── ClientDashboard ───────────────────────────────────────────────────
-// لعرض العضوية مثل (عضو منذ سنة و٣ أشهر)
+// ── Helpers ───────────────────────────────────────────────────────────
 function memberSince(dateStr) {
   const diff = Date.now() - new Date(dateStr);
   const days = Math.floor(diff / 86400000);
@@ -896,12 +903,11 @@ function memberSince(dateStr) {
   return months > 0 ? `${years} سنة و${months} شهر` : `${years} سنة`;
 }
 
+// ── ClientDashboard ───────────────────────────────────────────────────
 export default function ClientDashboard() {
   const { user, logout } = useAuth();
-  console.log("user created_at:", user?.created_at);
   const navigate = useNavigate();
   const [tab, setTab] = useState("overview");
-
   const nudgeShown = useRef(false);
 
   const [sessions, setSessions] = useState([]);
@@ -917,15 +923,13 @@ export default function ClientDashboard() {
   const [selectedInvoice, setSelectedInvoice] = useState(null);
 
   const [pastSubscription, setPastSubscription] = useState(null);
-  
+  const [subscription, setSubscription] = useState(null);
   const [recentInvoices, setRecentInvoices] = useState([]);
   const [loadingRecentInvoices, setLoadingRecentInvoices] = useState(true);
-  //state لإظهار الاشتراك ومدته
-  const [subscription, setSubscription] = useState(null);
-
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [allOrdersCount, setAllOrdersCount] = useState(0);
 
+  // ── Effects ──────────────────────────────────────────────────────────
   useEffect(() => {
     loadData();
     loadSpaces();
@@ -934,7 +938,6 @@ export default function ClientDashboard() {
   useEffect(() => {
     if (tab === "invoices") loadInvoices();
   }, [tab, invoicePage]);
-
   useEffect(() => {
     if (!activeSession) return;
     api
@@ -944,21 +947,15 @@ export default function ClientDashboard() {
   }, [activeSession]);
 
   // ── Profile completion nudge ─────────────────────────────────────────
-  // ✅ الحل — استخدم useRef عشان تتأكد إن user اتحمل فعلاً
   useEffect(() => {
-    // لو user لسه null أو الـ nudge اتعرض قبل كده، اخرج
     if (!user || nudgeShown.current) return;
-
     const missingPhoto = !user.avatar_url;
     const missingEmail = !user.email;
-
     if (!missingPhoto && !missingEmail) return;
-
     nudgeShown.current = true;
 
-    let line1 = "";
-    let line2 = "";
-
+    let line1 = "",
+      line2 = "";
     if (missingPhoto && missingEmail) {
       line1 = "👤 ملفك الشخصي غير مكتمل";
       line2 = "أضف صورة وبريدك الإلكتروني من الإعدادات لتجربة أفضل";
@@ -998,7 +995,6 @@ export default function ClientDashboard() {
             >
               {missingPhoto ? "📸" : "📧"}
             </div>
-
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 3 }}>
                 {line1}
@@ -1033,7 +1029,6 @@ export default function ClientDashboard() {
                 ⚙️ الإعدادات
               </button>
             </div>
-
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -1055,7 +1050,7 @@ export default function ClientDashboard() {
           </div>
         ),
         {
-          duration: 8000, // يختفي لوحده بعد 8 ثواني
+          duration: 8000,
           position: "top-center",
           style: {
             background: "#1a1a2e",
@@ -1070,9 +1065,10 @@ export default function ClientDashboard() {
         },
       );
     }, 1500);
-
     return () => clearTimeout(timer);
-  }, [user]); // لازم يفضل [user] عشان ينتظر تحميله
+  }, [user]);
+
+  // ── Data loading ─────────────────────────────────────────────────────
   async function loadSpaces() {
     try {
       const { data } = await spacesAPI.getAll();
@@ -1092,9 +1088,8 @@ export default function ClientDashboard() {
       setActiveSession(active || null);
       setSessions(allSessions.filter((s) => s.status !== "active"));
       setCoupons(couponRes.data.coupons);
-      setSubscription(subRes.data.subscription || null); // ✅ هنا المهم
+      setSubscription(subRes.data.subscription || null);
       setPastSubscription(subRes.data.past_subscription || null);
-      
     } catch {
       toast.error("خطأ في تحميل البيانات");
     } finally {
@@ -1145,12 +1140,11 @@ export default function ClientDashboard() {
       .catch(() => {});
   }
 
+  // ── Derived values ───────────────────────────────────────────────────
   const activeSpaceKey = activeSession?.space_key || "cowork";
   const activeSpaceName = activeSession?.space_name || "منطقة العمل المشتركة";
   const activePricePerHr = parseFloat(activeSession?.price_per_hr || 30);
   const activeMaxHours = parseInt(activeSession?.max_hours || 4);
-
-  // ✅ الأحرف الأولى للاسم — fallback لو ما في صورة
   const initials = (user?.name || "U")
     .split(" ")
     .slice(0, 2)
@@ -1158,6 +1152,7 @@ export default function ClientDashboard() {
     .join("");
   const totalInvoicePages = Math.ceil(invoiceTotal / 10);
 
+  // ── InvoiceCard ───────────────────────────────────────────────────────
   function InvoiceCard({ inv, onClick }) {
     const services =
       typeof inv.services === "string"
@@ -1168,6 +1163,7 @@ export default function ClientDashboard() {
     const walletPaid = parseFloat(inv.wallet_paid || 0);
     const cashPaid = parseFloat(inv.cash_paid || 0);
     const method = inv.payment_method;
+
     return (
       <div
         className="card"
@@ -1293,15 +1289,16 @@ export default function ClientDashboard() {
     );
   }
 
+  // ── Render ────────────────────────────────────────────────────────────
   return (
     <div className="page-wrap" style={{ paddingBottom: 40 }}>
+      {/* ── المودالات ── */}
       {selectedInvoice && (
         <InvoiceDetailModal
           invoice={selectedInvoice}
           onClose={() => setSelectedInvoice(null)}
         />
       )}
-
       {showOrderModal && activeSession && (
         <ClientOrderModal
           sessionId={activeSession.id}
@@ -1310,7 +1307,7 @@ export default function ClientDashboard() {
         />
       )}
 
-      {/* Header */}
+      {/* ── Header ── */}
       <div
         style={{
           display: "flex",
@@ -1354,7 +1351,7 @@ export default function ClientDashboard() {
         </div>
       </div>
 
-      {/* ✅ Profile — مع صورة أو أحرف أولى */}
+      {/* ── Profile Card ── */}
       <div
         className="card fade-up"
         style={{
@@ -1426,7 +1423,7 @@ export default function ClientDashboard() {
         </div>
       </div>
 
-      {/* Tab Bar */}
+      {/* ── Tab Bar ── */}
       <div
         style={{
           display: "flex",
@@ -1465,6 +1462,7 @@ export default function ClientDashboard() {
       {/* ══ OVERVIEW ══ */}
       {tab === "overview" && (
         <div className="fade-up">
+          {/* الرصيد والنقاط */}
           <div
             style={{
               display: "grid",
@@ -1507,6 +1505,7 @@ export default function ClientDashboard() {
             </div>
           </div>
 
+          {/* شريط النقاط */}
           <div className="card" style={{ marginBottom: 12 }}>
             <div
               style={{
@@ -1535,231 +1534,297 @@ export default function ClientDashboard() {
                 : `${100 - (user?.points || 0)} نقطة متبقية للحصول على خصم 20%`}
             </div>
           </div>
-          {/* ── كارت الاشتراك الشهري ── */}
-          {subscription ? (
-            <div
-              className="card fade-up"
-              style={{
-                marginBottom: 12,
-                background:
-                  "linear-gradient(135deg, rgba(167,139,250,0.08), rgba(167,139,250,0.03))",
-                border: "1px solid rgba(167,139,250,0.3)",
-              }}
-            >
+
+          {/* ── قسم الاشتراكات ── */}
+          <div style={{ marginBottom: 20 }}>
+            {subscription ? (
+              /* اشتراك نشط */
               <div
+                className="card fade-up"
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "flex-start",
+                  marginBottom: 12,
+                  background:
+                    "linear-gradient(135deg, rgba(167,139,250,0.08), rgba(167,139,250,0.03))",
+                  border: "1px solid rgba(167,139,250,0.3)",
                 }}
               >
-                <div style={{ flex: 1 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      marginBottom: 6,
-                    }}
-                  >
-                    <span style={{ fontSize: 18 }}>📋</span>
-                    <span
-                      style={{
-                        fontWeight: 800,
-                        fontSize: 15,
-                        color: "#a78bfa",
-                      }}
-                    >
-                      {subscription.plan_name}
-                    </span>
-                    <span
-                      style={{
-                        padding: "2px 8px",
-                        borderRadius: 20,
-                        fontSize: 10,
-                        fontWeight: 700,
-                        background: "rgba(167,139,250,0.15)",
-                        color: "#a78bfa",
-                        border: "1px solid rgba(167,139,250,0.3)",
-                      }}
-                    >
-                      نشط ✓
-                    </span>
-                  </div>
-
-                  {/* المميزات */}
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: "var(--muted)",
-                      marginBottom: 10,
-                      lineHeight: 1.6,
-                    }}
-                  >
-                    {subscription.covers_cowork && (
-                      <div>✅ دخول غير محدود لمنطقة العمل</div>
-                    )}
-                    {subscription.discount_rooms > 0 && (
-                      <div>✅ خصم {subscription.discount_rooms}% على الغرف</div>
-                    )}
-                  </div>
-
-                  {/* شريط انتهاء الصلاحية */}
-                  {(() => {
-                    const total =
-                      new Date(subscription.end_date) -
-                      new Date(subscription.start_date);
-                    const remaining =
-                      new Date(subscription.end_date) - new Date();
-                    const pct = Math.max(
-                      0,
-                      Math.min((remaining / total) * 100, 100),
-                    );
-                    const daysLeft = Math.ceil(remaining / 86400000);
-                    return (
-                      <div>
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            fontSize: 11,
-                            color: "var(--muted)",
-                            marginBottom: 4,
-                          }}
-                        >
-                          <span>
-                            متبقي {daysLeft > 0 ? `${daysLeft} يوم` : "انتهى"}
-                          </span>
-                          <span>
-                            ينتهي{" "}
-                            {new Date(subscription.end_date).toLocaleDateString(
-                              "ar-EG",
-                              { month: "long", day: "numeric" },
-                            )}
-                          </span>
-                        </div>
-                        <div
-                          style={{
-                            background: "rgba(255,255,255,0.08)",
-                            borderRadius: 10,
-                            height: 6,
-                            overflow: "hidden",
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: `${pct}%`,
-                              height: "100%",
-                              borderRadius: 10,
-                              background:
-                                pct > 30
-                                  ? "linear-gradient(90deg, #a78bfa, #7c3aed)"
-                                  : "#ff4757",
-                              transition: "width 0.8s ease",
-                            }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-
                 <div
                   style={{
-                    textAlign: "center",
-                    marginRight: 12,
-                    flexShrink: 0,
-                    padding: "8px 12px",
-                    background: "rgba(167,139,250,0.1)",
-                    borderRadius: 12,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        marginBottom: 6,
+                      }}
+                    >
+                      <span style={{ fontSize: 18 }}>📋</span>
+                      <span
+                        style={{
+                          fontWeight: 800,
+                          fontSize: 15,
+                          color: "#a78bfa",
+                        }}
+                      >
+                        {subscription.plan_name}
+                      </span>
+                      <span
+                        style={{
+                          padding: "2px 8px",
+                          borderRadius: 20,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          background: "rgba(167,139,250,0.15)",
+                          color: "#a78bfa",
+                          border: "1px solid rgba(167,139,250,0.3)",
+                        }}
+                      >
+                        نشط ✓
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: "var(--muted)",
+                        marginBottom: 10,
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      {subscription.covers_cowork && (
+                        <div>✅ دخول غير محدود لمنطقة العمل</div>
+                      )}
+                      {subscription.discount_rooms > 0 && (
+                        <div>
+                          ✅ خصم {subscription.discount_rooms}% على الغرف
+                        </div>
+                      )}
+                    </div>
+                    {(() => {
+                      const total =
+                        new Date(subscription.end_date) -
+                        new Date(subscription.start_date);
+                      const remaining =
+                        new Date(subscription.end_date) - new Date();
+                      const pct = Math.max(
+                        0,
+                        Math.min((remaining / total) * 100, 100),
+                      );
+                      const daysLeft = Math.ceil(remaining / 86400000);
+                      return (
+                        <div>
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              fontSize: 11,
+                              color: "var(--muted)",
+                              marginBottom: 4,
+                            }}
+                          >
+                            <span>
+                              متبقي {daysLeft > 0 ? `${daysLeft} يوم` : "انتهى"}
+                            </span>
+                            <span>
+                              ينتهي{" "}
+                              {new Date(
+                                subscription.end_date,
+                              ).toLocaleDateString("ar-EG", {
+                                month: "long",
+                                day: "numeric",
+                              })}
+                            </span>
+                          </div>
+                          <div
+                            style={{
+                              background: "rgba(255,255,255,0.08)",
+                              borderRadius: 10,
+                              height: 6,
+                              overflow: "hidden",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: `${pct}%`,
+                                height: "100%",
+                                borderRadius: 10,
+                                background:
+                                  pct > 30
+                                    ? "linear-gradient(90deg, #a78bfa, #7c3aed)"
+                                    : "#ff4757",
+                                transition: "width 0.8s ease",
+                              }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  <div
+                    style={{
+                      textAlign: "center",
+                      marginRight: 12,
+                      flexShrink: 0,
+                      padding: "8px 12px",
+                      background: "rgba(167,139,250,0.1)",
+                      borderRadius: 12,
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 10,
+                        color: "var(--muted)",
+                        marginBottom: 2,
+                      }}
+                    >
+                      السعر
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 18,
+                        fontWeight: 800,
+                        color: "#a78bfa",
+                      }}
+                    >
+                      {parseFloat(
+                        subscription.plan_price_current ||
+                          subscription.plan_price,
+                      ).toFixed(0)}
+                    </div>
+                    <div style={{ fontSize: 10, color: "var(--muted)" }}>
+                      ج/شهر
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : pastSubscription ? (
+              /* اشتراك سابق */
+              <div
+                className="card fade-up"
+                style={{
+                  marginBottom: 12,
+                  background: "rgba(255,71,87,0.04)",
+                  border: "1px dashed rgba(255,71,87,0.2)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    marginBottom: 8,
                   }}
                 >
                   <div
                     style={{
-                      fontSize: 10,
+                      fontWeight: 700,
+                      fontSize: 14,
                       color: "var(--muted)",
-                      marginBottom: 2,
                     }}
                   >
-                    السعر
+                    📋 {pastSubscription.plan_name}
                   </div>
-                  <div
-                    style={{ fontSize: 18, fontWeight: 800, color: "#a78bfa" }}
+                  <span
+                    style={{
+                      fontSize: 11,
+                      padding: "2px 8px",
+                      borderRadius: 20,
+                      fontWeight: 700,
+                      background:
+                        pastSubscription.status === "cancelled"
+                          ? "rgba(255,71,87,0.12)"
+                          : "rgba(255,165,2,0.12)",
+                      color:
+                        pastSubscription.status === "cancelled"
+                          ? "#ff4757"
+                          : "var(--warning)",
+                      border: `1px solid ${pastSubscription.status === "cancelled" ? "rgba(255,71,87,0.3)" : "rgba(255,165,2,0.3)"}`,
+                    }}
                   >
-                    {parseFloat(
-                      subscription.plan_price_current ||
-                        subscription.plan_price,
-                    ).toFixed(0)}
+                    {pastSubscription.status === "cancelled"
+                      ? "🚫 ملغي"
+                      : "⏰ منتهي"}
+                  </span>
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "var(--muted)",
+                    marginBottom: 6,
+                  }}
+                >
+                  انتهى في:{" "}
+                  <strong style={{ color: "var(--text)" }}>
+                    {new Date(pastSubscription.end_date).toLocaleDateString(
+                      "ar-EG",
+                      { year: "numeric", month: "long", day: "numeric" },
+                    )}
+                  </strong>
+                </div>
+                {pastSubscription.cancel_reason && (
+                  <div
+                    style={{
+                      padding: "8px 12px",
+                      background: "rgba(255,71,87,0.06)",
+                      border: "1px solid rgba(255,71,87,0.15)",
+                      borderRadius: 8,
+                      fontSize: 12,
+                      color: "#ff4757",
+                      marginBottom: 8,
+                    }}
+                  >
+                    💬 سبب الإلغاء: {pastSubscription.cancel_reason}
                   </div>
-                  <div style={{ fontSize: 10, color: "var(--muted)" }}>
-                    ج/شهر
-                  </div>
-                  
-                        {!subscription && pastSubscription && (
-        <div className="card fade-up" style={{ marginBottom: 12,
-          background: "rgba(255,71,87,0.04)", border: "1px dashed rgba(255,71,87,0.2)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: "var(--muted)" }}>
-              📋 {pastSubscription.plan_name}
-            </div>
-            <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, fontWeight: 700,
-              background: pastSubscription.status === "cancelled" ? "rgba(255,71,87,0.12)" : "rgba(255,165,2,0.12)",
-              color: pastSubscription.status === "cancelled" ? "#ff4757" : "var(--warning)",
-              border: `1px solid ${pastSubscription.status === "cancelled" ? "rgba(255,71,87,0.3)" : "rgba(255,165,2,0.3)"}` }}>
-              {pastSubscription.status === "cancelled" ? "🚫 ملغي" : "⏰ منتهي"}
-            </span>
-          </div>
-          <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>
-            انتهى في: <strong style={{ color: "var(--text)" }}>
-              {new Date(pastSubscription.end_date).toLocaleDateString("ar-EG", { year: "numeric", month: "long", day: "numeric" })}
-            </strong>
-          </div>
-          {pastSubscription.cancel_reason && (
-            <div style={{ padding: "8px 12px", background: "rgba(255,71,87,0.06)",
-              border: "1px solid rgba(255,71,87,0.15)", borderRadius: 8,
-              fontSize: 12, color: "#ff4757", marginBottom: 8 }}>
-              💬 سبب الإلغاء: {pastSubscription.cancel_reason}
-            </div>
-          )}
-          <div style={{ fontSize: 11, color: "var(--muted)", textAlign: "center",
-            padding: "8px", background: "rgba(167,139,250,0.04)", borderRadius: 8 }}>
-            تواصل معنا لتجديد اشتراكك 📞
-          </div>
-        </div>
-      )}
-
+                )}
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "var(--muted)",
+                    textAlign: "center",
+                    padding: "8px",
+                    background: "rgba(167,139,250,0.04)",
+                    borderRadius: 8,
+                  }}
+                >
+                  تواصل معنا لتجديد اشتراكك 📞
                 </div>
               </div>
-            </div>
-            
-          ) : (
-            // لو مفيش اشتراك — بطاقة ترويجية خفيفة
-            <div
-              className="card fade-up"
-              style={{
-                marginBottom: 12,
-                background: "rgba(167,139,250,0.04)",
-                border: "1px dashed rgba(167,139,250,0.2)",
-                textAlign: "center",
-                padding: "14px 16px",
-              }}
-            >
-              <div style={{ fontSize: 16, marginBottom: 6 }}>📋</div>
+            ) : (
+              /* لا يوجد اشتراك */
               <div
+                className="card fade-up"
                 style={{
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: "#a78bfa",
-                  marginBottom: 4,
+                  marginBottom: 12,
+                  background: "rgba(167,139,250,0.04)",
+                  border: "1px dashed rgba(167,139,250,0.2)",
+                  textAlign: "center",
+                  padding: "14px 16px",
                 }}
               >
-                اشترك في باقة شهرية
+                <div style={{ fontSize: 16, marginBottom: 6 }}>📋</div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: "#a78bfa",
+                    marginBottom: 4,
+                  }}
+                >
+                  اشترك في باقة شهرية
+                </div>
+                <div style={{ fontSize: 11, color: "var(--muted)" }}>
+                  وفّر أكثر مع دخول غير محدود وخصومات على الغرف
+                </div>
               </div>
-              <div style={{ fontSize: 11, color: "var(--muted)" }}>
-                وفّر أكثر مع دخول غير محدود وخصومات على الغرف
-              </div>
-            </div>
-          )}
+            )}
+          </div>
+
+          {/* ── كود الدخول ── */}
           <div className="section-title">كود الدخول</div>
           <div
             className="card"
@@ -1817,13 +1882,13 @@ export default function ClientDashboard() {
               اعرض هذا الكود عند الدخول والخروج
             </div>
           </div>
-          {/* ── كارت برنامج الدعوة ── */}
+
+          {/* ── برنامج الدعوة ── */}
           {user?.referral_code && (
             <div className="card fade-up" style={{ marginBottom: 12 }}>
               <div style={{ fontWeight: 700, marginBottom: 12, fontSize: 14 }}>
                 🎁 برنامج الدعوة
               </div>
-
               <div
                 style={{
                   background: "rgba(0,212,170,0.08)",
@@ -1873,7 +1938,6 @@ export default function ClientDashboard() {
                   </button>
                 </div>
               </div>
-
               <div
                 style={{
                   display: "grid",
@@ -1924,7 +1988,6 @@ export default function ClientDashboard() {
                   </div>
                 </div>
               </div>
-
               {user?.referred_by_name && (
                 <div
                   style={{
@@ -1945,6 +2008,8 @@ export default function ClientDashboard() {
               )}
             </div>
           )}
+
+          {/* ── الجلسة الحالية ── */}
           {activeSession && (
             <>
               <div className="section-title">الجلسة الحالية</div>
@@ -2002,6 +2067,7 @@ export default function ClientDashboard() {
             </>
           )}
 
+          {/* ── آخر الفواتير ── */}
           <div
             style={{
               display: "flex",
@@ -2027,7 +2093,6 @@ export default function ClientDashboard() {
               عرض الكل
             </button>
           </div>
-
           {loadingRecentInvoices ? (
             <div
               style={{
@@ -2064,6 +2129,7 @@ export default function ClientDashboard() {
             </div>
           )}
 
+          {/* ── الكوبونات ── */}
           <div className="section-title">الكوبونات</div>
           {coupons.length === 0 && (
             <div
