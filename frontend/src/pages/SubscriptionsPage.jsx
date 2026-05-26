@@ -454,8 +454,8 @@ export default function SubscriptionsPage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState("plans"); // plans | active
 
-  const activeSubs = subscriptions.filter(s => s.status === 'active');
-  const pastSubs = subscriptions.filter(s => s.status !== 'active');
+  // const activeSubs = subscriptions.filter(s => s.status === 'active');
+  // const pastSubs = subscriptions.filter(s => s.status !== 'active');
 
   const [plans, setPlans] = useState([]);
   const [activeSubs, setActiveSubs] = useState([]);
