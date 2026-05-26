@@ -35,6 +35,9 @@ function ProgressBar({ value, max }) {
 
 const SPACE_ICONS = { cowork: "🖥️", meeting: "🤝", lessons: "📚" };
 
+const [showPastSubs, setShowPastSubs] = useState(false);
+const [pastSubscriptions, setPastSubscriptions] = useState([]);
+
 // ── LiveTimer ─────────────────────────────────────────────────────────
 function LiveTimer({ checkIn, pricePerHr, maxHours = 4, spaceName, spaceKey }) {
   const [elapsed, setElapsed] = useState(0);
@@ -1221,6 +1224,8 @@ export default function ClientDashboard() {
       setCoupons(couponRes.data.coupons);
       setSubscription(subRes.data.subscription || null);
       setPastSubscription(subRes.data.past_subscription || null);
+      setPastSubscriptions(subRes.data.past_subscriptions || []);
+
     } catch {
       toast.error("خطأ في تحميل البيانات");
     } finally {
@@ -1775,6 +1780,90 @@ export default function ClientDashboard() {
                     💬 سبب الإلغاء: {pastSubscription.cancel_reason}
                   </div>
                 )}
+                {/* ── زر عرض كل الباقات السابقة ── */}
+{pastSubscriptions.length > 1 && (
+  <div style={{ marginBottom: 12 }}>
+    <button
+      onClick={() => setShowPastSubs(p => !p)}
+      style={{
+        width: "100%",
+        padding: "8px 14px",
+        borderRadius: 10,
+        border: "1px dashed rgba(255,255,255,0.15)",
+        background: "transparent",
+        color: "var(--muted)",
+        fontSize: 12,
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+      }}
+    >
+      <span>📋 كل الباقات السابقة ({pastSubscriptions.length})</span>
+      <span>{showPastSubs ? "▲" : "▼"}</span>
+    </button>
+
+    {showPastSubs && (
+      <div style={{
+        marginTop: 8,
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        maxHeight: 320,
+        overflowY: "auto",
+        padding: "4px 2px",
+      }}>
+        {pastSubscriptions.map((ps, i) => (
+          <div key={ps.id} style={{
+            padding: "12px 14px",
+            background: "rgba(255,255,255,0.02)",
+            border: "1px solid rgba(255,255,255,0.07)",
+            borderRadius: 12,
+            opacity: i === 0 ? 1 : 0.7,
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: "var(--muted)" }}>
+                📋 {ps.plan_name}
+              </div>
+              <span style={{
+                fontSize: 10,
+                padding: "2px 8px",
+                borderRadius: 20,
+                fontWeight: 700,
+                background: ps.status === "cancelled" ? "rgba(255,71,87,0.12)" : "rgba(255,165,2,0.12)",
+                color: ps.status === "cancelled" ? "#ff4757" : "var(--warning)",
+                border: `1px solid ${ps.status === "cancelled" ? "rgba(255,71,87,0.3)" : "rgba(255,165,2,0.3)"}`,
+              }}>
+                {ps.status === "cancelled" ? "🚫 ملغي" : "⏰ منتهي"}
+              </span>
+            </div>
+            <div style={{ fontSize: 11, color: "var(--muted)" }}>
+              انتهى:{" "}
+              <strong style={{ color: "var(--text)" }}>
+                {new Date(ps.end_date).toLocaleDateString("ar-EG", {
+                  year: "numeric", month: "long", day: "numeric"
+                })}
+              </strong>
+            </div>
+            {ps.cancel_reason && (
+              <div style={{
+                marginTop: 6,
+                padding: "6px 10px",
+                background: "rgba(255,71,87,0.06)",
+                border: "1px solid rgba(255,71,87,0.15)",
+                borderRadius: 8,
+                fontSize: 11,
+                color: "#ff4757",
+              }}>
+                💬 {ps.cancel_reason}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+)}
                 <div
                   style={{
                     fontSize: 11,
@@ -1788,6 +1877,7 @@ export default function ClientDashboard() {
                   تواصل معنا لتجديد اشتراكك 📞
                 </div>
               </div>
+              
             ) : (
               /* لا يوجد اشتراك */
               <div

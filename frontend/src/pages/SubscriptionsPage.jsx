@@ -559,7 +559,7 @@ export default function SubscriptionsPage() {
       );
       toast.success("تم إلغاء الاشتراك");
       setCancelModal(null);
-      fetchSubscriptions(); // 👈 أضف هذا السطر هنا لتحديث البيانات
+      // fetchSubscriptions(); // 👈 أضف هذا السطر هنا لتحديث البيانات
       setCancelReason("");
       loadActiveSubs();
     } catch {

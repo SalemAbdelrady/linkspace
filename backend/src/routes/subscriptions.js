@@ -68,7 +68,6 @@ router.delete('/plans/:id', ...isAdmin, async (req, res) => {
 // GET /api/subscriptions/my — اشتراكي الحالي + السابق
 router.get('/my', auth, async (req, res) => {
   try {
-    // الاشتراك النشط
     const { rows: active } = await db.query(`
       SELECT us.*, sp.name AS plan_name, sp.price AS plan_price,
              sp.covers_cowork, sp.discount_rooms, sp.features
@@ -78,8 +77,7 @@ router.get('/my', auth, async (req, res) => {
       ORDER BY us.created_at DESC LIMIT 1
     `, [req.user.id]);
 
-    // آخر اشتراك منتهي أو ملغي
-    const { rows: past } = await db.query(`
+    const { rows: pastAll } = await db.query(`
       SELECT us.*, sp.name AS plan_name, sp.price AS plan_price
       FROM user_subscriptions us
       JOIN subscription_plans sp ON sp.id = us.plan_id
@@ -88,12 +86,13 @@ router.get('/my', auth, async (req, res) => {
           us.status IN ('cancelled', 'expired')
           OR (us.status = 'active' AND us.end_date < NOW())
         )
-      ORDER BY COALESCE(us.cancelled_at, us.end_date) DESC LIMIT 1
+      ORDER BY COALESCE(us.cancelled_at, us.end_date) DESC
     `, [req.user.id]);
 
     res.json({
       subscription: active[0] || null,
-      past_subscription: past[0] || null,
+      past_subscription: pastAll[0] || null,
+      past_subscriptions: pastAll,
     });
   } catch (err) {
     console.error(err);
