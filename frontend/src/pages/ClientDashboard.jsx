@@ -1,17 +1,11 @@
 import React, { useEffect, useState, useRef } from "react";
-import api,{
-  sessionsAPI,
-  couponsAPI,
-  spacesAPI,
-  invoicesAPI,
-  servicesAPI,
-} from "../utils/api";
+import api, { sessionsAPI, couponsAPI, spacesAPI, invoicesAPI, servicesAPI } from "../utils/api";
+
 import { useAuth } from "../context/AuthContext";
 import { QRCodeSVG } from "qrcode.react";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
-//import api from "../utils/api";
 import { useNavigate } from "react-router-dom";
 
 // ── ProgressBar ───────────────────────────────────────────────────────
