@@ -1,5 +1,11 @@
 import React, { useEffect, useState, useRef } from "react";
-import api, { sessionsAPI, couponsAPI, spacesAPI, invoicesAPI, servicesAPI } from "../utils/api";
+import api, {
+  sessionsAPI,
+  couponsAPI,
+  spacesAPI,
+  invoicesAPI,
+  servicesAPI,
+} from "../utils/api";
 
 import { useAuth } from "../context/AuthContext";
 import { QRCodeSVG } from "qrcode.react";
@@ -900,142 +906,137 @@ function memberSince(dateStr) {
   return months > 0 ? `${years} سنة و${months} شهر` : `${years} سنة`;
 }
 
-  // ── InvoiceCard ───────────────────────────────────────────────────────
-  function InvoiceCard({ inv, onClick }) {
-    const services =
-      typeof inv.services === "string"
-        ? JSON.parse(inv.services)
-        : inv.services || [];
-    const icon = SPACE_ICONS[inv.space_key] || "🏢";
-    const name = inv.space_name || "منطقة العمل المشتركة";
-    const walletPaid = parseFloat(inv.wallet_paid || 0);
-    const cashPaid = parseFloat(inv.cash_paid || 0);
-    const method = inv.payment_method;
+// ── InvoiceCard ───────────────────────────────────────────────────────
+function InvoiceCard({ inv, onClick }) {
+  const services =
+    typeof inv.services === "string"
+      ? JSON.parse(inv.services)
+      : inv.services || [];
+  const icon = SPACE_ICONS[inv.space_key] || "🏢";
+  const name = inv.space_name || "منطقة العمل المشتركة";
+  const walletPaid = parseFloat(inv.wallet_paid || 0);
+  const cashPaid = parseFloat(inv.cash_paid || 0);
+  const method = inv.payment_method;
 
-    return (
+  return (
+    <div
+      className="card"
+      style={{ cursor: "pointer", marginBottom: 10 }}
+      onClick={onClick}
+    >
       <div
-        className="card"
-        style={{ cursor: "pointer", marginBottom: 10 }}
-        onClick={onClick}
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+        }}
       >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-          }}
-        >
-          <div style={{ flex: 1 }}>
-            <div
+        <div style={{ flex: 1 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 4,
+            }}
+          >
+            <span
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                marginBottom: 4,
+                fontFamily: "var(--mono)",
+                fontSize: 12,
+                color: "var(--accent)",
+                fontWeight: 700,
               }}
             >
-              <span
-                style={{
-                  fontFamily: "var(--mono)",
-                  fontSize: 12,
-                  color: "var(--accent)",
-                  fontWeight: 700,
-                }}
-              >
-                #{inv.invoice_number}
+              #{inv.invoice_number}
+            </span>
+            <span style={{ fontSize: 11, color: "var(--muted)" }}>
+              {new Date(inv.created_at).toLocaleDateString("ar-EG", {
+                month: "short",
+                day: "numeric",
+              })}{" "}
+              {new Date(inv.created_at).toLocaleTimeString("ar-EG", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+            {icon} {name}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+            {method === "subscription" ? (
+              <span className="badge badge-success" style={{ fontSize: 10 }}>
+                📋 اشتراك شهري
               </span>
-              <span style={{ fontSize: 11, color: "var(--muted)" }}>
-                {new Date(inv.created_at).toLocaleDateString("ar-EG", {
-                  month: "short",
-                  day: "numeric",
-                })}{" "}
-                {new Date(inv.created_at).toLocaleTimeString("ar-EG", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-              {icon} {name}
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-              {method === "subscription" ? (
-                <span className="badge badge-success" style={{ fontSize: 10 }}>
-                  📋 اشتراك شهري
-                </span>
-              ) : walletPaid > 0 && cashPaid > 0 ? (
-                <>
-                  <span className="badge badge-info" style={{ fontSize: 10 }}>
-                    💳 {walletPaid.toFixed(2)} ج محفظة
-                  </span>
-                  <span
-                    className="badge badge-warning"
-                    style={{ fontSize: 10 }}
-                  >
-                    💵 {cashPaid.toFixed(2)} ج كاش
-                  </span>
-                </>
-              ) : walletPaid > 0 ? (
+            ) : walletPaid > 0 && cashPaid > 0 ? (
+              <>
                 <span className="badge badge-info" style={{ fontSize: 10 }}>
                   💳 {walletPaid.toFixed(2)} ج محفظة
                 </span>
-              ) : (
                 <span className="badge badge-warning" style={{ fontSize: 10 }}>
-                  💵 {parseFloat(inv.total).toFixed(2)} ج كاش
+                  💵 {cashPaid.toFixed(2)} ج كاش
                 </span>
-              )}
-              {services.length > 0 && (
-                <span
-                  style={{
-                    fontSize: 10,
-                    color: "var(--muted)",
-                    padding: "2px 6px",
-                    background: "rgba(255,255,255,0.05)",
-                    borderRadius: 6,
-                  }}
-                >
-                  ☕ {services.length} خدمة
-                </span>
-              )}
-              {inv.coupon_code && (
-                <span
-                  style={{
-                    fontSize: 10,
-                    color: "var(--success)",
-                    padding: "2px 6px",
-                    background: "rgba(46,213,115,0.08)",
-                    borderRadius: 6,
-                  }}
-                >
-                  🎫 {inv.coupon_code}
-                </span>
-              )}
-            </div>
-          </div>
-          <div style={{ textAlign: "left", marginRight: 8 }}>
-            <div
-              style={{ fontSize: 20, fontWeight: 700, color: "var(--accent)" }}
-            >
-              {parseFloat(inv.total) === 0 ? (
-                <span style={{ fontSize: 14, color: "var(--success)" }}>
-                  مجاناً
-                </span>
-              ) : (
-                `${parseFloat(inv.total).toFixed(2)} ج`
-              )}
-            </div>
-            {inv.duration_min > 0 && (
-              <div
-                style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}
+              </>
+            ) : walletPaid > 0 ? (
+              <span className="badge badge-info" style={{ fontSize: 10 }}>
+                💳 {walletPaid.toFixed(2)} ج محفظة
+              </span>
+            ) : (
+              <span className="badge badge-warning" style={{ fontSize: 10 }}>
+                💵 {parseFloat(inv.total).toFixed(2)} ج كاش
+              </span>
+            )}
+            {services.length > 0 && (
+              <span
+                style={{
+                  fontSize: 10,
+                  color: "var(--muted)",
+                  padding: "2px 6px",
+                  background: "rgba(255,255,255,0.05)",
+                  borderRadius: 6,
+                }}
               >
-                ⏱ {inv.duration_min} د
-              </div>
+                ☕ {services.length} خدمة
+              </span>
+            )}
+            {inv.coupon_code && (
+              <span
+                style={{
+                  fontSize: 10,
+                  color: "var(--success)",
+                  padding: "2px 6px",
+                  background: "rgba(46,213,115,0.08)",
+                  borderRadius: 6,
+                }}
+              >
+                🎫 {inv.coupon_code}
+              </span>
             )}
           </div>
         </div>
+        <div style={{ textAlign: "left", marginRight: 8 }}>
+          <div
+            style={{ fontSize: 20, fontWeight: 700, color: "var(--accent)" }}
+          >
+            {parseFloat(inv.total) === 0 ? (
+              <span style={{ fontSize: 14, color: "var(--success)" }}>
+                مجاناً
+              </span>
+            ) : (
+              `${parseFloat(inv.total).toFixed(2)} ج`
+            )}
+          </div>
+          {inv.duration_min > 0 && (
+            <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
+              ⏱ {inv.duration_min} د
+            </div>
+          )}
+        </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
 // ── ClientDashboard ───────────────────────────────────────────────────
 export default function ClientDashboard() {
@@ -1225,7 +1226,6 @@ export default function ClientDashboard() {
       setSubscription(subRes.data.subscription || null);
       setPastSubscription(subRes.data.past_subscription || null);
       setPastSubscriptions(subRes.data.past_subscriptions || []);
-
     } catch {
       toast.error("خطأ في تحميل البيانات");
     } finally {
@@ -1781,89 +1781,128 @@ export default function ClientDashboard() {
                   </div>
                 )}
                 {/* ── زر عرض كل الباقات السابقة ── */}
-{pastSubscriptions.length > 1 && (
-  <div style={{ marginBottom: 12 }}>
-    <button
-      onClick={() => setShowPastSubs(p => !p)}
-      style={{
-        width: "100%",
-        padding: "8px 14px",
-        borderRadius: 10,
-        border: "1px dashed rgba(255,255,255,0.15)",
-        background: "transparent",
-        color: "var(--muted)",
-        fontSize: 12,
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-      }}
-    >
-      <span>📋 كل الباقات السابقة ({pastSubscriptions.length})</span>
-      <span>{showPastSubs ? "▲" : "▼"}</span>
-    </button>
+                {pastSubscriptions.length > 1 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <button
+                      onClick={() => setShowPastSubs((p) => !p)}
+                      style={{
+                        width: "100%",
+                        padding: "8px 14px",
+                        borderRadius: 10,
+                        border: "1px dashed rgba(255,255,255,0.15)",
+                        background: "transparent",
+                        color: "var(--muted)",
+                        fontSize: 12,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                      }}
+                    >
+                      <span>
+                        📋 كل الباقات السابقة ({pastSubscriptions.length})
+                      </span>
+                      <span>{showPastSubs ? "▲" : "▼"}</span>
+                    </button>
 
-    {showPastSubs && (
-      <div style={{
-        marginTop: 8,
-        display: "flex",
-        flexDirection: "column",
-        gap: 8,
-        maxHeight: 320,
-        overflowY: "auto",
-        padding: "4px 2px",
-      }}>
-        {pastSubscriptions.map((ps, i) => (
-          <div key={ps.id} style={{
-            padding: "12px 14px",
-            background: "rgba(255,255,255,0.02)",
-            border: "1px solid rgba(255,255,255,0.07)",
-            borderRadius: 12,
-            opacity: i === 0 ? 1 : 0.7,
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <div style={{ fontWeight: 700, fontSize: 13, color: "var(--muted)" }}>
-                📋 {ps.plan_name}
-              </div>
-              <span style={{
-                fontSize: 10,
-                padding: "2px 8px",
-                borderRadius: 20,
-                fontWeight: 700,
-                background: ps.status === "cancelled" ? "rgba(255,71,87,0.12)" : "rgba(255,165,2,0.12)",
-                color: ps.status === "cancelled" ? "#ff4757" : "var(--warning)",
-                border: `1px solid ${ps.status === "cancelled" ? "rgba(255,71,87,0.3)" : "rgba(255,165,2,0.3)"}`,
-              }}>
-                {ps.status === "cancelled" ? "🚫 ملغي" : "⏰ منتهي"}
-              </span>
-            </div>
-            <div style={{ fontSize: 11, color: "var(--muted)" }}>
-              انتهى:{" "}
-              <strong style={{ color: "var(--text)" }}>
-                {new Date(ps.end_date).toLocaleDateString("ar-EG", {
-                  year: "numeric", month: "long", day: "numeric"
-                })}
-              </strong>
-            </div>
-            {ps.cancel_reason && (
-              <div style={{
-                marginTop: 6,
-                padding: "6px 10px",
-                background: "rgba(255,71,87,0.06)",
-                border: "1px solid rgba(255,71,87,0.15)",
-                borderRadius: 8,
-                fontSize: 11,
-                color: "#ff4757",
-              }}>
-                💬 {ps.cancel_reason}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    )}
-  </div>
-)}
+                    {showPastSubs && (
+                      <div
+                        style={{
+                          marginTop: 8,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 8,
+                          maxHeight: 320,
+                          overflowY: "auto",
+                          padding: "4px 2px",
+                        }}
+                      >
+                        {pastSubscriptions.map((ps, i) => (
+                          <div
+                            key={ps.id}
+                            style={{
+                              padding: "12px 14px",
+                              background: "rgba(255,255,255,0.02)",
+                              border: "1px solid rgba(255,255,255,0.07)",
+                              borderRadius: 12,
+                              opacity: i === 0 ? 1 : 0.7,
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                marginBottom: 6,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  fontWeight: 700,
+                                  fontSize: 13,
+                                  color: "var(--muted)",
+                                }}
+                              >
+                                📋 {ps.plan_name}
+                              </div>
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  padding: "2px 8px",
+                                  borderRadius: 20,
+                                  fontWeight: 700,
+                                  background:
+                                    ps.status === "cancelled"
+                                      ? "rgba(255,71,87,0.12)"
+                                      : "rgba(255,165,2,0.12)",
+                                  color:
+                                    ps.status === "cancelled"
+                                      ? "#ff4757"
+                                      : "var(--warning)",
+                                  border: `1px solid ${ps.status === "cancelled" ? "rgba(255,71,87,0.3)" : "rgba(255,165,2,0.3)"}`,
+                                }}
+                              >
+                                {ps.status === "cancelled"
+                                  ? "🚫 ملغي"
+                                  : "⏰ منتهي"}
+                              </span>
+                            </div>
+                            <div
+                              style={{ fontSize: 11, color: "var(--muted)" }}
+                            >
+                              انتهى:{" "}
+                              <strong style={{ color: "var(--text)" }}>
+                                {new Date(ps.end_date).toLocaleDateString(
+                                  "ar-EG",
+                                  {
+                                    year: "numeric",
+                                    month: "long",
+                                    day: "numeric",
+                                  },
+                                )}
+                              </strong>
+                            </div>
+                            {ps.cancel_reason && (
+                              <div
+                                style={{
+                                  marginTop: 6,
+                                  padding: "6px 10px",
+                                  background: "rgba(255,71,87,0.06)",
+                                  border: "1px solid rgba(255,71,87,0.15)",
+                                  borderRadius: 8,
+                                  fontSize: 11,
+                                  color: "#ff4757",
+                                }}
+                              >
+                                💬 {ps.cancel_reason}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div
                   style={{
                     fontSize: 11,
@@ -1877,7 +1916,6 @@ export default function ClientDashboard() {
                   تواصل معنا لتجديد اشتراكك 📞
                 </div>
               </div>
-              
             ) : (
               /* لا يوجد اشتراك */
               <div
