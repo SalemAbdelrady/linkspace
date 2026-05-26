@@ -84,7 +84,7 @@ router.get('/my', auth, async (req, res) => {
       FROM user_subscriptions us
       JOIN subscription_plans sp ON sp.id = us.plan_id
       WHERE us.user_id = $1 AND us.status IN ('cancelled', 'expired')
-      ORDER BY us.cancelled_at DESC, us.end_date DESC LIMIT 1
+      ORDER BY COALESCE(us.cancelled_at, us.end_date) DESC LIMIT 1
     `, [req.user.id]);
 
     res.json({
@@ -267,9 +267,14 @@ router.post('/cancel/:id', ...isAdmin, async (req, res) => {
     }
 
     // 2. ألغِ الاشتراك
+    const { cancel_reason } = req.body;
     await client.query(
-      `UPDATE user_subscriptions SET status = 'cancelled', end_date = NOW() WHERE id = $1`,
-      [req.params.id]
+      `UPDATE user_subscriptions 
+      SET status = 'cancelled', 
+          cancelled_at = NOW(),
+          cancel_reason = $1
+      WHERE id = $2`,
+      [cancel_reason || null, req.params.id]
     );
 
     // 3. ✅ أغلق أي جلسة نشطة مرتبطة بهذا الاشتراك أو بنفس العميل
