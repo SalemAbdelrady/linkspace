@@ -903,6 +903,143 @@ function memberSince(dateStr) {
   return months > 0 ? `${years} سنة و${months} شهر` : `${years} سنة`;
 }
 
+  // ── InvoiceCard ───────────────────────────────────────────────────────
+  function InvoiceCard({ inv, onClick }) {
+    const services =
+      typeof inv.services === "string"
+        ? JSON.parse(inv.services)
+        : inv.services || [];
+    const icon = SPACE_ICONS[inv.space_key] || "🏢";
+    const name = inv.space_name || "منطقة العمل المشتركة";
+    const walletPaid = parseFloat(inv.wallet_paid || 0);
+    const cashPaid = parseFloat(inv.cash_paid || 0);
+    const method = inv.payment_method;
+
+    return (
+      <div
+        className="card"
+        style={{ cursor: "pointer", marginBottom: 10 }}
+        onClick={onClick}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+          }}
+        >
+          <div style={{ flex: 1 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 4,
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--mono)",
+                  fontSize: 12,
+                  color: "var(--accent)",
+                  fontWeight: 700,
+                }}
+              >
+                #{inv.invoice_number}
+              </span>
+              <span style={{ fontSize: 11, color: "var(--muted)" }}>
+                {new Date(inv.created_at).toLocaleDateString("ar-EG", {
+                  month: "short",
+                  day: "numeric",
+                })}{" "}
+                {new Date(inv.created_at).toLocaleTimeString("ar-EG", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+              {icon} {name}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+              {method === "subscription" ? (
+                <span className="badge badge-success" style={{ fontSize: 10 }}>
+                  📋 اشتراك شهري
+                </span>
+              ) : walletPaid > 0 && cashPaid > 0 ? (
+                <>
+                  <span className="badge badge-info" style={{ fontSize: 10 }}>
+                    💳 {walletPaid.toFixed(2)} ج محفظة
+                  </span>
+                  <span
+                    className="badge badge-warning"
+                    style={{ fontSize: 10 }}
+                  >
+                    💵 {cashPaid.toFixed(2)} ج كاش
+                  </span>
+                </>
+              ) : walletPaid > 0 ? (
+                <span className="badge badge-info" style={{ fontSize: 10 }}>
+                  💳 {walletPaid.toFixed(2)} ج محفظة
+                </span>
+              ) : (
+                <span className="badge badge-warning" style={{ fontSize: 10 }}>
+                  💵 {parseFloat(inv.total).toFixed(2)} ج كاش
+                </span>
+              )}
+              {services.length > 0 && (
+                <span
+                  style={{
+                    fontSize: 10,
+                    color: "var(--muted)",
+                    padding: "2px 6px",
+                    background: "rgba(255,255,255,0.05)",
+                    borderRadius: 6,
+                  }}
+                >
+                  ☕ {services.length} خدمة
+                </span>
+              )}
+              {inv.coupon_code && (
+                <span
+                  style={{
+                    fontSize: 10,
+                    color: "var(--success)",
+                    padding: "2px 6px",
+                    background: "rgba(46,213,115,0.08)",
+                    borderRadius: 6,
+                  }}
+                >
+                  🎫 {inv.coupon_code}
+                </span>
+              )}
+            </div>
+          </div>
+          <div style={{ textAlign: "left", marginRight: 8 }}>
+            <div
+              style={{ fontSize: 20, fontWeight: 700, color: "var(--accent)" }}
+            >
+              {parseFloat(inv.total) === 0 ? (
+                <span style={{ fontSize: 14, color: "var(--success)" }}>
+                  مجاناً
+                </span>
+              ) : (
+                `${parseFloat(inv.total).toFixed(2)} ج`
+              )}
+            </div>
+            {inv.duration_min > 0 && (
+              <div
+                style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}
+              >
+                ⏱ {inv.duration_min} د
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
 // ── ClientDashboard ───────────────────────────────────────────────────
 export default function ClientDashboard() {
   const { user, logout } = useAuth();
@@ -1151,143 +1288,6 @@ export default function ClientDashboard() {
     .map((w) => w[0])
     .join("");
   const totalInvoicePages = Math.ceil(invoiceTotal / 10);
-
-  // ── InvoiceCard ───────────────────────────────────────────────────────
-  function InvoiceCard({ inv, onClick }) {
-    const services =
-      typeof inv.services === "string"
-        ? JSON.parse(inv.services)
-        : inv.services || [];
-    const icon = SPACE_ICONS[inv.space_key] || "🏢";
-    const name = inv.space_name || "منطقة العمل المشتركة";
-    const walletPaid = parseFloat(inv.wallet_paid || 0);
-    const cashPaid = parseFloat(inv.cash_paid || 0);
-    const method = inv.payment_method;
-
-    return (
-      <div
-        className="card"
-        style={{ cursor: "pointer", marginBottom: 10 }}
-        onClick={onClick}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-          }}
-        >
-          <div style={{ flex: 1 }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                marginBottom: 4,
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: "var(--mono)",
-                  fontSize: 12,
-                  color: "var(--accent)",
-                  fontWeight: 700,
-                }}
-              >
-                #{inv.invoice_number}
-              </span>
-              <span style={{ fontSize: 11, color: "var(--muted)" }}>
-                {new Date(inv.created_at).toLocaleDateString("ar-EG", {
-                  month: "short",
-                  day: "numeric",
-                })}{" "}
-                {new Date(inv.created_at).toLocaleTimeString("ar-EG", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-            </div>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-              {icon} {name}
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-              {method === "subscription" ? (
-                <span className="badge badge-success" style={{ fontSize: 10 }}>
-                  📋 اشتراك شهري
-                </span>
-              ) : walletPaid > 0 && cashPaid > 0 ? (
-                <>
-                  <span className="badge badge-info" style={{ fontSize: 10 }}>
-                    💳 {walletPaid.toFixed(2)} ج محفظة
-                  </span>
-                  <span
-                    className="badge badge-warning"
-                    style={{ fontSize: 10 }}
-                  >
-                    💵 {cashPaid.toFixed(2)} ج كاش
-                  </span>
-                </>
-              ) : walletPaid > 0 ? (
-                <span className="badge badge-info" style={{ fontSize: 10 }}>
-                  💳 {walletPaid.toFixed(2)} ج محفظة
-                </span>
-              ) : (
-                <span className="badge badge-warning" style={{ fontSize: 10 }}>
-                  💵 {parseFloat(inv.total).toFixed(2)} ج كاش
-                </span>
-              )}
-              {services.length > 0 && (
-                <span
-                  style={{
-                    fontSize: 10,
-                    color: "var(--muted)",
-                    padding: "2px 6px",
-                    background: "rgba(255,255,255,0.05)",
-                    borderRadius: 6,
-                  }}
-                >
-                  ☕ {services.length} خدمة
-                </span>
-              )}
-              {inv.coupon_code && (
-                <span
-                  style={{
-                    fontSize: 10,
-                    color: "var(--success)",
-                    padding: "2px 6px",
-                    background: "rgba(46,213,115,0.08)",
-                    borderRadius: 6,
-                  }}
-                >
-                  🎫 {inv.coupon_code}
-                </span>
-              )}
-            </div>
-          </div>
-          <div style={{ textAlign: "left", marginRight: 8 }}>
-            <div
-              style={{ fontSize: 20, fontWeight: 700, color: "var(--accent)" }}
-            >
-              {parseFloat(inv.total) === 0 ? (
-                <span style={{ fontSize: 14, color: "var(--success)" }}>
-                  مجاناً
-                </span>
-              ) : (
-                `${parseFloat(inv.total).toFixed(2)} ج`
-              )}
-            </div>
-            {inv.duration_min > 0 && (
-              <div
-                style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}
-              >
-                ⏱ {inv.duration_min} د
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // ── Render ────────────────────────────────────────────────────────────
   return (
