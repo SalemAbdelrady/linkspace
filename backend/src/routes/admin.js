@@ -3,7 +3,9 @@ const db = require("../config/db");
 const bcrypt = require("bcryptjs"); // ✅ في الأعلى مش جوف الـ route
 const QRCode = require("qrcode");
 const { auth, requireRole } = require("../middleware/auth");
-const { requirePermission } = require("../middleware/permissions");
+const { requirePermission }              = require("../middleware/permissions");
+const { extractPermissions,
+        upsertPermissions }              = require("../utils/staffPermissions");
 
 const isAdmin = [auth, requireRole("admin")];
 const isStaffOrAdmin = [auth, requireRole("staff", "admin")];
@@ -343,17 +345,25 @@ router.put(
   },
 );
 
-// GET /api/admin/staff — قائمة الموظفين
+// ─── Staff routes ────────────────────────────────────────────────────────────
+// GET  /api/admin/staff         → مُوحَّد في /api/staff (staff.js)
+// POST /api/admin/staff         → مُوحَّد في /api/staff (staff.js)
+// الـ endpoints دي محتفظ بيها هنا فقط للـ backward compatibility
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/admin/staff — يعيد التوجيه للـ staff router
 router.get("/staff", ...isStaffOrAdmin, async (req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT
-        id, name, phone, role, is_active,
-        can_charge_wallet, can_add_points,
-        can_edit_prices, can_create_coupons, can_view_reports
-      FROM users
-      WHERE role IN ('admin', 'staff')
-      ORDER BY role DESC, name ASC
+        u.id, u.name, u.phone, u.role, u.is_active, u.created_at,
+        sp.can_charge_wallet, sp.can_add_points,
+        sp.can_edit_prices,   sp.can_create_coupons,
+        sp.can_view_reports,  sp.can_view_all
+      FROM users u
+      LEFT JOIN staff_permissions sp ON sp.user_id = u.id
+      WHERE u.role IN ('admin', 'staff')
+      ORDER BY u.role DESC, u.name ASC
     `);
     res.json({ staff: rows });
   } catch (err) {
@@ -362,32 +372,28 @@ router.get("/staff", ...isStaffOrAdmin, async (req, res) => {
   }
 });
 
-// POST /api/admin/staff — إضافة موظف جديد
+// POST /api/admin/staff — موحَّد مع staff.js (نفس المنطق)
 router.post("/staff", ...isAdmin, async (req, res) => {
-  const { name, phone, password, role = "staff" } = req.body;
+  const { name, phone, password, role = "staff", email } = req.body;
   if (!name || !phone || !password)
     return res.status(400).json({ error: "أدخل الاسم والموبايل وكلمة السر" });
   if (!["staff", "admin"].includes(role))
     return res.status(400).json({ error: "دور غير صحيح" });
 
   try {
-    // ✅ bcrypt في أعلى الملف — لا مشكلة هنا
-    const hash = await bcrypt.hash(password, 10);
+    const hash = await bcrypt.hash(password, 12);
     const { rows } = await db.query(
-      `
-      INSERT INTO users (name, phone, password, role)
-      VALUES ($1, $2, $3, $4)
-      RETURNING id, name, phone, role, is_active,
-                can_charge_wallet, can_add_points,
-                can_edit_prices, can_create_coupons, can_view_reports
-    `,
-      [name, phone, hash, role],
+      `INSERT INTO users (name, phone, password, email, role)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, name, phone, email, role, is_active, created_at`,
+      [name, phone, hash, email || null, role]
     );
-    res.status(201).json({ staff: rows[0] });
+    const newStaff = rows[0];
+    await upsertPermissions(newStaff.id, extractPermissions(req.body));
+    res.status(201).json({ staff: newStaff });
   } catch (err) {
-    if (err.code === "23505") {
+    if (err.code === "23505")
       return res.status(400).json({ error: "رقم الموبايل مسجل مسبقاً" });
-    }
     console.error(err);
     res.status(500).json({ error: "خطأ في الخادم" });
   }
@@ -407,38 +413,13 @@ router.patch("/staff/:id/toggle", ...isAdmin, async (req, res) => {
   }
 });
 
-// PATCH /api/admin/staff/:id/permissions — تعديل صلاحيات موظف
+// PATCH /api/admin/staff/:id/permissions — موحَّد مع staffPermissions util
 router.patch("/staff/:id/permissions", ...isAdmin, async (req, res) => {
-  const {
-    can_charge_wallet = false,
-    can_add_points = false,
-    can_edit_prices = false,
-    can_create_coupons = false,
-    can_view_reports = false,
-  } = req.body;
-
   try {
-    await db.query(
-      `
-      UPDATE users
-      SET can_charge_wallet  = $1,
-          can_add_points     = $2,
-          can_edit_prices    = $3,
-          can_create_coupons = $4,
-          can_view_reports   = $5
-      WHERE id = $6 AND role = 'staff'
-    `,
-      [
-        can_charge_wallet,
-        can_add_points,
-        can_edit_prices,
-        can_create_coupons,
-        can_view_reports,
-        req.params.id,
-      ],
-    );
+    await upsertPermissions(req.params.id, extractPermissions(req.body));
     res.json({ success: true });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "خطأ في الخادم" });
   }
 });

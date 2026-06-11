@@ -6,7 +6,10 @@
 const router = require('express').Router();
 const db     = require('../config/db');
 const bcrypt = require('bcrypt');
-const { auth, requireRole } = require('../middleware/auth');
+const { auth, requireRole }              = require('../middleware/auth');
+const { extractPermissions,
+        createPermissions,
+        upsertPermissions }              = require('../utils/staffPermissions');
 
 const isAdmin        = [auth, requireRole('admin')];
 const isStaffOrAdmin = [auth, requireRole('staff', 'admin')];
@@ -44,11 +47,7 @@ router.get('/', ...isAdmin, async (req, res) => {
 
 // POST /api/staff — إنشاء حساب موظف جديد
 router.post('/', ...isAdmin, async (req, res) => {
-  const { name, phone, password, email,
-          can_view_all = false,
-          can_edit_prices = false,
-          can_charge_wallet = true,
-          can_add_points = true } = req.body;
+  const { name, phone, password, email } = req.body;
 
   if (!name || !phone || !password) {
     return res.status(400).json({ error: 'الاسم والموبايل وكلمة السر مطلوبة' });
@@ -72,12 +71,8 @@ router.post('/', ...isAdmin, async (req, res) => {
 
     const newStaff = rows[0];
 
-    // إنشاء صلاحياته
-    await db.query(`
-      INSERT INTO staff_permissions
-        (user_id, can_view_all, can_edit_prices, can_charge_wallet, can_add_points)
-      VALUES ($1, $2, $3, $4, $5)
-    `, [newStaff.id, can_view_all, can_edit_prices, can_charge_wallet, can_add_points]);
+    // إنشاء صلاحياته — عبر الـ util الموحَّد
+    await createPermissions(newStaff.id, extractPermissions(req.body));
 
     res.status(201).json({ success: true, staff: newStaff });
   } catch (err) {
@@ -88,22 +83,8 @@ router.post('/', ...isAdmin, async (req, res) => {
 
 // PATCH /api/staff/:id/permissions — تعديل صلاحيات موظف (أدمن فقط)
 router.patch('/:id/permissions', ...isAdmin, async (req, res) => {
-  const { can_view_all, can_edit_prices, can_charge_wallet, can_add_points, notes } = req.body;
   try {
-    await db.query(`
-      INSERT INTO staff_permissions
-        (user_id, can_view_all, can_edit_prices, can_charge_wallet, can_add_points, notes)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      ON CONFLICT (user_id) DO UPDATE SET
-        can_view_all      = $2,
-        can_edit_prices   = $3,
-        can_charge_wallet = $4,
-        can_add_points    = $5,
-        notes             = $6,
-        updated_at        = NOW()
-    `, [req.params.id, can_view_all ?? false, can_edit_prices ?? false,
-        can_charge_wallet ?? true, can_add_points ?? true, notes || null]);
-
+    await upsertPermissions(req.params.id, extractPermissions(req.body));
     res.json({ success: true });
   } catch (err) {
     console.error(err);

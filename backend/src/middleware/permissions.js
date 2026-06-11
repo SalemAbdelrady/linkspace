@@ -1,29 +1,30 @@
-// backend/src/middleware/permissions.js
-// ✅ middleware للتحقق من صلاحيات الموظفين
+/**
+ * permissions.js middleware
+ * يستخدم staffPermissions util — مصدر واحد للحقيقة
+ */
 
-const db = require('../config/db');
+const { checkPermission, PERMISSION_KEYS } = require('../utils/staffPermissions');
 
 /**
  * requirePermission('can_edit_prices')
- * يسمح للـ admin دائماً
- * يسمح للـ staff فقط لو عنده الصلاحية المطلوبة في staff_permissions
+ * admin → يعدي دائماً
+ * staff → يتحقق من staff_permissions
  */
 function requirePermission(permission) {
+  if (!PERMISSION_KEYS.includes(permission)) {
+    throw new Error(`[permissions] صلاحية غير معروفة: ${permission}`);
+  }
+
   return async (req, res, next) => {
-    // الأدمن عنده كل الصلاحيات
     if (req.user.role === 'admin') return next();
 
-    // الـ staff — نتحقق من الجدول
     if (req.user.role === 'staff') {
       try {
-        const { rows } = await db.query(
-          `SELECT ${permission} FROM staff_permissions WHERE user_id = $1`,
-          [req.user.id]
-        );
-        if (rows[0]?.[permission] === true) return next();
+        const allowed = await checkPermission(req.user.id, permission);
+        if (allowed) return next();
         return res.status(403).json({ error: 'ليس لديك صلاحية لهذا الإجراء' });
       } catch (err) {
-        console.error(err);
+        console.error('[permissions middleware]', err);
         return res.status(500).json({ error: 'خطأ في التحقق من الصلاحيات' });
       }
     }
