@@ -195,9 +195,12 @@ router.post('/subscribe', ...isStaffOrAdmin, async (req, res) => {
       `, [user_id, walletPaid, `اشتراك ${plan.name}`]);
     }
 
-    // ✅ إنشاء الاشتراك — 29 يوم من اليوم
+    // مدة الاشتراك: من الباقة نفسها (duration_days) أو من متغير البيئة أو 29 يوماً كافتراضي
+    const subDays = plan.duration_days
+      || parseInt(process.env.SUBSCRIPTION_DURATION_DAYS)
+      || 29;
     const endDate = new Date();
-    endDate.setDate(endDate.getDate() + 29);
+    endDate.setDate(endDate.getDate() + subDays);
 
     const { rows: subRows } = await client.query(`
       INSERT INTO user_subscriptions
@@ -342,4 +345,3 @@ router.get('/check/:user_id', ...isStaffOrAdmin, async (req, res) => {
 });
 
 module.exports = router;
-

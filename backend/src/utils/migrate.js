@@ -126,7 +126,9 @@ async function migrate() {
     );
   `);
 
-  await db.query(`ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS covers_cowork BOOLEAN NOT NULL DEFAULT true;`);
+  await db.query(`ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS covers_cowork  BOOLEAN NOT NULL DEFAULT true;`);
+  // مدة الاشتراك قابلة للتخصيص لكل باقة — الافتراضي 29 يوماً
+  await db.query(`ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS duration_days INTEGER NOT NULL DEFAULT 29;`);
 
   await db.query(`
     DO $$
@@ -262,4 +264,3 @@ async function migrate() {
 }
 
 module.exports = migrate;
-

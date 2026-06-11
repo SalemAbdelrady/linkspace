@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5001/api',
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5002/api',
   timeout: 10000,
 });
 
@@ -49,7 +49,7 @@ export const sessionsAPI = {
 export const couponsAPI = {
   redeem:       ()     => api.post('/coupons/redeem'),
   myCoupons:    ()     => api.get('/coupons/my'),
-  validate:     (body) => api.post('/coupons/validate', body),
+  validate:     (code) => api.get(`/coupons/validate?code=${encodeURIComponent(code)}`),
   use:          (body) => api.post('/coupons/use', body),
   adminAll:     ()     => api.get('/coupons/admin/all'),
   adminCreate:  (body) => api.post('/coupons/admin/create', body),
@@ -139,3 +139,11 @@ export const quickSaleAPI = {
 };
 
 export default api;
+
+// Settings — نُقل من App.jsx لهنا عشان نحافظ على مبدأ فصل المسؤوليات
+export const settingsAPI = {
+  update         : (data)              => api.patch('/auth/settings', data),
+  changePassword : (data)              => api.patch('/auth/change-password', data),
+  forgotPassword : (email)             => api.post('/auth/forgot-password', { email }),
+  resetPassword  : (email, otp, pass)  => api.post('/auth/reset-password', { email, otp, new_password: pass }),
+};

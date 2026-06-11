@@ -49,14 +49,36 @@ app.use(helmet({
 }));
 
 // Rate limiting
-const limiter     = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
-const authLimiter = rateLimit({
+// 1) حد عام — كل الـ API: 200 طلب / 15 دقيقة
+const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
-  message: { error: 'محاولات كثيرة جداً، انتظر 15 دقيقة' },
+  max: 200,
+  message: { error: 'طلبات كثيرة جداً، انتظر قليلاً' },
 });
-app.use('/api/auth', authLimiter);
-app.use(limiter);
+
+// 2) حد صارم للـ login فقط — لمنع Brute Force على كلمة السر
+// 20 محاولة / 15 دقيقة لكل IP (كافية للاستخدام الطبيعي)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'محاولات دخول كثيرة جداً، انتظر 15 دقيقة' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// 3) حد صارم لـ forgot-password — لمنع إغراق الإيميل
+// 5 محاولات / ساعة لكل IP
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { error: 'تجاوزت الحد المسموح لطلبات استعادة كلمة السر، حاول بعد ساعة' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.use('/api/auth/forgot-password', forgotPasswordLimiter); // أصرم — يطبَّق أولاً
+app.use('/api/auth/login',           loginLimiter);           // Brute force protection
+app.use(limiter);                                              // عام على كل شيء
 
 // Body parsing & logging
 app.use(express.json({ limit: '10kb' }));

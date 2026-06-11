@@ -12,14 +12,8 @@ import InvoicePage from './pages/InvoicePage';
 import SettingsPage from './pages/SettingsPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import './index.css';
-import api from './utils/api';
-
-export const settingsAPI = {
-  update         : (data)              => api.patch('/auth/settings', data),
-  changePassword : (data)              => api.patch('/auth/change-password', data),
-  forgotPassword : (email)             => api.post('/auth/forgot-password', { email }),
-  resetPassword  : (email, otp, pass) => api.post('/auth/reset-password', { email, otp, new_password: pass }),
-};
+// settingsAPI نُقل إلى utils/api.js — استوردوه من هناك
+export { settingsAPI } from './utils/api';
 
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();

@@ -2,18 +2,6 @@ const router = require('express').Router();
 const db     = require('../config/db');
 const { auth, requireRole } = require('../middleware/auth');
 
-// ── migration guard ───────────────────────────────────────────────────
-;(async () => {
-  try {
-    await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS wallet_paid  NUMERIC(10,2) NOT NULL DEFAULT 0`);
-    await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS cash_paid    NUMERIC(10,2) NOT NULL DEFAULT 0`);
-    await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_key    VARCHAR(20)   DEFAULT 'cowork'`);
-    await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS space_name   VARCHAR(100)  DEFAULT 'منطقة العمل المشتركة'`);
-    await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL`);
-    await db.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS invoice_type VARCHAR(20)   DEFAULT 'session'`);
-  } catch (e) { /* الأعمدة موجودة مسبقاً */ }
-})();
-
 // POST /api/invoices — حفظ فاتورة جلسة [staff/admin]
 router.post('/', auth, requireRole('staff', 'admin'), async (req, res) => {
   const {
