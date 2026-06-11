@@ -1,11 +1,14 @@
 require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const morgan = require('morgan');
-const rateLimit = require('express-rate-limit');
-const migrate = require('./utils/migrate');
-const seed = require('./utils/seed');
+const express          = require('express');
+const cors             = require('cors');
+const helmet           = require('helmet');
+const morgan           = require('morgan');
+const rateLimit        = require('express-rate-limit');
+const xss              = require('xss-clean');
+const mongoSanitize    = require('express-mongo-sanitize');
+const hpp              = require('hpp');
+const migrate          = require('./utils/migrate');
+const seed             = require('./utils/seed');
 
 const app = express();
 
@@ -83,6 +86,31 @@ app.use(limiter);                                              // عام على 
 // Body parsing & logging
 app.use(express.json({ limit: '10kb' }));
 app.use(morgan('dev'));
+
+// ════════════════════════════════════════════════
+// Input Sanitization — يُطبَّق بعد body parsing
+// وقبل أي route عشان يضمن تنظيف كل البيانات
+// ════════════════════════════════════════════════
+
+// 1) XSS — يشفِّر الأكواد الخطيرة مثل <script> في body/query/params
+//    مثال: <script>alert(1)</script>  →  &lt;script&gt;alert(1)&lt;/script&gt;
+app.use(xss());
+
+// 2) NoSQL Injection — يحذف المفاتيح التي تبدأ بـ $ أو تحتوي نقطة
+//    مثال: { "$gt": "" }  →  {}   (يمنع تخطي شرط WHERE)
+app.use(mongoSanitize({
+  replaceWith: '_',          // بدل الحذف الكامل — أسهل في التتبع
+  onSanitize: ({ req, key }) => {
+    console.warn(`[Sanitize] NoSQL injection attempt blocked — key: ${key} — IP: ${req.ip}`);
+  },
+}));
+
+// 3) HTTP Parameter Pollution — يمنع إرسال نفس الـ param أكثر من مرة
+//    مثال: ?sort=price&sort=hack  →  sort='price' (آخر قيمة فقط)
+//    whitelist: الـ params المسموح لها بالتكرار الشرعي (مثل filter[])
+app.use(hpp({
+  whitelist: ['filter', 'fields', 'sort'],
+}));
 
 // ✅ Routes
 app.use('/api/auth',          require('./routes/auth'));
