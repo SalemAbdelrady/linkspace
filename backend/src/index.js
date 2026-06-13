@@ -20,7 +20,7 @@ app.set('trust proxy', 1);
 // ✅ CORS config — مرن ومحمي
 const ALLOWED_ORIGINS = [
   'https://linkspace-topaz.vercel.app',
-  'https://linkspace-void.vercel.app',
+  'https://linkspace-vojd.vercel.app',
   'http://localhost:3000',
   'http://localhost:5173',
   process.env.FRONTEND_URL,
