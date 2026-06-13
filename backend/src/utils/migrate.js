@@ -1,7 +1,8 @@
 const db = require('../config/db');
+const logger = require('../utils/logger');
 
 async function migrate() {
-  console.log('🔄 Running migrations...');
+  logger.info('🔄 Running migrations...');
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -129,6 +130,22 @@ async function migrate() {
   await db.query(`ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS covers_cowork  BOOLEAN NOT NULL DEFAULT true;`);
   // مدة الاشتراك قابلة للتخصيص لكل باقة — الافتراضي 29 يوماً
   await db.query(`ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS duration_days INTEGER NOT NULL DEFAULT 29;`);
+
+  // ── Refresh Tokens Table ──────────────────────────────────────────────
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS refresh_tokens (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token      VARCHAR(512) NOT NULL UNIQUE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      revoked_at TIMESTAMPTZ,
+      user_agent TEXT,
+      ip_address VARCHAR(45)
+    );
+  `);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token);`);
 
   await db.query(`
     DO $$
@@ -264,7 +281,7 @@ async function migrate() {
   await db.query(`ALTER TABLE staff_permissions ADD COLUMN IF NOT EXISTS can_create_coupons BOOLEAN NOT NULL DEFAULT false;`);
   await db.query(`ALTER TABLE staff_permissions ADD COLUMN IF NOT EXISTS can_view_reports   BOOLEAN NOT NULL DEFAULT false;`);
 
-  console.log('✅ Migrations completed!');
+  logger.info('✅ Migrations completed!');
 }
 
 module.exports = migrate;

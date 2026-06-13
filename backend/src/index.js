@@ -8,6 +8,7 @@ const rateLimit        = require('express-rate-limit');
 const xss              = require('xss-clean');
 const mongoSanitize    = require('express-mongo-sanitize');
 const hpp              = require('hpp');
+const cookieParser     = require('cookie-parser');
 const migrate          = require('./utils/migrate');
 const seed             = require('./utils/seed');
 
@@ -84,8 +85,9 @@ app.use('/api/auth/forgot-password', forgotPasswordLimiter); // أصرم — ي�
 app.use('/api/auth/login',           loginLimiter);           // Brute force protection
 app.use(limiter);                                              // عام على كل شيء
 
-// Body parsing & logging
+// Body parsing, cookies & logging
 app.use(express.json({ limit: '10kb' }));
+app.use(cookieParser());
 app.use(morgan('dev'));
 
 // ════════════════════════════════════════════════

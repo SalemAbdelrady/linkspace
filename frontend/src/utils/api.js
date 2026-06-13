@@ -1,21 +1,71 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5002/api',
-  timeout: 10000,
+  baseURL       : process.env.REACT_APP_API_URL || 'http://localhost:5002/api',
+  timeout       : 10000,
+  withCredentials: true,  // يرسل الـ httpOnly cookie مع كل request
 });
 
-// Attach token on every request
+// ── Request Interceptor — أضف الـ access token ────────────────────────
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('ls_token');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// Handle 401 globally
+// ── Response Interceptor — Refresh Token Rotation ─────────────────────
+let isRefreshing = false;
+let failedQueue  = [];
+
+function processQueue(error, token = null) {
+  failedQueue.forEach(p => error ? p.reject(error) : p.resolve(token));
+  failedQueue = [];
+}
+
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
+  async (err) => {
+    const original = err.config;
+
+    // لو 401 ومش محاولة تجديد أو logout — نحاول نجدد تلقائياً
+    if (
+      err.response?.status === 401 &&
+      !original._retry &&
+      !original.url?.includes('/auth/refresh') &&
+      !original.url?.includes('/auth/login')
+    ) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then(token => {
+          original.headers['Authorization'] = `Bearer ${token}`;
+          return api(original);
+        });
+      }
+
+      original._retry = true;
+      isRefreshing    = true;
+
+      try {
+        const { data } = await api.post('/auth/refresh');
+        const newToken = data.token;
+        localStorage.setItem('ls_token', newToken);
+        api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+        original.headers['Authorization'] = `Bearer ${newToken}`;
+        processQueue(null, newToken);
+        return api(original);
+      } catch {
+        processQueue(new Error('Session expired'), null);
+        localStorage.removeItem('ls_token');
+        localStorage.removeItem('ls_user');
+        window.location.href = '/login';
+        return Promise.reject(err);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+
+    // أي 401 تاني — اطرده للـ login
     if (err.response?.status === 401) {
       localStorage.removeItem('ls_token');
       localStorage.removeItem('ls_user');

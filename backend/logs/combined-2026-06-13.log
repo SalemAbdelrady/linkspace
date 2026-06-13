@@ -2,3 +2,21 @@
 {"level":"info","message":"🚀 Link Space API running on http://localhost:5002","timestamp":"2026-06-13T11:48:11.811Z"}
 {"level":"info","message":"📊 Environment: development","timestamp":"2026-06-13T11:48:11.813Z"}
 {"level":"info","message":"🌐 Allowed origins: https://linkspace-topaz.vercel.app, https://linkspace-vojd.vercel.app, http://localhost:3000, http://localhost:5173, http://localhost:3000","timestamp":"2026-06-13T11:48:11.815Z"}
+{"level":"info","message":"✅ DB initialized","timestamp":"2026-06-13T11:52:21.855Z"}
+{"level":"info","message":"🚀 Link Space API running on http://localhost:5002","timestamp":"2026-06-13T11:52:22.046Z"}
+{"level":"info","message":"📊 Environment: development","timestamp":"2026-06-13T11:52:22.046Z"}
+{"level":"info","message":"🌐 Allowed origins: https://linkspace-topaz.vercel.app, https://linkspace-vojd.vercel.app, http://localhost:3000, http://localhost:5173, http://localhost:3000","timestamp":"2026-06-13T11:52:22.047Z"}
+{"level":"info","message":"✅ DB initialized","timestamp":"2026-06-13T19:18:35.296Z"}
+{"level":"info","message":"🚀 Link Space API running on http://localhost:5002","timestamp":"2026-06-13T19:18:35.324Z"}
+{"level":"info","message":"📊 Environment: development","timestamp":"2026-06-13T19:18:35.326Z"}
+{"level":"info","message":"🌐 Allowed origins: https://linkspace-topaz.vercel.app, https://linkspace-vojd.vercel.app, http://localhost:3000, http://localhost:5173, http://localhost:3000","timestamp":"2026-06-13T19:18:35.327Z"}
+{"level":"info","message":"✅ DB initialized","timestamp":"2026-06-13T19:19:21.416Z"}
+{"level":"info","message":"🚀 Link Space API running on http://localhost:5002","timestamp":"2026-06-13T19:19:21.449Z"}
+{"level":"info","message":"📊 Environment: development","timestamp":"2026-06-13T19:19:21.450Z"}
+{"level":"info","message":"🌐 Allowed origins: https://linkspace-topaz.vercel.app, https://linkspace-vojd.vercel.app, http://localhost:3000, http://localhost:5173, http://localhost:3000","timestamp":"2026-06-13T19:19:21.451Z"}
+{"level":"info","message":"🔄 Running migrations...","timestamp":"2026-06-13T19:19:38.474Z"}
+{"level":"info","message":"✅ Migrations completed!","timestamp":"2026-06-13T19:19:45.341Z"}
+{"level":"info","message":"✅ DB initialized","timestamp":"2026-06-13T19:19:51.599Z"}
+{"level":"info","message":"🚀 Link Space API running on http://localhost:5002","timestamp":"2026-06-13T19:19:51.605Z"}
+{"level":"info","message":"📊 Environment: development","timestamp":"2026-06-13T19:19:51.606Z"}
+{"level":"info","message":"🌐 Allowed origins: https://linkspace-topaz.vercel.app, https://linkspace-vojd.vercel.app, http://localhost:3000, http://localhost:5173, http://localhost:3000","timestamp":"2026-06-13T19:19:51.606Z"}

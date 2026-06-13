@@ -1,6 +1,8 @@
 const router  = require('express').Router();
+const logger  = require('../utils/logger');
 const bcrypt  = require('bcryptjs');
 const jwt     = require('jsonwebtoken');
+const { v4: uuidv4 } = require('uuid');
 const QRCode  = require('qrcode');
 const { body, validationResult } = require('express-validator');
 const db      = require('../config/db');
@@ -56,8 +58,41 @@ async function sendEmail(to, subject, html) {
       to, subject, html,
     });
   } catch (err) {
-    console.error('Email send error:', err.message);
+    logger.error('Email send error:', { message: err.message });
   }
+}
+
+// ── Refresh Token Helpers ────────────────────────────────────────────
+const REFRESH_TOKEN_DAYS = parseInt(process.env.REFRESH_TOKEN_DAYS) || 30;
+const ACCESS_TOKEN_EXP   = process.env.JWT_EXPIRES_IN || '15m';
+
+async function createRefreshToken(userId, req) {
+  const token     = uuidv4();
+  const expiresAt = new Date(Date.now() + REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000);
+  await db.query(
+    `INSERT INTO refresh_tokens (user_id, token, expires_at, user_agent, ip_address)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [userId, token, expiresAt, req.headers['user-agent'] || null, req.ip || null]
+  );
+  return token;
+}
+
+function setRefreshCookie(res, token) {
+  res.cookie('refreshToken', token, {
+    httpOnly : true,
+    secure   : process.env.NODE_ENV === 'production',
+    sameSite : 'strict',
+    maxAge   : REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000,
+    path     : '/api/auth',
+  });
+}
+
+function signAccessToken(user) {
+  return jwt.sign(
+    { id: user.id, role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: ACCESS_TOKEN_EXP }
+  );
 }
 
 // ── POST /api/auth/register ───────────────────────────────────────────
@@ -130,12 +165,10 @@ router.post('/register', [
       `, [referrerId, user.id, SIGNUP_POINTS]);
     }
 
-    const qrDataUrl = await safeQRCode(user.qr_code);
-    const token     = jwt.sign(
-      { id: user.id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-    );
+    const qrDataUrl      = await safeQRCode(user.qr_code);
+    const token          = signAccessToken(user);
+    const refreshToken   = await createRefreshToken(user.id, req);
+    setRefreshCookie(res, refreshToken);
 
     if (email) {
       await sendEmail(email, `مرحباً بك في ${APP_NAME} 🎉`, `
@@ -157,7 +190,7 @@ router.post('/register', [
 
     res.status(201).json({ token, user: { ...user, qr_image: qrDataUrl } });
   } catch (err) {
-    console.error(err);
+    logger.error(err.message || err, { stack: err.stack });
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
@@ -181,17 +214,15 @@ router.post('/login', [
       return res.status(401).json({ error: 'رقم الموبايل أو كلمة السر غلط' });
     }
 
-    const qrDataUrl = await safeQRCode(user.qr_code);
-    const token     = jwt.sign(
-      { id: user.id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
-    );
+    const qrDataUrl      = await safeQRCode(user.qr_code);
+    const token          = signAccessToken(user);
+    const refreshToken   = await createRefreshToken(user.id, req);
+    setRefreshCookie(res, refreshToken);
 
     const { password: _, ...safeUser } = user;
     res.json({ token, user: { ...safeUser, qr_image: qrDataUrl } });
   } catch (err) {
-    console.error(err);
+    logger.error(err.message || err, { stack: err.stack });
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
@@ -222,7 +253,7 @@ router.get('/me', auth, async (req, res) => {
     const qrDataUrl = await safeQRCode(rows[0].qr_code);
     res.json({ user: { ...rows[0], qr_image: qrDataUrl, referred_by_name } });
   } catch (err) {
-    console.error(err);
+    logger.error(err.message || err, { stack: err.stack });
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
@@ -272,7 +303,7 @@ router.patch('/settings', auth, async (req, res) => {
     const qrDataUrl = await safeQRCode(rows[0].qr_code);
     res.json({ user: { ...rows[0], qr_image: qrDataUrl } });
   } catch (err) {
-    console.error(err);
+    logger.error(err.message || err, { stack: err.stack });
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
@@ -300,7 +331,7 @@ router.patch('/change-password', auth, async (req, res) => {
     );
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    logger.error(err.message || err, { stack: err.stack });
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
@@ -344,7 +375,7 @@ router.post('/forgot-password', async (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    console.error(err);
+    logger.error(err.message || err, { stack: err.stack });
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
@@ -384,7 +415,7 @@ router.post('/reset-password', async (req, res) => {
 
     res.json({ success: true, message: 'تم تغيير كلمة السر بنجاح' });
   } catch (err) {
-    console.error(err);
+    logger.error(err.message || err, { stack: err.stack });
     res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
@@ -401,8 +432,72 @@ router.post('/avatar', auth, uploadAvatar.single('avatar'), async (req, res) => 
     );
     res.json({ avatar_url });
   } catch (err) {
-    console.error(err);
+    logger.error(err.message || err, { stack: err.stack });
     res.status(500).json({ error: 'خطأ في رفع الصورة' });
+  }
+});
+
+// ── POST /api/auth/refresh — تجديد الـ Access Token ──────────────────
+router.post('/refresh', async (req, res) => {
+  const refreshToken = req.cookies?.refreshToken;
+  if (!refreshToken) return res.status(401).json({ error: 'لا يوجد refresh token' });
+
+  try {
+    const { rows } = await db.query(
+      `SELECT rt.*, u.id as uid, u.role, u.is_active
+       FROM refresh_tokens rt
+       JOIN users u ON u.id = rt.user_id
+       WHERE rt.token = $1
+         AND rt.expires_at > NOW()
+         AND rt.revoked_at IS NULL`,
+      [refreshToken]
+    );
+
+    const record = rows[0];
+    if (!record)       return res.status(401).json({ error: 'الـ refresh token منتهي أو ملغي' });
+    if (!record.is_active) return res.status(401).json({ error: 'الحساب غير نشط' });
+
+    // أصدر access token جديد
+    const token = signAccessToken({ id: record.uid, role: record.role });
+
+    // Refresh Token Rotation — أصدر refresh token جديد وألغِ القديم
+    await db.query(`UPDATE refresh_tokens SET revoked_at = NOW() WHERE token = $1`, [refreshToken]);
+    const newRefreshToken = await createRefreshToken(record.uid, req);
+    setRefreshCookie(res, newRefreshToken);
+
+    res.json({ token });
+  } catch (err) {
+    logger.error('refresh token error', { stack: err.stack });
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// ── POST /api/auth/logout — إلغاء الـ Refresh Token ──────────────────
+router.post('/logout', async (req, res) => {
+  const refreshToken = req.cookies?.refreshToken;
+  if (refreshToken) {
+    await db.query(
+      `UPDATE refresh_tokens SET revoked_at = NOW() WHERE token = $1`,
+      [refreshToken]
+    ).catch(() => {});
+  }
+  res.clearCookie('refreshToken', { path: '/api/auth' });
+  res.json({ success: true });
+});
+
+// ── DELETE /api/auth/logout-all — إلغاء كل الـ Sessions ─────────────
+router.delete('/logout-all', auth, async (req, res) => {
+  try {
+    await db.query(
+      `UPDATE refresh_tokens SET revoked_at = NOW()
+       WHERE user_id = $1 AND revoked_at IS NULL`,
+      [req.user.id]
+    );
+    res.clearCookie('refreshToken', { path: '/api/auth' });
+    res.json({ success: true, message: 'تم تسجيل الخروج من كل الأجهزة' });
+  } catch (err) {
+    logger.error('logout-all error', { stack: err.stack });
+    res.status(500).json({ error: 'خطأ في الخادم' });
   }
 });
 
