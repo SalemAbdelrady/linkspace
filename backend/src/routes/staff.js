@@ -9,7 +9,8 @@ const bcrypt = require('bcrypt');
 const { auth, requireRole }              = require('../middleware/auth');
 const { extractPermissions,
         createPermissions,
-        upsertPermissions }              = require('../utils/staffPermissions');
+        upsertPermissions,
+        getPermissions   }              = require('../utils/staffPermissions');
 
 const isAdmin        = [auth, requireRole('admin')];
 const isStaffOrAdmin = [auth, requireRole('staff', 'admin')];
@@ -25,8 +26,9 @@ router.get('/', ...isAdmin, async (req, res) => {
       SELECT
         u.id, u.name, u.phone, u.email, u.role,
         u.is_active, u.created_at,
-        sp.can_view_all, sp.can_edit_prices,
-        sp.can_charge_wallet, sp.can_add_points,
+        sp.can_view_all,        sp.can_edit_prices,
+        sp.can_charge_wallet,   sp.can_add_points,
+        sp.can_create_coupons,  sp.can_view_reports,
         -- إحصائيات سريعة
         COUNT(DISTINCT i.id)  AS total_invoices,
         COALESCE(SUM(i.total), 0) AS total_revenue
@@ -35,7 +37,8 @@ router.get('/', ...isAdmin, async (req, res) => {
       LEFT JOIN invoices i ON i.created_by = u.id
       WHERE u.role IN ('staff', 'admin')
       GROUP BY u.id, sp.can_view_all, sp.can_edit_prices,
-               sp.can_charge_wallet, sp.can_add_points
+               sp.can_charge_wallet, sp.can_add_points,
+               sp.can_create_coupons, sp.can_view_reports
       ORDER BY u.created_at DESC
     `);
     res.json({ staff: rows });
@@ -116,9 +119,7 @@ router.patch('/:id', ...isAdmin, async (req, res) => {
 
 // PATCH /api/staff/:id — تعديل بيانات موظف
 router.patch('/:id', ...isAdmin, async (req, res) => {
-  const { name, email,
-          can_view_all, can_edit_prices,
-          can_charge_wallet, can_add_points } = req.body;
+  const { name, email } = req.body;
 
   try {
     // تعديل البيانات الأساسية
@@ -132,23 +133,8 @@ router.patch('/:id', ...isAdmin, async (req, res) => {
       `, [name || null, email ?? null, req.params.id]);
     }
 
-    // تعديل الصلاحيات — INSERT or UPDATE
-    if ([can_view_all, can_edit_prices, can_charge_wallet, can_add_points]
-        .some(v => v !== undefined)) {
-      await db.query(`
-        INSERT INTO staff_permissions
-          (user_id, can_view_all, can_edit_prices, can_charge_wallet, can_add_points)
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (user_id) DO UPDATE SET
-          can_view_all      = COALESCE($2, staff_permissions.can_view_all),
-          can_edit_prices   = COALESCE($3, staff_permissions.can_edit_prices),
-          can_charge_wallet = COALESCE($4, staff_permissions.can_charge_wallet),
-          can_add_points    = COALESCE($5, staff_permissions.can_add_points),
-          updated_at        = NOW()
-      `, [req.params.id,
-          can_view_all ?? null, can_edit_prices ?? null,
-          can_charge_wallet ?? null, can_add_points ?? null]);
-    }
+    // تعديل الصلاحيات — عبر الـ util الموحَّد
+    await upsertPermissions(req.params.id, extractPermissions(req.body));
 
     res.json({ success: true });
   } catch (err) {
@@ -197,6 +183,41 @@ router.patch('/:id/toggle', ...isAdmin, async (req, res) => {
 // ════════════════════════════════════════════════════════════
 
 // GET /api/staff/me/stats — إحصائياتي الشخصية (للموظف نفسه)
+// GET /api/staff/clients/search?q=... — بحث عن عميل للعمليات
+// متاح لأي موظف عنده can_charge_wallet أو can_add_points
+router.get('/clients/search', auth, requireRole('staff', 'admin'), async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    if (q.length < 2) return res.json({ clients: [] });
+
+    const { rows } = await db.query(`
+      SELECT id, name, phone, email, balance, points
+      FROM users
+      WHERE role = 'client'
+        AND is_active = true
+        AND (name ILIKE $1 OR phone ILIKE $1)
+      ORDER BY name ASC
+      LIMIT 10
+    `, [`%${q}%`]);
+    res.json({ clients: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// GET /api/staff/me/permissions — صلاحيات الموظف الحالي
+// يُستخدم في StaffDashboard عشان يعرف الصلاحيات المفعَّلة
+router.get('/me/permissions', ...isStaffOrAdmin, async (req, res) => {
+  try {
+    const perms = await getPermissions(req.user.id);
+    res.json({ permissions: perms || {} });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
 router.get('/me/stats', ...isStaffOrAdmin, async (req, res) => {
   const staffId = req.user.id;
   const date    = req.query.date || new Date().toISOString().split('T')[0];

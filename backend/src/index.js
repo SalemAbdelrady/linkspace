@@ -1,4 +1,5 @@
 require('dotenv').config();
+const logger = require('./utils/logger');
 const express          = require('express');
 const cors             = require('cors');
 const helmet           = require('helmet');
@@ -32,7 +33,7 @@ const corsOptions = {
     if (ALLOWED_ORIGINS.includes(origin)) {
       callback(null, true);
     } else {
-      console.warn(`CORS blocked: ${origin}`);
+      logger.warn(`CORS blocked: ${origin}`);
       callback(new Error(`CORS: ${origin} غير مسموح`));
     }
   },
@@ -101,7 +102,7 @@ app.use(xss());
 app.use(mongoSanitize({
   replaceWith: '_',          // بدل الحذف الكامل — أسهل في التتبع
   onSanitize: ({ req, key }) => {
-    console.warn(`[Sanitize] NoSQL injection attempt blocked — key: ${key} — IP: ${req.ip}`);
+    logger.warn(`[Sanitize] NoSQL injection attempt blocked — key: ${key} — IP: ${req.ip}`);
   },
 }));
 
@@ -140,7 +141,7 @@ app.use((err, req, res, next) => {
   if (err.message && err.message.startsWith('CORS:')) {
     return res.status(403).json({ error: err.message });
   }
-  console.error(err);
+  logger.error(err.message || err, { stack: err.stack });
   res.status(500).json({ error: 'خطأ داخلي في الخادم' });
 });
 
@@ -152,9 +153,9 @@ async function initialize() {
   try {
     await migrate();
     await seed();
-    console.log('✅ DB initialized');
+    logger.info('✅ DB initialized');
   } catch (err) {
-    console.error('Startup warning:', err.message);
+    logger.error('Startup warning:', { message: err.message });
   }
 }
 
@@ -169,9 +170,9 @@ if (process.env.VERCEL) {
   async function startServer() {
     await initialize();
     app.listen(PORT, () => {
-      console.log(`🚀 Link Space API running on http://localhost:${PORT}`);
-      console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🌐 Allowed origins: ${ALLOWED_ORIGINS.join(', ')}`);
+      logger.info(`🚀 Link Space API running on http://localhost:${PORT}`);
+      logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+      logger.info(`🌐 Allowed origins: ${ALLOWED_ORIGINS.join(', ')}`);
     });
   }
   startServer();

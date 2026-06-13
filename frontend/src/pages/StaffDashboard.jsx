@@ -395,7 +395,33 @@ export default function StaffDashboard() {
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [canViewAll,      setCanViewAll]      = useState(false);
 
-  const [canEditPrices,   setCanEditPrices]   = useState(false);
+  const [canEditPrices,    setCanEditPrices]    = useState(false);
+
+  // ── الكوبونات ────────────────────────────────────────────────────────
+  const [myCoupons,       setMyCoupons]       = useState([]);
+  const [couponForm,      setCouponForm]       = useState({ code: '', discount: 20, days: 30, max_uses: 1 });
+  const [couponLoading,   setCouponLoading]   = useState(false);
+  const [couponSearch,    setCouponSearch]    = useState('');
+  const [couponMsg,       setCouponMsg]       = useState(null);
+
+  // ── التقارير ─────────────────────────────────────────────────────────
+  const [reportType,      setReportType]      = useState('daily');
+  const [reportDate,      setReportDate]      = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [reportMonth,     setReportMonth]     = useState(format(new Date(), 'yyyy-MM'));
+  const [reportData,      setReportData]      = useState(null);
+  const [reportLoading,   setReportLoading]   = useState(false);
+
+  // ── عمليات العملاء ──────────────────────────────────────────────────
+  const [clientSearch,    setClientSearch]    = useState('');
+  const [clientResults,   setClientResults]   = useState([]);
+  const [selectedClient,  setSelectedClient]  = useState(null);
+  const [walletAmount,    setWalletAmount]     = useState('');
+  const [pointsAmount,    setPointsAmount]     = useState('');
+  const [clientOpLoading, setClientOpLoading] = useState(false);
+  const [canChargeWallet,  setCanChargeWallet]  = useState(false);
+  const [canAddPoints,     setCanAddPoints]     = useState(false);
+  const [canCreateCoupons, setCanCreateCoupons] = useState(false);
+  const [canViewReports,   setCanViewReports]   = useState(false);
   const [spaces,          setSpaces]          = useState({
     cowork:  { name: 'منطقة العمل المشتركة', first_hour: 30, extra_hour: 30, max_hours: 4 },
     meeting: { name: 'غرفة الاجتماعات',      first_hour: 150, extra_hour: 100, max_hours: 12 },
@@ -412,7 +438,9 @@ export default function StaffDashboard() {
 
   useEffect(() => { loadStats(); checkPermissions(); loadServicesData(); }, []);
   useEffect(() => { if (tab === 'invoices') loadMyInvoices(); }, [tab, myInvoicePage, invoiceSearch, invoiceDate]);
-  useEffect(() => { if (tab === 'prices') { loadSpaces(); loadServicesData(); } }, [tab]);
+  useEffect(() => { if (tab === 'prices')  { loadSpaces(); loadServicesData(); } }, [tab]);
+  useEffect(() => { if (tab === 'coupons') { loadMyCoupons(); }  }, [tab]);
+  useEffect(() => { if (tab === 'reports') { loadReport(); }     }, [tab]);
 
   async function loadStats() {
     setLoading(true);
@@ -428,10 +456,107 @@ export default function StaffDashboard() {
 
   async function checkPermissions() {
     try {
-      const { data } = await staffAPI.getAll();
-      const me = data.staff?.find(s => s.id === user?.id);
-      if (me) setCanEditPrices(me.can_edit_prices === true);
+      const { data } = await staffAPI.myPermissions();
+      const p = data.permissions || {};
+      setCanEditPrices   (p.can_edit_prices    === true);
+      setCanChargeWallet (p.can_charge_wallet  === true);
+      setCanAddPoints    (p.can_add_points     === true);
+      setCanCreateCoupons(p.can_create_coupons === true);
+      setCanViewReports  (p.can_view_reports   === true);
     } catch {}
+  }
+
+  // ── دوال الكوبونات ───────────────────────────────────────────────────
+  async function loadMyCoupons() {
+    try {
+      const { data } = await adminAPI.allCoupons();
+      setMyCoupons(data.coupons || []);
+    } catch {}
+  }
+
+  async function createCoupon() {
+    if (!couponForm.discount || !couponForm.days) return toast.error('أدخل نسبة الخصم والمدة');
+    setCouponLoading(true);
+    setCouponMsg(null);
+    try {
+      const { data } = await adminAPI.createCoupon({
+        code      : couponForm.code.trim().toUpperCase() || undefined,
+        discount  : parseInt(couponForm.discount),
+        days      : parseInt(couponForm.days),
+        max_uses  : parseInt(couponForm.max_uses) || 1,
+      });
+      setCouponMsg({ type: 'success', text: `✅ الكوبون: ${data.coupon.code} — خصم ${data.coupon.discount_pct}%` });
+      setCouponForm({ code: '', discount: 20, days: 30, max_uses: 1 });
+      loadMyCoupons();
+    } catch (err) {
+      setCouponMsg({ type: 'error', text: err.response?.data?.error || 'خطأ في الإنشاء' });
+    } finally {
+      setCouponLoading(false);
+    }
+  }
+
+  async function revokeCoupon(id) {
+    try {
+      await adminAPI.revokeCoupon(id);
+      toast.success('تم إلغاء الكوبون');
+      loadMyCoupons();
+    } catch { toast.error('خطأ في الإلغاء'); }
+  }
+
+  // ── دوال التقارير ──────────────────────────────────────────────────
+  async function loadReport() {
+    setReportLoading(true);
+    setReportData(null);
+    try {
+      if (reportType === 'daily') {
+        const { data } = await adminAPI.dailyReport(reportDate);
+        setReportData(data);
+      } else {
+        const [y, m] = reportMonth.split('-');
+        const { data } = await adminAPI.monthlyReport(y, m);
+        setReportData(data);
+      }
+    } catch { toast.error('خطأ في تحميل التقرير'); }
+    finally { setReportLoading(false); }
+  }
+
+  // ── دوال عمليات العملاء ───────────────────────────────────────────────
+  async function searchClients(q) {
+    if (q.length < 2) { setClientResults([]); return; }
+    try {
+      const { data } = await staffAPI.searchClients(q);
+      setClientResults(data.clients || []);
+    } catch {}
+  }
+
+  async function chargeClientWallet() {
+    if (!selectedClient || !walletAmount) return toast.error('أدخل المبلغ');
+    const amt = parseFloat(walletAmount);
+    if (isNaN(amt) || amt <= 0) return toast.error('مبلغ غير صحيح');
+    setClientOpLoading(true);
+    try {
+      await adminAPI.chargeWallet(selectedClient.id, amt);
+      setSelectedClient(prev => ({ ...prev, balance: (parseFloat(prev.balance) + amt).toFixed(2) }));
+      setWalletAmount('');
+      toast.success(`✅ تم شحن ${amt} ج لـ ${selectedClient.name}`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'خطأ في الشحن');
+    } finally { setClientOpLoading(false); }
+  }
+
+  async function addClientPoints() {
+    if (!selectedClient || !pointsAmount) return toast.error('أدخل عدد النقاط');
+    const pts = parseInt(pointsAmount);
+    if (isNaN(pts) || pts <= 0) return toast.error('نقاط غير صحيحة');
+    setClientOpLoading(true);
+    try {
+      await adminAPI.addPoints(selectedClient.id, pts);
+      setSelectedClient(prev => ({ ...prev, points: (parseInt(prev.points || 0) + pts) }));
+      setPointsAmount('');
+      toast.success(`✅ تمت إضافة ${pts} نقطة لـ ${selectedClient.name}`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'خطأ في إضافة النقاط');
+    } finally { setClientOpLoading(false); }
   }
 
   // ✅ نحمل الخدمات من البداية عشان Quick Sale تشتغل
@@ -573,7 +698,10 @@ export default function StaffDashboard() {
         {[
           ['overview', 'نظرة عامة'],
           ['invoices', '🧾 فواتيري'],
-          ...(canEditPrices ? [['prices', '💰 الأسعار']] : []),
+          ...(canEditPrices                       ? [['prices',  '💰 الأسعار']]   : []),
+          ...((canChargeWallet || canAddPoints)  ? [['clients', '👥 العملاء']]    : []),
+          ...(canCreateCoupons                   ? [['coupons', '🎟️ الكوبونات']] : []),
+          ...(canViewReports                     ? [['reports', '📊 التقارير']]  : []),
         ].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)}
             style={{ padding: '7px 16px', borderRadius: 20, border: '1px solid', fontSize: 13, fontWeight: 600,
@@ -888,6 +1016,319 @@ export default function StaffDashboard() {
             )}
           </div>
         )}
+
+        {/* ══ CLIENTS OPS ══ */}
+        {tab === 'clients' && (canChargeWallet || canAddPoints) && (
+          <div className="fade-up">
+
+            {/* بحث عن عميل */}
+            <div style={{ position: 'relative', marginBottom: 16 }}>
+              <input className="input-field"
+                placeholder="🔍 ابحث عن عميل بالاسم أو الموبايل..."
+                value={clientSearch}
+                onChange={e => { setClientSearch(e.target.value); searchClients(e.target.value); }} />
+              {clientResults.length > 0 && (
+                <div style={{ position: 'absolute', top: '100%', right: 0, left: 0, zIndex: 30,
+                  background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, marginTop: 4, overflow: 'hidden' }}>
+                  {clientResults.map(c => (
+                    <div key={c.id}
+                      onClick={() => { setSelectedClient(c); setClientSearch(c.name); setClientResults([]); }}
+                      style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 13 }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,212,170,0.08)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      <div style={{ fontWeight: 600 }}>{c.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)' }}>{c.phone} · رصيد: {parseFloat(c.balance||0).toFixed(2)} ج · نقاط: {c.points||0}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* بطاقة العميل المختار */}
+            {selectedClient ? (
+              <div>
+                <div className="card" style={{ marginBottom: 16, background: 'rgba(0,212,170,0.06)', border: '1px solid rgba(0,212,170,0.25)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 16 }}>{selectedClient.name}</div>
+                      <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 2 }}>{selectedClient.phone}</div>
+                    </div>
+                    <button onClick={() => { setSelectedClient(null); setClientSearch(''); }}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 20, cursor: 'pointer' }}>✕</button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
+                    <div style={{ textAlign: 'center', padding: '10px 0', background: 'rgba(0,0,0,0.1)', borderRadius: 10 }}>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>💳 الرصيد</div>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: '#3b82f6' }}>{parseFloat(selectedClient.balance||0).toFixed(2)} ج</div>
+                    </div>
+                    <div style={{ textAlign: 'center', padding: '10px 0', background: 'rgba(0,0,0,0.1)', borderRadius: 10 }}>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>⭐ النقاط</div>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--warning)' }}>{selectedClient.points||0}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* شحن المحفظة */}
+                {canChargeWallet && (
+                  <div className="card" style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#3b82f6', marginBottom: 10 }}>💳 شحن المحفظة</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
+                      <input className="input-field" type="number" placeholder="المبلغ بالجنيه..."
+                        value={walletAmount} onChange={e => setWalletAmount(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && chargeClientWallet()} />
+                      <button className="btn btn-primary" style={{ padding: '0 20px' }}
+                        disabled={clientOpLoading || !walletAmount}
+                        onClick={chargeClientWallet}>
+                        {clientOpLoading ? '...' : 'شحن'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* إضافة نقاط */}
+                {canAddPoints && (
+                  <div className="card">
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--warning)', marginBottom: 10 }}>⭐ إضافة نقاط</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
+                      <input className="input-field" type="number" placeholder="عدد النقاط..."
+                        value={pointsAmount} onChange={e => setPointsAmount(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && addClientPoints()} />
+                      <button className="btn btn-primary" style={{ padding: '0 20px', background: 'var(--warning)', color: '#000' }}
+                        disabled={clientOpLoading || !pointsAmount}
+                        onClick={addClientPoints}>
+                        {clientOpLoading ? '...' : 'إضافة'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>👥</div>
+                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>ابحث عن عميل</div>
+                <div style={{ fontSize: 13 }}>اكتب الاسم أو رقم الموبايل للبحث</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ══ COUPONS ══ */}
+        {tab === 'coupons' && canCreateCoupons && (
+          <div className="fade-up">
+
+            {/* فورم إنشاء كوبون */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent)', marginBottom: 14 }}>🎟️ إنشاء كوبون جديد</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>كود الكوبون (اختياري)</div>
+                  <input className="input-field" placeholder="مثال: SUMMER20"
+                    value={couponForm.code}
+                    onChange={e => setCouponForm(p => ({ ...p, code: e.target.value.toUpperCase() }))} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>نسبة الخصم %</div>
+                  <input className="input-field" type="number" min="1" max="100" placeholder="20"
+                    value={couponForm.discount}
+                    onChange={e => setCouponForm(p => ({ ...p, discount: e.target.value }))} />
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>الصلاحية (أيام)</div>
+                  <input className="input-field" type="number" min="1" placeholder="30"
+                    value={couponForm.days}
+                    onChange={e => setCouponForm(p => ({ ...p, days: e.target.value }))} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>عدد مرات الاستخدام</div>
+                  <input className="input-field" type="number" min="1" placeholder="1"
+                    value={couponForm.max_uses}
+                    onChange={e => setCouponForm(p => ({ ...p, max_uses: e.target.value }))} />
+                </div>
+              </div>
+              {couponMsg && (
+                <div style={{ padding: '8px 12px', borderRadius: 8, marginBottom: 10, fontSize: 13,
+                  background: couponMsg.type === 'success' ? 'rgba(0,212,170,0.1)' : 'rgba(255,71,87,0.1)',
+                  color: couponMsg.type === 'success' ? 'var(--accent)' : '#ff4757',
+                  border: `1px solid ${couponMsg.type === 'success' ? 'rgba(0,212,170,0.3)' : 'rgba(255,71,87,0.3)'}` }}>
+                  {couponMsg.text}
+                </div>
+              )}
+              <button className="btn btn-primary" style={{ width: '100%' }}
+                disabled={couponLoading} onClick={createCoupon}>
+                {couponLoading ? 'جارٍ الإنشاء...' : '✨ إنشاء الكوبون'}
+              </button>
+            </div>
+
+            {/* قائمة الكوبونات */}
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)', marginBottom: 10 }}>
+              الكوبونات الموجودة ({myCoupons.length})
+            </div>
+            <input className="input-field" placeholder="🔍 بحث بالكود..." style={{ marginBottom: 12 }}
+              value={couponSearch} onChange={e => setCouponSearch(e.target.value)} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {myCoupons
+                .filter(c => c.code.includes(couponSearch.toUpperCase()))
+                .map(c => {
+                  const expired     = new Date(c.expires_at) < new Date();
+                  const used        = c.is_used || c.uses_count >= c.max_uses;
+                  const statusColor = c.is_revoked ? '#ff4757' : expired ? 'var(--muted)' : used ? 'var(--warning)' : 'var(--accent)';
+                  const statusText  = c.is_revoked ? 'ملغي' : expired ? 'منتهي' : used ? 'مستخدم' : 'فعّال';
+                  return (
+                    <div key={c.id} className="card" style={{ opacity: (c.is_revoked || expired) ? 0.6 : 1 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontFamily: 'var(--mono)', fontWeight: 700, fontSize: 15, color: 'var(--accent)', letterSpacing: 2 }}>
+                            {c.code}
+                          </div>
+                          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>
+                            خصم {c.discount_pct}% · {c.uses_count || 0}/{c.max_uses} استخدام
+                            · ينتهي {new Date(c.expires_at).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' })}
+                          </div>
+                          {c.client_name && (
+                            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>👤 {c.client_name}</div>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: statusColor, padding: '2px 8px',
+                            background: statusColor + '18', borderRadius: 8, border: '1px solid ' + statusColor + '40' }}>
+                            {statusText}
+                          </span>
+                          {!c.is_revoked && !expired && !used && (
+                            <button onClick={() => revokeCoupon(c.id)}
+                              style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6,
+                                border: '1px solid rgba(255,71,87,0.4)', background: 'transparent',
+                                color: '#ff4757', cursor: 'pointer' }}>
+                              إلغاء
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              {myCoupons.length === 0 && (
+                <div className="card" style={{ textAlign: 'center', color: 'var(--muted)', padding: 32 }}>
+                  لا توجد كوبونات بعد
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ══ REPORTS ══ */}
+        {tab === 'reports' && canViewReports && (
+          <div className="fade-up">
+
+            {/* اختيار نوع التقرير والتاريخ */}
+            <div className="card" style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                {[['daily','📅 يومي'],['monthly','📆 شهري']].map(([k,label]) => (
+                  <button key={k} onClick={() => { setReportType(k); setReportData(null); }}
+                    style={{ flex: 1, padding: '8px', borderRadius: 10, border: '1px solid', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                      borderColor: reportType === k ? 'var(--accent)' : 'var(--border)',
+                      background:  reportType === k ? 'var(--accent)' : 'transparent',
+                      color:       reportType === k ? '#000' : 'var(--muted)' }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {reportType === 'daily' ? (
+                <input type="date" className="input-field" value={reportDate}
+                  onChange={e => setReportDate(e.target.value)} />
+              ) : (
+                <input type="month" className="input-field" value={reportMonth}
+                  onChange={e => setReportMonth(e.target.value)} />
+              )}
+              <button className="btn btn-primary" style={{ width: '100%', marginTop: 10 }}
+                onClick={loadReport} disabled={reportLoading}>
+                {reportLoading ? 'جارٍ التحميل...' : '🔍 عرض التقرير'}
+              </button>
+            </div>
+
+            {/* نتائج التقرير */}
+            {reportLoading && (
+              <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)' }}>جارٍ التحميل...</div>
+            )}
+
+            {reportData && reportType === 'daily' && (
+              <div className="fade-up">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
+                  {[
+                    ['🚶 الزيارات',  reportData.summary?.visits || 0,                                        'var(--text)'],
+                    ['💰 الإيرادات', `${parseFloat(reportData.summary?.total_revenue || 0).toFixed(0)} ج`,  'var(--accent)'],
+                    ['⏱️ متوسط المدة',`${Math.round(reportData.summary?.avg_duration || 0)} د`,              '#3b82f6'],
+                  ].map(([label, val, color]) => (
+                    <div key={label} className="card" style={{ padding: 12, textAlign: 'center' }}>
+                      <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>{label}</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color }}>{val}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="card" style={{ marginBottom: 16, padding: '10px 12px',
+                  background: 'rgba(0,212,170,0.08)', border: '1px solid rgba(0,212,170,0.2)' }}>
+                  <span style={{ fontSize: 13 }}>🟢 العملاء الحاليون: </span>
+                  <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--accent)' }}>{reportData.active_now}</span>
+                </div>
+
+                {reportData.by_hour?.length > 0 && (
+                  <div className="card">
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>📈 توزيع الزيارات بالساعة</div>
+                    <ResponsiveContainer width="100%" height={140}>
+                      <BarChart data={reportData.by_hour.map(h => ({ name: `${h.hour}:00`, visits: parseInt(h.visits) }))}
+                        margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                        <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--muted)' }} axisLine={false} tickLine={false}/>
+                        <YAxis tick={{ fontSize: 10, fill: 'var(--muted)' }} axisLine={false} tickLine={false}/>
+                        <Tooltip contentStyle={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
+                          formatter={v => [v, 'زيارة']} />
+                        <Bar dataKey="visits" fill="var(--accent)" radius={[4,4,0,0]} opacity={0.85}/>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {reportData && reportType === 'monthly' && (
+              <div className="fade-up">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
+                  {[
+                    ['🚶 الزيارات',   reportData.totals?.total_visits || 0,                                         'var(--text)'],
+                    ['💰 الإيرادات',  `${parseFloat(reportData.totals?.total_revenue || 0).toFixed(0)} ج`,          'var(--accent)'],
+                    ['⏱️ متوسط المدة', `${Math.round(reportData.totals?.avg_duration || 0)} د`,                      '#3b82f6'],
+                  ].map(([label, val, color]) => (
+                    <div key={label} className="card" style={{ padding: 12, textAlign: 'center' }}>
+                      <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4 }}>{label}</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color }}>{val}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {reportData.daily?.length > 0 && (
+                  <div className="card">
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>📈 الإيرادات اليومية</div>
+                    <ResponsiveContainer width="100%" height={160}>
+                      <BarChart data={reportData.daily.map(d => ({
+                          name: new Date(d.day).toLocaleDateString('ar-EG', { day: 'numeric' }),
+                          revenue: parseFloat(d.revenue), visits: parseInt(d.visits) }))}
+                        margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                        <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'var(--muted)' }} axisLine={false} tickLine={false}/>
+                        <YAxis tick={{ fontSize: 10, fill: 'var(--muted)' }} axisLine={false} tickLine={false}/>
+                        <Tooltip contentStyle={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }}
+                          formatter={(v, n) => [n === 'revenue' ? `${v} ج` : v, n === 'revenue' ? 'الإيراد' : 'زيارات']} />
+                        <Bar dataKey="revenue" fill="var(--accent)" radius={[4,4,0,0]} opacity={0.85}/>
+                        <Bar dataKey="visits"  fill="#3b82f6"       radius={[4,4,0,0]} opacity={0.6}/>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
     </div>
   );

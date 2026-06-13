@@ -260,6 +260,10 @@ async function migrate() {
   await db.query(`CREATE INDEX IF NOT EXISTS idx_invoices_created_by ON invoices(created_by);`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_staff_perms_user    ON staff_permissions(user_id);`);
 
+  // أعمدة مضافة لاحقاً — IF NOT EXISTS يمنع الخطأ لو موجودة
+  await db.query(`ALTER TABLE staff_permissions ADD COLUMN IF NOT EXISTS can_create_coupons BOOLEAN NOT NULL DEFAULT false;`);
+  await db.query(`ALTER TABLE staff_permissions ADD COLUMN IF NOT EXISTS can_view_reports   BOOLEAN NOT NULL DEFAULT false;`);
+
   console.log('✅ Migrations completed!');
 }
 

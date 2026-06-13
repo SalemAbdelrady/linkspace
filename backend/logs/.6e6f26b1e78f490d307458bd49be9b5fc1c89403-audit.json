@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "C:\\Users\\Tm\\Downloads\\linkspace-main\\backend\\logs\\.6e6f26b1e78f490d307458bd49be9b5fc1c89403-audit.json",
+    "files": [
+        {
+            "date": 1781351279847,
+            "name": "C:\\Users\\Tm\\Downloads\\linkspace-main\\backend\\logs\\error-2026-06-13.log",
+            "hash": "174c579c8baaaa54cf25b77db63b52c06cbf156aaf5a1bdf6ae829f035d66ca2"
+        }
+    ],
+    "hashType": "sha256"
+}

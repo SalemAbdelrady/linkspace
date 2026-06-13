@@ -203,7 +203,7 @@ router.get('/admin/:id/details', auth, requireRole('admin'), async (req, res) =>
 //  - discount: نسبة الخصم %
 //  - days    : صلاحية بالأيام
 //  - user_id : اختياري — لو NULL الكوبون عام لأي عميل
-router.post('/admin/create', auth, requireRole('admin'), async (req, res) => {
+router.post('/admin/create', auth, requireRole('admin', 'staff'), async (req, res) => {
   const { code, discount, days, user_id, max_uses = 1 } = req.body;
 
   if (!discount || !days) {

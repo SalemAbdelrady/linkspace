@@ -127,9 +127,18 @@ export const staffAPI = {
   changePassword:    (id, password)    => api.patch(`/staff/${id}/password`, { password }),
   toggle:            (id)              => api.patch(`/staff/${id}/toggle`),
   delete:            (id)              => api.delete(`/staff/${id}`),           // ✅ مضاف
+  myPermissions:     ()                => api.get('/staff/me/permissions'),
+  searchClients:     (q)               => api.get(`/staff/clients/search?q=${encodeURIComponent(q)}`),
   myStats:           (date)            => api.get(`/staff/me/stats?date=${date || ''}`),
   myInvoices:        (params)          => api.get('/staff/me/invoices', { params }),
   staffStats:        (id, year, month) => api.get(`/staff/${id}/stats?year=${year}&month=${month}`),
+  chargeWallet:      (id, amount)      => api.patch(`/admin/users/${id}/wallet`, { amount }),
+  addPoints:         (id, points)      => api.patch(`/admin/users/${id}/points`, { points }),
+  dailyReport:       (date)            => api.get(`/admin/reports/daily?date=${date}`),
+  monthlyReport:     (year, month)     => api.get(`/admin/reports/monthly?year=${year}&month=${month}`),
+  createCoupon:      (data)            => api.post('/coupons/admin/create', data),
+  allCoupons:        ()                => api.get('/coupons/admin/all'),
+  revokeCoupon:      (id)              => api.post(`/coupons/admin/revoke/${id}`),
   compare:           (year, month)     => api.get(`/staff/compare?year=${year}&month=${month}`),
 };
 
