@@ -54,12 +54,16 @@ api.interceptors.response.use(
         original.headers['Authorization'] = `Bearer ${newToken}`;
         processQueue(null, newToken);
         return api(original);
-      } catch {
+      } catch (refreshErr) {
+        // refresh فشل — امسح كل حاجة وروح login
         processQueue(new Error('Session expired'), null);
         localStorage.removeItem('ls_token');
         localStorage.removeItem('ls_user');
-        window.location.href = '/login';
-        return Promise.reject(err);
+        // لو مش في صفحة login خليه يروح لها
+        if (!window.location.pathname.includes('/login')) {
+          window.location.href = '/login';
+        }
+        return Promise.reject(refreshErr);
       } finally {
         isRefreshing = false;
       }
@@ -199,20 +203,21 @@ export const quickSaleAPI = {
 
 export default api;
 
+// Bookings
+export const bookingsAPI = {
+  availability : (date, space_key)  => api.get(`/bookings/availability?date=${date}&space_key=${space_key}`),
+  create       : (data)             => api.post('/bookings', data),
+  my           : ()                 => api.get('/bookings/my'),
+  all          : (params)           => api.get('/bookings', { params }),
+  today        : ()                 => api.get('/bookings/today'),
+  confirm      : (id)               => api.patch(`/bookings/${id}/confirm`),
+  cancel       : (id, reason)       => api.patch(`/bookings/${id}/cancel`, { cancel_reason: reason }),
+};
+
 // Settings — نُقل من App.jsx لهنا عشان نحافظ على مبدأ فصل المسؤوليات
 export const settingsAPI = {
   update         : (data)              => api.patch('/auth/settings', data),
   changePassword : (data)              => api.patch('/auth/change-password', data),
   forgotPassword : (email)             => api.post('/auth/forgot-password', { email }),
   resetPassword  : (email, otp, pass)  => api.post('/auth/reset-password', { email, otp, new_password: pass }),
-};
-
-// Booking API
-export const bookingsAPI = {
-  getAvailability: (date, spaceId) => api.get(`/bookings/availability?date=${date}&space_id=${spaceId}`),
-  create: (data) => api.post('/bookings', data),
-  confirm: (id) => api.patch(`/bookings/${id}/confirm`),
-  cancel: (id) => api.patch(`/bookings/${id}/cancel`),
-  getToday: () => api.get('/bookings/today'),
-  getMyBookings: () => api.get('/bookings/my'),
 };

@@ -46,8 +46,9 @@ const fileFormat = combine(
 
 // ── Transports ────────────────────────────────────────────────────────
 const transports = [];
+const isVercel = !!process.env.VERCEL; // Vercel filesystem = read-only
 
-// 1) Console — دائماً
+// 1) Console — دائماً (الوحيد المتاح في Vercel)
 transports.push(
   new winston.transports.Console({
     format: isDev ? devFormat : combine(timestamp(), errors({ stack: true }), json()),
@@ -55,30 +56,30 @@ transports.push(
   })
 );
 
-// 2) ملف الأخطاء — errors فقط
-transports.push(
-  new DailyRotateFile({
-    filename    : path.join(__dirname, '../../logs/error-%DATE%.log'),
-    datePattern : 'YYYY-MM-DD',
-    level       : 'error',
-    format      : fileFormat,
-    maxFiles    : '14d',
-    maxSize     : '10m',
-    zippedArchive: true,
-  })
-);
-
-// 3) ملف شامل — كل المستويات
-transports.push(
-  new DailyRotateFile({
-    filename    : path.join(__dirname, '../../logs/combined-%DATE%.log'),
-    datePattern : 'YYYY-MM-DD',
-    format      : fileFormat,
-    maxFiles    : '14d',
-    maxSize     : '20m',
-    zippedArchive: true,
-  })
-);
+// 2+3) ملفات — فقط خارج Vercel (local / Docker)
+if (!isVercel) {
+  transports.push(
+    new DailyRotateFile({
+      filename    : path.join(__dirname, '../../logs/error-%DATE%.log'),
+      datePattern : 'YYYY-MM-DD',
+      level       : 'error',
+      format      : fileFormat,
+      maxFiles    : '14d',
+      maxSize     : '10m',
+      zippedArchive: true,
+    })
+  );
+  transports.push(
+    new DailyRotateFile({
+      filename    : path.join(__dirname, '../../logs/combined-%DATE%.log'),
+      datePattern : 'YYYY-MM-DD',
+      format      : fileFormat,
+      maxFiles    : '14d',
+      maxSize     : '20m',
+      zippedArchive: true,
+    })
+  );
+}
 
 // ── Logger Instance ───────────────────────────────────────────────────
 const logger = winston.createLogger({

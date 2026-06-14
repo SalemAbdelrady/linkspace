@@ -64,7 +64,9 @@ async function sendEmail(to, subject, html) {
 
 // ── Refresh Token Helpers ────────────────────────────────────────────
 const REFRESH_TOKEN_DAYS = parseInt(process.env.REFRESH_TOKEN_DAYS) || 30;
-const ACCESS_TOKEN_EXP   = process.env.JWT_EXPIRES_IN || '15m';
+// في Vercel بدون refresh_tokens table — نستخدم مدة أطول كـ fallback
+// بعد تشغيل migration يُغيَّر إلى '15m' في .env
+const ACCESS_TOKEN_EXP = process.env.JWT_EXPIRES_IN || '7d';
 
 async function createRefreshToken(userId, req) {
   const token     = uuidv4();

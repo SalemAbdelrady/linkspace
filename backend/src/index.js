@@ -35,7 +35,9 @@ const ALLOWED_ORIGINS = [
   'https://linkspace-topaz.vercel.app',
   'https://linkspace-vojd.vercel.app',
   'http://localhost:3000',
+  'http://localhost:3001',
   'http://localhost:5173',
+  'http://localhost:5002',
   process.env.FRONTEND_URL,
 ].filter(Boolean);
 
