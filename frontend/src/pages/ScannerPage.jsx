@@ -507,11 +507,18 @@ export default function ScannerPage() {
   // ─────────────────────────────────────────
   async function startCamera() {
     try {
-      const qr = new Html5Qrcode("camera-reader");
+      const qr = new Html5Qrcode('camera-reader');
       html5QrRef.current = qr;
       await qr.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 220, height: 220 } },
+        { facingMode: 'environment' },
+        {
+          fps         : 15,
+          qrbox       : { width: 240, height: 240 },
+          aspectRatio : 1.0,
+          disableFlip : false,
+          // تفعيل الـ torch تلقائياً لو متاح
+          experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+        },
         async (decodedText) => {
           if (scanningRef.current) return;
           const now = Date.now();
@@ -519,20 +526,33 @@ export default function ScannerPage() {
             decodedText === lastScannedRef.current &&
             now - lastScannedTimeRef.current < 5000
           ) return;
+          // Haptic feedback لو متاح
+          if (navigator.vibrate) navigator.vibrate([50, 30, 50]);
           await handleScan(decodedText);
         },
-        () => {},
+        () => {}
       );
       setCameraActive(true);
-    } catch {
-      toast.error("تعذر تشغيل الكاميرا — تحقق من الإذن");
-      changeScanMode("device");
+    } catch (err) {
+      if (err?.name === 'NotAllowedError') {
+        toast.error('❌ لم يتم منح إذن الكاميرا — اسمح للمتصفح باستخدامها');
+      } else if (err?.name === 'NotFoundError') {
+        toast.error('❌ لا توجد كاميرا متاحة على هذا الجهاز');
+      } else {
+        toast.error('تعذر تشغيل الكاميرا — تحقق من الإذن');
+      }
+      changeScanMode('device');
     }
   }
 
   async function stopCamera() {
     if (html5QrRef.current) {
-      try { await html5QrRef.current.stop(); } catch {}
+      try {
+        if (html5QrRef.current.isScanning) {
+          await html5QrRef.current.stop();
+        }
+        html5QrRef.current.clear();
+      } catch {}
       html5QrRef.current = null;
     }
     setCameraActive(false);

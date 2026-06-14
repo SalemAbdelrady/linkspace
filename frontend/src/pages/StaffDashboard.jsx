@@ -680,6 +680,11 @@ export default function StaffDashboard() {
               padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             ⚡ بيع سريع
           </button>
+          <button onClick={() => navigate('/bookings')}
+            style={{ background: 'transparent', border: '1px solid var(--accent)', color: 'var(--accent)',
+              padding: '6px 12px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
+            📅 الحجوزات
+          </button>
           <button onClick={() => navigate('/scanner')}
             style={{ background: 'transparent', border: '1px solid var(--accent)', color: 'var(--accent)',
               padding: '6px 12px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>

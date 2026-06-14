@@ -11,6 +11,7 @@ import SubscriptionsPage from './pages/SubscriptionsPage';
 import InvoicePage from './pages/InvoicePage';
 import SettingsPage from './pages/SettingsPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import BookingPage from './pages/BookingPage';
 import './index.css';
 // settingsAPI نُقل إلى utils/api.js — استوردوه من هناك
 export { settingsAPI } from './utils/api';
@@ -171,6 +172,13 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
 
+      {/* الحجوزات — للكل */}
+      <Route path="/bookings" element={
+        <ProtectedRoute>
+          <BookingPage />
+        </ProtectedRoute>
+      } />
+
       {/* Admin فقط */}
       <Route path="/admin" element={
         <ProtectedRoute roles={['admin']}>
@@ -194,6 +202,13 @@ function AppRoutes() {
       <Route path="/invoice" element={
         <ProtectedRoute roles={['staff', 'admin']}>
           <InvoicePage />
+        </ProtectedRoute>
+      } />
+
+      {/* الحجوزات — للكل */}
+      <Route path="/bookings" element={
+        <ProtectedRoute>
+          <BookingPage />
         </ProtectedRoute>
       } />
 

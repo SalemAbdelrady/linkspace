@@ -147,6 +147,32 @@ async function migrate() {
   await db.query(`CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);`);
   await db.query(`CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token);`);
 
+  // ── Bookings Table — نظام الحجز المسبق ──────────────────────────────
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS bookings (
+      id           SERIAL PRIMARY KEY,
+      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      space_key    VARCHAR(20) NOT NULL DEFAULT 'cowork',
+      space_name   VARCHAR(100),
+      date         DATE NOT NULL,
+      start_time   TIME NOT NULL,
+      end_time     TIME NOT NULL,
+      guest_count  INTEGER NOT NULL DEFAULT 1,
+      status       VARCHAR(20) NOT NULL DEFAULT 'pending'
+                   CHECK (status IN ('pending','confirmed','cancelled','completed')),
+      note         TEXT,
+      created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      confirmed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      cancelled_at TIMESTAMPTZ,
+      cancel_reason TEXT,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_bookings_user      ON bookings(user_id);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_bookings_date      ON bookings(date, space_key);`);
+  await db.query(`CREATE INDEX IF NOT EXISTS idx_bookings_status    ON bookings(status);`);
+
   await db.query(`
     DO $$
     BEGIN

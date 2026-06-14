@@ -1,5 +1,18 @@
 require('dotenv').config();
 const logger = require('./utils/logger');
+
+// ══ أولوية قصوى — التحقق من المتغيرات الحرجة عند الـ Startup ══════════
+const REQUIRED_ENV = ['JWT_SECRET', 'DATABASE_URL'];
+const missingEnv   = REQUIRED_ENV.filter(k => !process.env[k]);
+if (missingEnv.length) {
+  logger.error(`❌ FATAL: متغيرات بيئة مفقودة: ${missingEnv.join(', ')}`);
+  logger.error('   أضفهم في ملف .env ثم أعد التشغيل.');
+  process.exit(1);
+}
+if (process.env.JWT_SECRET.length < 32) {
+  logger.error('❌ FATAL: JWT_SECRET أقل من 32 حرف — غير آمن!');
+  process.exit(1);
+}
 const express          = require('express');
 const cors             = require('cors');
 const helmet           = require('helmet');
@@ -121,6 +134,7 @@ app.use('/api/sessions',      require('./routes/sessions'));
 app.use('/api/coupons',       require('./routes/coupons'));
 app.use('/api/admin',         require('./routes/admin'));
 app.use('/api/spaces',        require('./routes/spaces'));
+app.use('/api/bookings',      require('./routes/bookings'));
 app.use('/api/services',      require('./routes/services'));
 app.use('/api/subscriptions', require('./routes/subscriptions'));
 app.use('/api/invoices',      require('./routes/invoices'));
