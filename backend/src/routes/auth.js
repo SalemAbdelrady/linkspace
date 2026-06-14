@@ -78,10 +78,11 @@ async function createRefreshToken(userId, req) {
 }
 
 function setRefreshCookie(res, token) {
+  const isProd = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
   res.cookie('refreshToken', token, {
     httpOnly : true,
-    secure   : process.env.NODE_ENV === 'production',
-    sameSite : 'strict',
+    secure   : isProd,                    // Vercel = HTTPS دائماً
+    sameSite : isProd ? 'none' : 'lax',  // cross-origin في Vercel يحتاج 'none'
     maxAge   : REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000,
     path     : '/api/auth',
   });
