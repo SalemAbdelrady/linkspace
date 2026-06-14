@@ -206,3 +206,13 @@ export const settingsAPI = {
   forgotPassword : (email)             => api.post('/auth/forgot-password', { email }),
   resetPassword  : (email, otp, pass)  => api.post('/auth/reset-password', { email, otp, new_password: pass }),
 };
+
+// Booking API
+export const bookingsAPI = {
+  getAvailability: (date, spaceId) => api.get(`/bookings/availability?date=${date}&space_id=${spaceId}`),
+  create: (data) => api.post('/bookings', data),
+  confirm: (id) => api.patch(`/bookings/${id}/confirm`),
+  cancel: (id) => api.patch(`/bookings/${id}/cancel`),
+  getToday: () => api.get('/bookings/today'),
+  getMyBookings: () => api.get('/bookings/my'),
+};

@@ -41,8 +41,6 @@ function ProgressBar({ value, max }) {
 
 const SPACE_ICONS = { cowork: "🖥️", meeting: "🤝", lessons: "📚" };
 
-const [showPastSubs, setShowPastSubs] = useState(false);
-const [pastSubscriptions, setPastSubscriptions] = useState([]);
 
 // ── LiveTimer ─────────────────────────────────────────────────────────
 function LiveTimer({ checkIn, pricePerHr, maxHours = 4, spaceName, spaceKey }) {
@@ -1063,6 +1061,9 @@ export default function ClientDashboard() {
   const [loadingRecentInvoices, setLoadingRecentInvoices] = useState(true);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [allOrdersCount, setAllOrdersCount] = useState(0);
+
+  const [showPastSubs, setShowPastSubs] = useState(false);
+  const [pastSubscriptions, setPastSubscriptions] = useState([]);
 
   // ── Effects ──────────────────────────────────────────────────────────
   useEffect(() => {
