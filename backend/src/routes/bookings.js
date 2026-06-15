@@ -41,10 +41,16 @@ router.get('/availability', auth, async (req, res) => {
 
 // ── POST /api/bookings — إنشاء حجز جديد ──────────────────────────────
 router.post('/', ...isAuth, async (req, res) => {
-  const { space_key, space_name, date, start_time, end_time, guest_count = 1, note } = req.body;
+  const { space_key, space_name, date, start_time, end_time,
+          guest_count = 1, note, client_user_id } = req.body;
 
   if (!space_key || !date || !start_time || !end_time)
     return res.status(400).json({ error: 'أدخل المساحة والتاريخ ووقت البداية والنهاية' });
+
+  // الموظف/Admin يقدر يحجز باسم عميل آخر
+  const bookingUserId = (client_user_id && req.user.role !== 'client')
+    ? parseInt(client_user_id)
+    : req.user.id;
 
   // التحقق من إن الوقت مستقبلي
   const bookingStart = new Date(`${date}T${start_time}`);
@@ -75,7 +81,7 @@ router.post('/', ...isAuth, async (req, res) => {
          (user_id, space_key, space_name, date, start_time, end_time, guest_count, note, created_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING *`,
-      [req.user.id, space_key, space_name || space_key, date,
+      [bookingUserId, space_key, space_name || space_key, date,
        start_time, end_time, guest_count, note || null, req.user.id]
     );
 
@@ -150,18 +156,26 @@ router.get('/', ...isStaffOrAdmin, async (req, res) => {
 // ── PATCH /api/bookings/:id/confirm — تأكيد الحجز (staff/admin) ──────
 router.patch('/:id/confirm', ...isStaffOrAdmin, async (req, res) => {
   try {
-    const { rows } = await db.query(
+    await db.query(
       `UPDATE bookings
        SET status = 'confirmed', confirmed_by = $1, updated_at = NOW()
-       WHERE id = $2 AND status = 'pending'
-       RETURNING *`,
+       WHERE id = $2 AND status = 'pending'`,
       [req.user.id, req.params.id]
+    );
+
+    // جيب البيانات مع اسم الموظف المؤكِّد
+    const { rows } = await db.query(
+      `SELECT b.*, u.name AS confirmed_by_name
+       FROM bookings b
+       LEFT JOIN users u ON u.id = b.confirmed_by
+       WHERE b.id = $1`,
+      [req.params.id]
     );
 
     if (!rows[0]) return res.status(404).json({ error: 'الحجز غير موجود أو تم تأكيده مسبقاً' });
 
-    logger.info('booking confirmed', { bookingId: rows[0].id, staffId: req.user.id });
-    res.json({ booking: rows[0], message: 'تم تأكيد الحجز ✅' });
+    logger.info('booking confirmed', { bookingId: rows[0].id, staffId: req.user.id, staffName: req.user.name });
+    res.json({ booking: rows[0], message: `تم تأكيد الحجز ✅ بواسطة ${req.user.name || 'الموظف'}` });
   } catch (err) {
     logger.error('confirm booking error', { stack: err.stack });
     res.status(500).json({ error: 'خطأ في الخادم' });

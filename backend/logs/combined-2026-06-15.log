@@ -1,0 +1,6 @@
+{"level":"info","message":"🔄 Running migrations...","timestamp":"2026-06-14T23:47:56.453Z"}
+{"level":"info","message":"✅ Migrations completed!","timestamp":"2026-06-14T23:48:02.552Z"}
+{"level":"info","message":"✅ DB initialized","timestamp":"2026-06-14T23:48:05.749Z"}
+{"level":"info","message":"🚀 Link Space API running on http://localhost:5002","timestamp":"2026-06-14T23:48:05.756Z"}
+{"level":"info","message":"📊 Environment: development","timestamp":"2026-06-14T23:48:05.756Z"}
+{"level":"info","message":"🌐 Allowed origins: https://linkspace-topaz.vercel.app, https://linkspace-vojd.vercel.app, http://localhost:3000, http://localhost:3001, http://localhost:5173, http://localhost:5002, http://localhost:3000","timestamp":"2026-06-14T23:48:05.757Z"}

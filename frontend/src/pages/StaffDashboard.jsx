@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { staffAPI, spacesAPI, servicesAPI, adminAPI, quickSaleAPI } from '../utils/api';
+import { staffAPI, spacesAPI, servicesAPI, adminAPI, quickSaleAPI, bookingsAPI, sessionsAPI } from '../utils/api';
+import LogoutConfirmModal from '../components/LogoutConfirmModal';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
@@ -397,6 +398,11 @@ export default function StaffDashboard() {
 
   const [canEditPrices,    setCanEditPrices]    = useState(false);
 
+  // ── Logout Modal + Badges ──────────────────────────────────────────────
+  const [showLogout,      setShowLogout]      = useState(false);
+  const [pendingCount,    setPendingCount]    = useState(0);
+  const [activeCount,     setActiveCount]     = useState(0);
+
   // ── الكوبونات ────────────────────────────────────────────────────────
   const [myCoupons,       setMyCoupons]       = useState([]);
   const [couponForm,      setCouponForm]       = useState({ code: '', discount: 20, days: 30, max_uses: 1 });
@@ -440,6 +446,13 @@ export default function StaffDashboard() {
   useEffect(() => { if (tab === 'invoices') loadMyInvoices(); }, [tab, myInvoicePage, invoiceSearch, invoiceDate]);
   useEffect(() => { if (tab === 'prices')  { loadSpaces(); loadServicesData(); } }, [tab]);
   useEffect(() => { if (tab === 'coupons') { loadMyCoupons(); }  }, [tab]);
+
+  // تحميل عداد الحجوزات المعلقة + الجلسات النشطة كل 30 ثانية
+  useEffect(() => {
+    loadBadges();
+    const interval = setInterval(loadBadges, 30000);
+    return () => clearInterval(interval);
+  }, []);
   useEffect(() => { if (tab === 'reports') { loadReport(); }     }, [tab]);
 
   async function loadStats() {
@@ -452,6 +465,17 @@ export default function StaffDashboard() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function loadBadges() {
+    try {
+      const [bookRes, sessRes] = await Promise.all([
+        bookingsAPI.all({ status: 'pending' }),
+        sessionsAPI.active(),
+      ]);
+      setPendingCount(bookRes.data.bookings?.length || 0);
+      setActiveCount(sessRes.data.sessions?.length || 0);
+    } catch {}
   }
 
   async function checkPermissions() {
@@ -653,6 +677,13 @@ export default function StaffDashboard() {
   return (
     <div style={{ minHeight: '100vh', maxWidth: 680, margin: '0 auto', padding: '0 0 40px' }}>
 
+      {showLogout && (
+        <LogoutConfirmModal
+          onConfirm={() => { setShowLogout(false); logout(); }}
+          onCancel={() => setShowLogout(false)}
+        />
+      )}
+
       {selectedInvoice && (
         <InvoiceModal invoice={selectedInvoice} onClose={() => setSelectedInvoice(null)} />
       )}
@@ -681,16 +712,32 @@ export default function StaffDashboard() {
             ⚡ بيع سريع
           </button>
           <button onClick={() => navigate('/bookings')}
-            style={{ background: 'transparent', border: '1px solid var(--accent)', color: 'var(--accent)',
-              padding: '6px 12px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
+            style={{ position:'relative', background: 'transparent', border: '1px solid var(--accent)',
+              color: 'var(--accent)', padding: '6px 12px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
             📅 الحجوزات
+            {pendingCount > 0 && (
+              <span style={{ position:'absolute', top:-6, right:-6, minWidth:18, height:18,
+                borderRadius:9, background:'#ef4444', color:'#fff', fontSize:10, fontWeight:700,
+                display:'flex', alignItems:'center', justifyContent:'center', padding:'0 4px',
+                border:'2px solid var(--bg)' }}>
+                {pendingCount > 9 ? '9+' : pendingCount}
+              </span>
+            )}
           </button>
           <button onClick={() => navigate('/scanner')}
-            style={{ background: 'transparent', border: '1px solid var(--accent)', color: 'var(--accent)',
-              padding: '6px 12px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
+            style={{ position:'relative', background: 'transparent', border: '1px solid var(--accent)',
+              color: 'var(--accent)', padding: '6px 12px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
             📡 Scanner
+            {activeCount > 0 && (
+              <span style={{ position:'absolute', top:-6, right:-6, minWidth:18, height:18,
+                borderRadius:9, background:'#10b981', color:'#fff', fontSize:10, fontWeight:700,
+                display:'flex', alignItems:'center', justifyContent:'center', padding:'0 4px',
+                border:'2px solid var(--bg)' }}>
+                {activeCount > 99 ? '99+' : activeCount}
+              </span>
+            )}
           </button>
-          <button onClick={logout}
+          <button onClick={() => setShowLogout(true)}
             style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--muted)',
               padding: '6px 12px', borderRadius: 8, fontSize: 12, cursor: 'pointer' }}>
             خروج

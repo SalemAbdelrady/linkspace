@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { bookingsAPI, spacesAPI } from '../utils/api';
+import { bookingsAPI, spacesAPI, adminAPI } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -48,6 +48,11 @@ export default function BookingPage() {
   const [cancelId,      setCancelId]      = useState(null);
   const [cancelReason,  setCancelReason]  = useState('');
 
+  // ── للموظف: اختيار العميل ────────────────────────────────────────
+  const [clientSearch,    setClientSearch]   = useState('');
+  const [clientResults,   setClientResults]  = useState([]);
+  const [selectedClient,  setSelectedClient] = useState(null);
+
   // ── Load ────────────────────────────────────────────────────────
   useEffect(() => {
     loadSpaces();
@@ -91,6 +96,15 @@ export default function BookingPage() {
     finally { setLoading(false); }
   }
 
+  // ── Staff: بحث عن عميل ──────────────────────────────────────────────
+  async function searchClients(q) {
+    if (q.length < 2) { setClientResults([]); return; }
+    try {
+      const { data } = await adminAPI.users(q);
+      setClientResults((data.users || []).filter(u => u.role === 'client').slice(0, 6));
+    } catch {}
+  }
+
   // ── Actions ─────────────────────────────────────────────────────
   async function createBooking() {
     if (!selectedDate || !startTime || !endTime)
@@ -102,13 +116,16 @@ export default function BookingPage() {
     setSaving(true);
     try {
       await bookingsAPI.create({
-        space_key  : selectedSpace,
-        space_name : spaceObj?.name || selectedSpace,
-        date       : selectedDate,
-        start_time : startTime,
-        end_time   : endTime,
-        guest_count: guestCount,
-        note       : note || null,
+        space_key   : selectedSpace,
+        space_name  : spaceObj?.name || selectedSpace,
+        date        : selectedDate,
+        start_time  : startTime,
+        end_time    : endTime,
+        guest_count : guestCount,
+        note        : note || null,
+        // الموظف يحجز باسم عميل مختار
+        client_user_id: isStaff && selectedClient ? selectedClient.id : undefined,
+        client_name   : isStaff && selectedClient ? selectedClient.name : undefined,
       });
       toast.success('✅ تم إرسال طلب الحجز — سيتم التأكيد قريباً');
       setNote('');
@@ -212,6 +229,51 @@ export default function BookingPage() {
         {/* ══ حجز جديد ══ */}
         {tab === 'new' && (
           <div className="fade-up">
+
+            {/* الموظف يختار العميل أولاً */}
+            {isStaff && (
+              <div className="card" style={{ marginBottom:16, border:'1px solid rgba(0,212,170,0.3)', background:'rgba(0,212,170,0.04)' }}>
+                <div style={{ fontSize:13, fontWeight:700, color:'var(--accent)', marginBottom:10 }}>
+                  👤 الحجز باسم عميل (اختياري)
+                </div>
+                {selectedClient ? (
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
+                    padding:'10px 12px', background:'rgba(0,212,170,0.08)', borderRadius:10,
+                    border:'1px solid rgba(0,212,170,0.25)' }}>
+                    <div>
+                      <div style={{ fontWeight:700 }}>{selectedClient.name}</div>
+                      <div style={{ fontSize:12, color:'var(--muted)' }}>{selectedClient.phone}</div>
+                    </div>
+                    <button onClick={() => { setSelectedClient(null); setClientSearch(''); }}
+                      style={{ background:'transparent', border:'none', color:'#ef4444', fontSize:18, cursor:'pointer' }}>✕</button>
+                  </div>
+                ) : (
+                  <div style={{ position:'relative' }}>
+                    <input className="input-field" placeholder="ابحث عن عميل بالاسم أو الموبايل..."
+                      value={clientSearch}
+                      onChange={e => { setClientSearch(e.target.value); searchClients(e.target.value); }} />
+                    {clientResults.length > 0 && (
+                      <div style={{ position:'absolute', top:'100%', right:0, left:0, zIndex:20,
+                        background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:10, marginTop:4, overflow:'hidden' }}>
+                        {clientResults.map(c => (
+                          <div key={c.id}
+                            onClick={() => { setSelectedClient(c); setClientSearch(c.name); setClientResults([]); }}
+                            style={{ padding:'10px 14px', cursor:'pointer', borderBottom:'1px solid var(--border)', fontSize:13 }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,212,170,0.08)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                            <div style={{ fontWeight:600 }}>{c.name}</div>
+                            <div style={{ fontSize:11, color:'var(--muted)' }}>{c.phone}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div style={{ fontSize:11, color:'var(--muted)', marginTop:6 }}>
+                      اتركه فارغاً للحجز باسمك أنت
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* اختيار المساحة */}
             <div style={{ marginBottom:16 }}>

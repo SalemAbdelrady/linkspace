@@ -22,6 +22,8 @@ import toast from "react-hot-toast";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
+import LogoutConfirmModal from "../components/LogoutConfirmModal";
+import { bookingsAPI, sessionsAPI } from "../utils/api";
 
 // ── NumberInput ───────────────────────────────────────────────────────
 function NumberInput({ value, onChange, min = 1, step = 1, suffix = "" }) {
@@ -1707,6 +1709,9 @@ function memberSince(dateStr) {
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [showLogout,   setShowLogout]   = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [activeCount,  setActiveCount]  = useState(0);
   const [tab, setTab] = useState("overview");
   const [showQuickSale, setShowQuickSale] = useState(false);
 
@@ -1841,7 +1846,24 @@ export default function AdminDashboard() {
   const today = format(new Date(), "yyyy-MM-dd");
   const now = new Date();
 
+  // عداد الحجوزات المعلقة + الجلسات النشطة
   useEffect(() => {
+    async function loadBadges() {
+      try {
+        const [bookRes, sessRes] = await Promise.all([
+          bookingsAPI.all({ status: "pending" }),
+          sessionsAPI.active(),
+        ]);
+        setPendingCount(bookRes.data.bookings?.length || 0);
+        setActiveCount(sessRes.data.sessions?.length || 0);
+      } catch {}
+    }
+    loadBadges();
+    const iv = setInterval(loadBadges, 30000);
+    return () => clearInterval(iv);
+  }, []);
+
+    useEffect(() => {
     loadOverview();
     loadSpaces();
     loadServices();
@@ -2986,7 +3008,14 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Top Bar */}
+      {showLogout && (
+        <LogoutConfirmModal
+          onConfirm={() => { setShowLogout(false); logout(); }}
+          onCancel={() => setShowLogout(false)}
+        />
+      )}
+
+            {/* Top Bar */}
       <div
         style={{
           display: "flex",
@@ -3028,8 +3057,32 @@ export default function AdminDashboard() {
             ⚡ بيع سريع
           </button>
           <button
+            onClick={() => navigate("/bookings")}
+            style={{
+              position: "relative",
+              background: "transparent",
+              border: "1px solid var(--accent)",
+              color: "var(--accent)",
+              padding: "6px 12px",
+              borderRadius: 8,
+              fontSize: 12,
+              cursor: "pointer",
+            }}
+          >
+            📅 الحجوزات
+            {pendingCount > 0 && (
+              <span style={{ position:"absolute", top:-6, right:-6, minWidth:18, height:18,
+                borderRadius:9, background:"#ef4444", color:"#fff", fontSize:10, fontWeight:700,
+                display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px",
+                border:"2px solid var(--bg)" }}>
+                {pendingCount > 9 ? "9+" : pendingCount}
+              </span>
+            )}
+          </button>
+          <button
             onClick={() => navigate("/scanner")}
             style={{
+              position: "relative",
               background: "transparent",
               border: "1px solid var(--accent)",
               color: "var(--accent)",
@@ -3040,6 +3093,14 @@ export default function AdminDashboard() {
             }}
           >
             📡 Scanner
+            {activeCount > 0 && (
+              <span style={{ position:"absolute", top:-6, right:-6, minWidth:18, height:18,
+                borderRadius:9, background:"#10b981", color:"#fff", fontSize:10, fontWeight:700,
+                display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px",
+                border:"2px solid var(--bg)" }}>
+                {activeCount > 99 ? "99+" : activeCount}
+              </span>
+            )}
           </button>
           <button
             onClick={() => navigate("/subscriptions")}
@@ -3056,7 +3117,7 @@ export default function AdminDashboard() {
             📋 الاشتراكات
           </button>
           <button
-            onClick={logout}
+            onClick={() => setShowLogout(true)}
             style={{
               background: "transparent",
               border: "1px solid var(--border)",
@@ -3064,6 +3125,7 @@ export default function AdminDashboard() {
               padding: "6px 12px",
               borderRadius: 8,
               fontSize: 12,
+              cursor: "pointer",
             }}
           >
             خروج

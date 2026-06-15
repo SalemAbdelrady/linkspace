@@ -13,6 +13,7 @@ import toast from "react-hot-toast";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
+import LogoutConfirmModal from "../components/LogoutConfirmModal";
 
 // ── ProgressBar ───────────────────────────────────────────────────────
 function ProgressBar({ value, max }) {
@@ -41,6 +42,8 @@ function ProgressBar({ value, max }) {
 
 const SPACE_ICONS = { cowork: "🖥️", meeting: "🤝", lessons: "📚" };
 
+const [showPastSubs, setShowPastSubs] = useState(false);
+const [pastSubscriptions, setPastSubscriptions] = useState([]);
 
 // ── LiveTimer ─────────────────────────────────────────────────────────
 function LiveTimer({ checkIn, pricePerHr, maxHours = 4, spaceName, spaceKey }) {
@@ -1040,6 +1043,7 @@ function InvoiceCard({ inv, onClick }) {
 export default function ClientDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [showLogout, setShowLogout] = useState(false);
   const [tab, setTab] = useState("overview");
   const nudgeShown = useRef(false);
 
@@ -1061,9 +1065,6 @@ export default function ClientDashboard() {
   const [loadingRecentInvoices, setLoadingRecentInvoices] = useState(true);
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [allOrdersCount, setAllOrdersCount] = useState(0);
-
-  const [showPastSubs, setShowPastSubs] = useState(false);
-  const [pastSubscriptions, setPastSubscriptions] = useState([]);
 
   // ── Effects ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1292,6 +1293,13 @@ export default function ClientDashboard() {
   // ── Render ────────────────────────────────────────────────────────────
   return (
     <div className="page-wrap" style={{ paddingBottom: 40 }}>
+      {showLogout && (
+        <LogoutConfirmModal
+          onConfirm={() => { setShowLogout(false); logout(); }}
+          onCancel={() => setShowLogout(false)}
+        />
+      )}
+
       {/* ── المودالات ── */}
       {selectedInvoice && (
         <InvoiceDetailModal
@@ -1322,21 +1330,6 @@ export default function ClientDashboard() {
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button
-            onClick={() => navigate("/bookings")}
-            style={{
-              background: "var(--accent)",
-              border: "none",
-              color: "#000",
-              padding: "6px 12px",
-              borderRadius: 8,
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            📅 حجز
-          </button>
-          <button
             onClick={() => navigate("/settings")}
             style={{
               background: "transparent",
@@ -1351,7 +1344,7 @@ export default function ClientDashboard() {
             ⚙️
           </button>
           <button
-            onClick={logout}
+            onClick={() => setShowLogout(true)}
             style={{
               background: "transparent",
               border: "1px solid var(--border)",
