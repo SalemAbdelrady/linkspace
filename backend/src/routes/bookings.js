@@ -143,7 +143,16 @@ router.get('/', ...isStaffOrAdmin, async (req, res) => {
        JOIN  users c ON c.id = b.user_id
        LEFT JOIN users u ON u.id = b.confirmed_by
        ${whereClause}
-       ORDER BY b.date ASC, b.start_time ASC`,
+       ORDER BY
+         CASE b.status
+           WHEN 'pending'   THEN 1
+           WHEN 'confirmed' THEN 2
+           WHEN 'cancelled' THEN 3
+           WHEN 'completed' THEN 4
+           ELSE 5
+         END,
+         b.date ASC,
+         b.start_time ASC`,
       params
     );
     res.json({ bookings: rows });

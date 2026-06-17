@@ -632,6 +632,7 @@ export default function SubscriptionsPage() {
             </div>
           </div>
         </div>
+        {/*
         <button
           onClick={logout}
           style={{
@@ -645,6 +646,7 @@ export default function SubscriptionsPage() {
         >
           خروج
         </button>
+        */}
       </div>
 
       {/* Tabs */}

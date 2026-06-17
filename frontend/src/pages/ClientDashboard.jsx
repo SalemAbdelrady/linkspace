@@ -42,9 +42,6 @@ function ProgressBar({ value, max }) {
 
 const SPACE_ICONS = { cowork: "🖥️", meeting: "🤝", lessons: "📚" };
 
-const [showPastSubs, setShowPastSubs] = useState(false);
-const [pastSubscriptions, setPastSubscriptions] = useState([]);
-
 // ── LiveTimer ─────────────────────────────────────────────────────────
 function LiveTimer({ checkIn, pricePerHr, maxHours = 4, spaceName, spaceKey }) {
   const [elapsed, setElapsed] = useState(0);
@@ -1066,6 +1063,9 @@ export default function ClientDashboard() {
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [allOrdersCount, setAllOrdersCount] = useState(0);
 
+  const [showPastSubs, setShowPastSubs] = useState(false);
+  const [pastSubscriptions, setPastSubscriptions] = useState([]);
+
   // ── Effects ──────────────────────────────────────────────────────────
   useEffect(() => {
     loadData();
@@ -1330,6 +1330,21 @@ export default function ClientDashboard() {
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <button
+            onClick={() => navigate("/bookings")}
+            style={{
+              background: "var(--accent)",
+              border: "none",
+              color: "#000",
+              padding: "6px 12px",
+              borderRadius: 8,
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            📅 حجز
+          </button>
+          <button
             onClick={() => navigate("/settings")}
             style={{
               background: "transparent",
@@ -1352,6 +1367,7 @@ export default function ClientDashboard() {
               padding: "6px 12px",
               borderRadius: 8,
               fontSize: 12,
+              cursor: "pointer",
             }}
           >
             خروج

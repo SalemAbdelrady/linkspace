@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   adminAPI,
-  sessionsAPI,
+  // sessionsAPI,
   spacesAPI,
   servicesAPI,
   couponsAPI,
@@ -25,6 +25,23 @@ import { useNavigate } from "react-router-dom";
 import LogoutConfirmModal from "../components/LogoutConfirmModal";
 import { bookingsAPI, sessionsAPI } from "../utils/api";
 
+{/*
+// ── Print & PDF Styles ─────────────────────────────────────────────
+const PRINT_STYLE = `
+  @media print {
+    body * { visibility: hidden !important; }
+    #invoice-print-area, #invoice-print-area * { visibility: visible !important; }
+    #invoice-print-area {
+      position: fixed !important; inset: 0 !important;
+      width: 80mm !important; margin: 0 auto !important;
+      padding: 8mm !important; background: white !important;
+      color: black !important; font-family: Arial, sans-serif !important;
+      font-size: 12px !important;
+    }
+    @page { size: 80mm auto; margin: 0; }
+  }
+`;
+*/}
 // ── NumberInput ───────────────────────────────────────────────────────
 function NumberInput({ value, onChange, min = 1, step = 1, suffix = "" }) {
   const num = parseFloat(value) || 0;
@@ -566,7 +583,130 @@ function InvoiceModal({ invoice, onClose }) {
     });
   }
 
+  // ── Print ──────────────────────────────────────────────────────────
+  
+  function handlePrint() {
+    window.print();
+  }
+
+  // ── Save PDF ───────────────────────────────────────────────────────
+  async function handleSavePDF() {
+    async function loadScript(src) {
+      if (document.querySelector(`script[src="${src}"]`)) return;
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src; s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+    await loadScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js');
+
+    const element = document.getElementById('inv-modal-print');
+    if (!element) return;
+
+    // ── إخفاء الأزرار ──
+    const noPrintEls = element.querySelectorAll('.inv-no-print');
+    noPrintEls.forEach(el => el.style.display = 'none');
+
+    // ── حفظ الستايل الأصلي ──
+    const originalStyle = {
+      maxHeight:    element.style.maxHeight,
+      overflowY:    element.style.overflowY,
+      background:   element.style.background,
+      color:        element.style.color,
+      borderRadius: element.style.borderRadius,
+      width:        element.style.width,
+    };
+
+    // ── تطبيق ستايل الطباعة ──
+    element.style.maxHeight    = 'none';
+    element.style.overflowY    = 'visible';
+    element.style.background   = '#ffffff';
+    element.style.color        = '#000000';
+    element.style.borderRadius = '0';
+    element.style.width        = '380px';
+
+    // ── تغيير ألوان النصوص للأسود ──
+    const allEls = element.querySelectorAll('*');
+    const originalColors = [];
+    allEls.forEach(el => {
+      originalColors.push({
+        el,
+        color:      el.style.color,
+        background: el.style.background,
+        borderColor: el.style.borderColor,
+      });
+      const computed = window.getComputedStyle(el);
+      // النصوص الملونة → أسود، الـ muted → رمادي داكن
+      if (computed.color.includes('212, 170') || // accent أخضر
+          computed.color.includes('255, 165') || // warning برتقالي  
+          computed.color.includes('59, 130'))  { // أزرق
+        el.style.color = '#1a6b5a'; // أخضر داكن مناسب للطباعة
+      }
+    });
+
+    try {
+      await new Promise(r => setTimeout(r, 100)); // انتظر الـ rerender
+
+      const canvas = await window.html2canvas(element, {
+        scale: 2.5,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        windowWidth: 420,
+      });
+
+      const { jsPDF } = window.jspdf;
+
+      const imgWidth  = 80; // mm — عرض إيصال
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      const pdf = new jsPDF({
+        unit: 'mm',
+        format: [imgWidth, imgHeight + 10], // +10 هامش سفلي
+        orientation: 'portrait',
+      });
+
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 5, imgWidth, imgHeight);
+      pdf.save(`فاتورة-${invoice.invoice_number}.pdf`);
+
+    } finally {
+      // ── إرجاع كل حاجة لأصلها ──
+      Object.assign(element.style, originalStyle);
+      noPrintEls.forEach(el => el.style.display = '');
+      originalColors.forEach(({ el, color, background, borderColor }) => {
+        el.style.color       = color;
+        el.style.background  = background;
+        el.style.borderColor = borderColor;
+      });
+    }
+  }
+
   return (
+    <>
+    <style>{`
+      @media print {
+        body * { visibility: hidden !important; }
+        #inv-modal-print, #inv-modal-print * { visibility: visible !important; }
+        #inv-modal-print {
+          position: fixed !important;
+          top: 0 !important; left: 0 !important;
+          width: 100% !important;
+          background: white !important;
+          color: black !important;
+          padding: 20px !important;
+          font-family: Arial, sans-serif !important;
+          direction: rtl !important;
+        }
+        .inv-no-print { display: none !important; }
+        @page { size: A5 portrait; margin: 10mm; }
+        #inv-modal-print {
+          max-height: 190mm !important; /* يمنع التمدد */
+          font-size: 11px !important;
+        }
+    `}</style>
     <div
       style={{
         position: "fixed",
@@ -580,7 +720,8 @@ function InvoiceModal({ invoice, onClose }) {
       }}
       onClick={onClose}
     >
-      <div
+      
+      <div id="inv-modal-print"
         style={{
           background: "var(--surface)",
           borderRadius: 16,
@@ -620,7 +761,25 @@ function InvoiceModal({ invoice, onClose }) {
               })}
             </div>
           </div>
-          <button
+
+          <div className="inv-no-print" style={{ display:'flex', gap:6, marginBottom:12, marginTop:4 }}>
+            <button onClick={handlePrint}
+              style={{ flex:1, padding:'6px 10px', borderRadius:8,
+                border:'1px solid var(--border)', background:'transparent',
+                color:'var(--text)', fontSize:11, fontWeight:600, cursor:'pointer',
+                display:'flex', alignItems:'center', justifyContent:'center', gap:4 }}>
+              🖨️ طباعة
+            </button>
+            <button onClick={handleSavePDF}
+              style={{ flex:1, padding:'6px 10px', borderRadius:8,
+                border:'1px solid rgba(0,212,170,0.4)',
+                background:'rgba(0,212,170,0.08)',
+                color:'var(--accent)', fontSize:11, fontWeight:600, cursor:'pointer',
+                display:'flex', alignItems:'center', justifyContent:'center', gap:4 }}>
+              📄 PDF
+            </button>
+          </div>
+          <button className="inv-no-print"
             onClick={onClose}
             style={{
               background: "transparent",
@@ -966,6 +1125,8 @@ function InvoiceModal({ invoice, onClose }) {
         )}
       </div>
     </div>
+
+    </>
   );
 }
 
@@ -1058,6 +1219,8 @@ function QuickSaleModal({ services: allServices, adminAPI, onClose, onDone }) {
     } finally {
       setSaving(false);
     }
+    window.print();
+
   }
 
   return (
