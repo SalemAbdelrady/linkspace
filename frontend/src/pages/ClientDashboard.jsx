@@ -5,6 +5,8 @@ import api, {
   spacesAPI,
   invoicesAPI,
   servicesAPI,
+  bookingsAPI,
+  notificationsAPI,
 } from "../utils/api";
 
 import { useAuth } from "../context/AuthContext";
@@ -549,7 +551,134 @@ function InvoiceDetailModal({ invoice, onClose }) {
   const cashPaid = parseFloat(invoice.cash_paid || 0);
   const method = invoice.payment_method;
 
+// ── Save PDF ───────────────────────────────────────────────────────
+  async function handleSavePDF() {
+    async function loadScript(src) {
+      if (document.querySelector(`script[src="${src}"]`)) return;
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src; s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+    await loadScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js');
+
+    const element = document.getElementById('inv-modal-print');
+    if (!element) return;
+
+    // ── إخفاء الأزرار ──
+    const noPrintEls = element.querySelectorAll('.inv-no-print');
+    noPrintEls.forEach(el => el.style.display = 'none');
+
+    // ── حفظ الستايل الأصلي ──
+    const originalStyle = {
+      maxHeight:    element.style.maxHeight,
+      overflowY:    element.style.overflowY,
+      background:   element.style.background,
+      color:        element.style.color,
+      borderRadius: element.style.borderRadius,
+      width:        element.style.width,
+    };
+
+    // ── تطبيق ستايل الطباعة ──
+    element.style.maxHeight    = 'none';
+    element.style.overflowY    = 'visible';
+    element.style.background   = '#ffffff';
+    element.style.color        = '#000000';
+    element.style.borderRadius = '0';
+    element.style.width        = '380px';
+
+    // ── تغيير ألوان النصوص للأسود ──
+    const allEls = element.querySelectorAll('*');
+    const originalColors = [];
+    allEls.forEach(el => {
+      originalColors.push({
+        el,
+        color:      el.style.color,
+        background: el.style.background,
+        borderColor: el.style.borderColor,
+      });
+      const computed = window.getComputedStyle(el);
+      // النصوص الملونة → أسود، الـ muted → رمادي داكن
+      if (computed.color.includes('212, 170') || // accent أخضر
+          computed.color.includes('255, 165') || // warning برتقالي  
+          computed.color.includes('59, 130'))  { // أزرق
+        el.style.color = '#1a6b5a'; // أخضر داكن مناسب للطباعة
+      }
+    });
+
+    try {
+      await new Promise(r => setTimeout(r, 100)); // انتظر الـ rerender
+
+      // ✅ scale أقل (1.5 بدل 2.5) — يقلل حجم الـ canvas بشكل كبير
+      // كفاية جداً لإيصال صغير، الفرق في الجودة غير ملاحظ تقريباً
+      const canvas = await window.html2canvas(element, {
+        scale: 2.5,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        windowWidth: 420,
+      });
+
+      const { jsPDF } = window.jspdf;
+
+      const imgWidth  = 80; // mm — عرض إيصال
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      const pdf = new jsPDF({
+        unit: 'mm',
+        format: [imgWidth, imgHeight + 10], // +10 هامش سفلي
+        orientation: 'portrait',
+        compress: true, // ✅ تفعيل ضغط jsPDF الداخلي
+      });
+
+      // ✅ JPEG بجودة 0.85 بدل PNG — الفرق في حجم الملف ضخم جداً
+      // (PNG غير مضغوط للصور بتدرجات، JPEG مضغوط بطبيعته)
+      const imgData = canvas.toDataURL('image/jpeg', 0.85);
+      pdf.addImage(imgData, 'JPEG', 0, 5, imgWidth, imgHeight);
+      pdf.save(`فاتورة-${invoice.invoice_number}.pdf`);
+
+    } finally {
+      // ── إرجاع كل حاجة لأصلها ──
+      Object.assign(element.style, originalStyle);
+      noPrintEls.forEach(el => el.style.display = '');
+      originalColors.forEach(({ el, color, background, borderColor }) => {
+        el.style.color       = color;
+        el.style.background  = background;
+        el.style.borderColor = borderColor;
+      });
+    }
+  }
+  
   return (
+          <>
+    <style>{`
+      @media print {
+        body * { visibility: hidden !important; }
+        #inv-modal-print, #inv-modal-print * { visibility: visible !important; }
+        #inv-modal-print {
+          position: fixed !important;
+          top: 0 !important; left: 0 !important;
+          width: 100% !important;
+          background: white !important;
+          color: black !important;
+          padding: 20px !important;
+          font-family: Arial, sans-serif !important;
+          direction: rtl !important;
+        }
+        .inv-no-print { display: none !important; }
+        @page { 
+          size: A5 portrait; 
+          margin: 5mm; 
+        }
+        #inv-modal-print {
+          max-height: none !important;
+          overflow: visible !important;
+        }
+    `}</style>
+
     <div
       style={{
         position: "fixed",
@@ -563,7 +692,7 @@ function InvoiceDetailModal({ invoice, onClose }) {
       }}
       onClick={onClose}
     >
-      <div
+      <div id="inv-modal-print"
         style={{
           background: "var(--surface)",
           borderRadius: 16,
@@ -602,7 +731,20 @@ function InvoiceDetailModal({ invoice, onClose }) {
               })}
             </div>
           </div>
-          <button
+
+            <div className="inv-no-print" style={{ display:'flex', gap:6, marginBottom:12, marginTop:4 }}>
+
+            <button onClick={handleSavePDF}
+              style={{ flex:1, padding:'6px 10px', borderRadius:8,
+                border:'1px solid rgba(0,212,170,0.4)',
+                background:'rgba(0,212,170,0.08)',
+                color:'var(--accent)', fontSize:11, fontWeight:600, cursor:'pointer',
+                display:'flex', alignItems:'center', justifyContent:'center', gap:4 }}>
+              📄 PDF
+            </button>
+          </div>
+
+          <button className="inv-no-print"
             onClick={onClose}
             style={{
               background: "transparent",
@@ -890,6 +1032,8 @@ function InvoiceDetailModal({ invoice, onClose }) {
         )}
       </div>
     </div>
+          </>
+
   );
 }
 
@@ -1036,6 +1180,100 @@ function InvoiceCard({ inv, onClick }) {
   );
 }
 
+// ── NotificationBell للعميل ─────────────────────────────────────────
+function ClientNotificationBell({ notifications, unreadCount, onMarkRead, onMarkAllRead }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen(p => !p)}
+        style={{
+          position: 'relative', background: 'transparent',
+          border: '1px solid var(--border)', color: 'var(--muted)',
+          padding: '6px 10px', borderRadius: 8, fontSize: 16, cursor: 'pointer',
+        }}
+      >
+        🔔
+        {unreadCount > 0 && (
+          <span style={{
+            position: 'absolute', top: -6, right: -6,
+            minWidth: 18, height: 18, borderRadius: 9,
+            background: '#ef4444', color: '#fff', fontSize: 10, fontWeight: 700,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '0 4px', border: '2px solid var(--bg)',
+          }}>
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 90 }} onClick={() => setOpen(false)} />
+          <div style={{
+            position: 'absolute', top: '110%', left: 0, zIndex: 100,
+            width: 320, maxHeight: 420, overflowY: 'auto',
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderRadius: 14, boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
+          }}>
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '12px 16px', borderBottom: '1px solid var(--border)',
+            }}>
+              <span style={{ fontWeight: 700, fontSize: 14 }}>🔔 إشعاراتي</span>
+              {unreadCount > 0 && (
+                <button onClick={onMarkAllRead} style={{
+                  background: 'transparent', border: 'none', color: 'var(--accent)',
+                  fontSize: 11, cursor: 'pointer',
+                }}>
+                  تعليم الكل كمقروء
+                </button>
+              )}
+            </div>
+            {notifications.length === 0 ? (
+              <div style={{ padding: 30, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                لا توجد إشعارات
+              </div>
+            ) : (
+              notifications.map(n => (
+                <div
+                  key={n.id}
+                  onClick={() => { if (!n.is_read) onMarkRead(n.id); }}
+                  style={{
+                    padding: '12px 16px', borderBottom: '1px solid var(--border)',
+                    cursor: 'pointer', background: n.is_read ? 'transparent' : 'rgba(0,212,170,0.04)',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,212,170,0.08)'}
+                  onMouseLeave={e => e.currentTarget.style.background = n.is_read ? 'transparent' : 'rgba(0,212,170,0.04)'}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    {!n.is_read && (
+                      <span style={{
+                        width: 7, height: 7, borderRadius: '50%',
+                        background: 'var(--accent)', marginTop: 5, flexShrink: 0,
+                      }} />
+                    )}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{n.title}</div>
+                      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{n.message}</div>
+                      <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, opacity: 0.7 }}>
+                        {new Date(n.created_at).toLocaleString('ar-EG', {
+                          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── ClientDashboard ───────────────────────────────────────────────────
 export default function ClientDashboard() {
   const { user, logout } = useAuth();
@@ -1066,12 +1304,46 @@ export default function ClientDashboard() {
   const [showPastSubs, setShowPastSubs] = useState(false);
   const [pastSubscriptions, setPastSubscriptions] = useState([]);
 
-  // ── Effects ──────────────────────────────────────────────────────────
+  const [upcomingBookingsCount, setUpcomingBookingsCount] = useState(0);
+
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount,   setUnreadCount]   = useState(0);
+
+  async function loadNotifications() {
+    try {
+      const { data } = await notificationsAPI.getAll();
+      setNotifications(data.notifications || []);
+      setUnreadCount(data.unread_count || 0);
+    } catch {}
+  }
+
+  async function markNotifRead(id) {
+    try {
+      await notificationsAPI.markRead(id);
+      setUnreadCount(p => Math.max(0, p - 1));
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    } catch {}
+  }
+
+  async function markAllNotifsRead() {
+    try {
+      await notificationsAPI.markAllRead();
+      setUnreadCount(0);
+      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    } catch {}
+  }
+
+// ── Effects ──────────────────────────────────────────────────────────
   useEffect(() => {
     loadData();
     loadSpaces();
     loadRecentInvoices();
+    loadUpcomingBookingsCount();
+    loadNotifications(); // ✅ تحميل فوري عند فتح الصفحة
+    const iv = setInterval(loadNotifications, 30000); // تحديث كل 30 ثانية
+    return () => clearInterval(iv);
   }, []);
+
   useEffect(() => {
     if (tab === "invoices") loadInvoices();
   }, [tab, invoicePage]);
@@ -1136,6 +1408,7 @@ export default function ClientDashboard() {
               <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 3 }}>
                 {line1}
               </div>
+
               <div
                 style={{
                   fontSize: 12,
@@ -1165,12 +1438,14 @@ export default function ClientDashboard() {
               >
                 ⚙️ الإعدادات
               </button>
-            </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toast.dismiss(t.id);
-              }}
+
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toast.dismiss(t.id);
+                }}
+
               style={{
                 background: "transparent",
                 border: "none",
@@ -1205,6 +1480,20 @@ export default function ClientDashboard() {
     return () => clearTimeout(timer);
   }, [user]);
 
+
+    async function loadUpcomingBookingsCount() {
+    try {
+      const { data } = await bookingsAPI.my();
+      const now = new Date();
+      const count = (data.bookings || []).filter(b => {
+        if (!['pending', 'confirmed'].includes(b.status)) return false;
+        // الحجز لسه ما جاش معاده (التاريخ + وقت النهاية في المستقبل)
+        const bookingEnd = new Date(`${b.date.slice(0,10)}T${b.end_time}`);
+        return bookingEnd > now;
+      }).length;
+      setUpcomingBookingsCount(count);
+    } catch {}
+  }
   // ── Data loading ─────────────────────────────────────────────────────
   async function loadSpaces() {
     try {
@@ -1317,6 +1606,7 @@ export default function ClientDashboard() {
 
       {/* ── Header ── */}
       <div
+
         style={{
           display: "flex",
           alignItems: "center",
@@ -1328,22 +1618,41 @@ export default function ClientDashboard() {
         <div style={{ fontSize: 20, fontWeight: 800, color: "var(--accent)" }}>
           Link Space
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={() => navigate("/bookings")}
-            style={{
-              background: "var(--accent)",
-              border: "none",
-              color: "#000",
-              padding: "6px 12px",
-              borderRadius: 8,
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            📅 حجز
-          </button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <ClientNotificationBell
+          notifications={notifications}
+          unreadCount={unreadCount}
+          onMarkRead={markNotifRead}
+          onMarkAllRead={markAllNotifsRead}
+        />
+        <button
+          onClick={() => navigate("/bookings")}
+          style={{
+            position: "relative",
+            background: "var(--accent)",
+            border: "none",
+            color: "#000",
+            padding: "6px 12px",
+            borderRadius: 8,
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          📅 حجز
+          {upcomingBookingsCount > 0 && (
+            <span style={{
+              position: "absolute", top: -6, right: -6,
+              minWidth: 18, height: 18, borderRadius: 9,
+              background: "#ef4444", color: "#fff",
+              fontSize: 10, fontWeight: 700,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              padding: "0 4px", border: "2px solid var(--bg)",
+            }}>
+              {upcomingBookingsCount > 9 ? "9+" : upcomingBookingsCount}
+            </span>
+          )}
+        </button>
           <button
             onClick={() => navigate("/settings")}
             style={{

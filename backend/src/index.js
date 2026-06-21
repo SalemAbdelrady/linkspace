@@ -76,11 +76,21 @@ const limiter = rateLimit({
   message: { error: 'طلبات كثيرة جداً، انتظر قليلاً' },
 });
 
+{/*
 // 2) حد صارم للـ login فقط — لمنع Brute Force على كلمة السر
 // 20 محاولة / 15 دقيقة لكل IP (كافية للاستخدام الطبيعي)
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 20,
+  message: { error: 'محاولات دخول كثيرة جداً، انتظر 15 دقيقة' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+*/}
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'production' ? 20 : 200, // ✅ أعلى محلياً
   message: { error: 'محاولات دخول كثيرة جداً، انتظر 15 دقيقة' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -142,6 +152,7 @@ app.use('/api/subscriptions', require('./routes/subscriptions'));
 app.use('/api/invoices',      require('./routes/invoices'));
 app.use('/api/orders',        require('./routes/orders'));
 app.use('/api/staff',         require('./routes/staff'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 // Health check
 app.get('/api/health', (_, res) =>

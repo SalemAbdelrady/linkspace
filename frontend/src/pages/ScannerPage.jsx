@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { Html5Qrcode } from "html5-qrcode";
+import { format } from "date-fns";
 import api from "../utils/api";
 
 // ─────────────────────────────────────────────
@@ -21,13 +22,17 @@ const DEFAULT_SPACES = [
 // Helpers
 // ─────────────────────────────────────────────
 function calcCost(checkIn, pricePerHr, maxHours = 4) {
-  const rawHours    = (Date.now() - new Date(checkIn)) / 3_600_000;
+  const rawHours    = Math.max(0, (Date.now() - new Date(checkIn)) / 3_600_000); // ✅ Math.max
   const billedHours = Math.min(Math.max(Math.ceil(rawHours), 1), maxHours);
   return (billedHours * pricePerHr).toFixed(2);
 }
 
 function elapsed(checkIn) {
-  const total = Math.floor((Date.now() - new Date(checkIn)) / 1000);
+  // ✅ تأكد من parse صحيح للتاريخ
+  const checkInDate = new Date(checkIn);
+  const now = new Date();
+  const total = Math.floor((now - checkInDate) / 1000);
+  if (total < 0) return "00:00:00";
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
@@ -202,56 +207,31 @@ function AddOrderModal({ session, onClose, onAdded }) {
 // ─────────────────────────────────────────────
 // ActiveClientCard
 // ─────────────────────────────────────────────
-function GuestCountEditor({ session, onUpdated }) {
-  const [count, setCount] = useState(parseInt(session.guest_count) || 1);
-  const [saving,  setSaving]  = useState(false);
 
-  async function save(newCount) {
-    if (newCount === session.guest_count) return;
-    setSaving(true);
-    try {
-      await sessionsAPI.updateGuestCount(session.id, newCount);
-      toast.success(`✅ تم تحديث عدد الأشخاص إلى ${newCount}`);
-      onUpdated(newCount);
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'خطأ في التحديث');
-      setCount(session.guest_count);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4, flexWrap: "wrap",  }}>
-      {[1,2,3,4,5,6,7,8].map(n => (
-        <button
-          key={n}
-          onClick={(e) => { e.stopPropagation(); setCount(n); save(n); }}
-          disabled={saving}
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: 8,
-            fontSize: 11,
-            padding: 0,
-            flexShrink: 0,
-            fontWeight: 700,
-            cursor: saving ? 'not-allowed' : 'pointer',
-            borderColor: count === n ? 'var(--accent)' : 'var(--border)',
-            background:  count === n ? 'rgba(0,212,170,0.15)' : 'transparent',
-            color:       count === n ? 'var(--accent)' : 'var(--muted)',
-            opacity: saving ? 0.6 : 1,
-          }}
-        >
-          {n}
-        </button>
-      ))}
-    </div>
-  );
-}
 function ActiveClientCard({ session, ordersInfo, onAddOrder, tick }) {
   // 💡 إضافة حالة محلية لكل كارت ليفتح ويغلق بشكل مستقل
   const [isExpanded, setIsExpanded] = useState(false);
+
+// أضف هذا الـ state داخل ActiveClientCard
+const [sessionExtension, setSessionExtension] = useState(
+  parseInt(session.max_hours) || 1
+);
+const [savingExt, setSavingExt] = useState(false);
+
+async function saveExtension(newMaxHours) {
+  setSavingExt(true);
+  try {
+    await api.patch(`/sessions/${session.id}/max-hours`, { 
+      max_hours: newMaxHours 
+    });
+    session.max_hours = newMaxHours; // تحديث محلي
+    toast.success(`✅ تم تحديث مدة الجلسة إلى ${newMaxHours} ساعة`);
+  } catch (err) {
+    toast.error(err.response?.data?.error || 'خطأ في التحديث');
+  } finally {
+    setSavingExt(false);
+  }
+}
 
   return (
     <div 
@@ -358,6 +338,53 @@ function ActiveClientCard({ session, ordersInfo, onAddOrder, tick }) {
               session={session}
               onUpdated={(newCount) => { session.guest_count = newCount; }}
             />
+            {/* ── تمديد مدة الجلسة ── */}
+          <div style={{ ...styles.detailItem, gridColumn: "1 / -1", marginTop: 8 }}>
+            <div style={styles.detailLabel}>⏱️ الحد الأقصى للجلسة (ساعات)</div>
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:6 }}>
+              {[1,2,3,4,6,8,12].map(h => (
+                <button
+                  key={h}
+                  onClick={() => { setSessionExtension(h); saveExtension(h); }}
+                  disabled={savingExt}
+                  style={{
+                    width:        36,
+                    height:       36,
+                    borderRadius: 8,
+                    fontSize:     12,
+                    fontWeight:   700,
+                    cursor:       savingExt ? 'not-allowed' : 'pointer',
+                    border:       '1px solid',
+                    borderColor:  sessionExtension === h ? 'var(--accent)' : 'var(--border)',
+                    background:   sessionExtension === h ? 'rgba(0,212,170,0.15)' : 'transparent',
+                    color:        sessionExtension === h ? 'var(--accent)' : 'var(--muted)',
+                    opacity:      savingExt ? 0.6 : 1,
+                  }}
+                >
+                  {h}
+                </button>
+              ))}
+              <span style={{ fontSize:11, color:'var(--muted)', alignSelf:'center', marginRight:4 }}>
+                ساعة
+              </span>
+            </div>
+            {/* تكلفة متوقعة */}
+            <div style={{ 
+              marginTop:6, fontSize:11, color:'var(--muted)',
+              padding:'5px 10px', background:'rgba(0,212,170,0.04)',
+              borderRadius:8, border:'1px dashed rgba(0,212,170,0.2)'
+            }}>
+              💰 التكلفة المتوقعة:{' '}
+              <strong style={{ color:'var(--accent)' }}>
+                {(Math.min(sessionExtension, sessionExtension) * parseFloat(session.price_per_hr)).toFixed(2)} ج
+              </strong>
+              {' '}· ينتهي الوقت عند:{' '}
+              <strong style={{ color:'var(--warning)' }}>
+                {new Date(new Date(session.check_in).getTime() + sessionExtension * 3600000)
+                  .toLocaleTimeString('ar-EG', { hour:'2-digit', minute:'2-digit' })}
+              </strong>
+            </div>
+          </div>
           </div>
 
             <DetailItem label="الرصيد الحالي" value={`${parseFloat(session.balance || 0).toFixed(2)} ج`} />
@@ -412,6 +439,7 @@ export default function ScannerPage() {
   const [spaces,         setSpaces]        = useState([]);
   const [selectedSpace,  setSelectedSpace] = useState("cowork");
   const [guestCount,     setGuestCount]    = useState(1);
+  const [sessionDuration, setSessionDuration] = useState(0); // 0 = مفتوح
 
   // ── Active clients ──
   const [activeClients,  setActiveClients]  = useState([]);
@@ -477,6 +505,24 @@ export default function ScannerPage() {
     );
     setSessionOrders(counts);
   }
+
+  // ─────────────────────────────────────────────
+  // عداد المتاح من المساحات
+  // ─────────────────────────────────────────────
+  const [spacesAvail, setSpacesAvail] = useState([]);
+
+  useEffect(() => {
+    async function loadSpacesAvail() {
+      try {
+        const today = format(new Date(), 'yyyy-MM-dd');
+        const { data } = await spacesAPI.getAllWithAvailability(today);
+        setSpacesAvail(data.spaces.filter(s => s.space_key !== 'services'));
+      } catch {}
+    }
+    loadSpacesAvail();
+    const iv = setInterval(loadSpacesAvail, 60000); // تحديث كل دقيقة
+    return () => clearInterval(iv);
+  }, []);
 
   // ─────────────────────────────────────────
   // Effects
@@ -569,7 +615,12 @@ export default function ScannerPage() {
     setScanning(true);
 
     try {
-      const { data } = await sessionsAPI.scan(qrCode.trim(), selectedSpace, guestCount);
+      const { data } = await sessionsAPI.scan(
+        qrCode.trim(), 
+        selectedSpace, 
+        guestCount,
+        sessionDuration || null  // ✅ مدة الجلسة بالساعات
+      );
       if (scanModeRef.current === "camera") await stopCamera();
       setResult(data);
       setManualCode("");
@@ -663,6 +714,45 @@ export default function ScannerPage() {
         </div>
       </div>
 
+      {/* ── عداد الأماكن المتاحة ── */}
+      {spacesAvail.length > 0 && (
+        <div style={{
+          display:'grid',
+          gridTemplateColumns:`repeat(${Math.min(spacesAvail.length, 3)}, 1fr)`,
+          gap:8, padding:'12px 16px',
+          background:'var(--surface)',
+          borderBottom:'1px solid var(--border)',
+        }}>
+          {spacesAvail.map(sp => (
+            <div key={sp.space_key} style={{
+              textAlign:'center', padding:'8px 6px',
+              background:'var(--bg)', borderRadius:10,
+              border:`1px solid ${sp.available_spots===0 ? 'rgba(255,71,87,0.3)' : 'rgba(0,212,170,0.2)'}`,
+            }}>
+              <div style={{ fontSize:18, marginBottom:2 }}>
+                {sp.icon || SPACE_ICONS[sp.space_key] || '🏢'}
+              </div>
+              <div style={{ fontSize:10, color:'var(--muted)', marginBottom:3 }}>
+                {sp.name}
+              </div>
+              <div style={{
+                fontSize:16, fontWeight:800,
+                color: sp.available_spots===0 ? '#ff4757'
+                    : sp.available_spots<=2  ? 'var(--warning)'
+                    : 'var(--accent)',
+              }}>
+                {sp.available_spots ?? sp.capacity}
+                <span style={{ fontSize:10, color:'var(--muted)', fontWeight:400 }}>
+                  /{sp.capacity}
+                </span>
+              </div>
+              <div style={{ fontSize:9, color:'var(--muted)' }}>
+                {sp.available_spots===0 ? '🔴 ممتلئة' : '🟢 متاح'}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
       {/* ══════════════════════════════════════
           Space Selector
       ══════════════════════════════════════ */}
@@ -704,7 +794,55 @@ export default function ScannerPage() {
           </div>
         )}
       </section>
-
+      {/* ── مدة الجلسة (للغرف فقط) ── */}
+      {selectedSpace !== 'cowork' && (
+        <section style={styles.section}>
+          <div style={styles.sectionTitle}>⏱️ مدة الجلسة المتوقعة</div>
+          <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+            {[
+              [0,  'مفتوحة'],
+              [1,  '1 ساعة'],
+              [2,  '2 ساعة'],
+              [3,  '3 ساعات'],
+              [4,  '4 ساعات'],
+              [6,  '6 ساعات'],
+              [8,  '8 ساعات'],
+              [12, '12 ساعة'],
+            ].map(([hours, label]) => (
+              <button
+                key={hours}
+                onClick={() => setSessionDuration(hours)}
+                style={{
+                  padding:      '8px 14px',
+                  borderRadius: 10,
+                  border:       '1px solid',
+                  fontSize:     12,
+                  fontWeight:   600,
+                  cursor:       'pointer',
+                  borderColor:  sessionDuration === hours ? 'var(--accent)' : 'var(--border)',
+                  background:   sessionDuration === hours ? 'rgba(0,212,170,0.12)' : 'transparent',
+                  color:        sessionDuration === hours ? 'var(--accent)' : 'var(--muted)',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {sessionDuration > 0 && (
+            <div style={{
+              marginTop:    8, padding:'7px 12px',
+              background:   'rgba(0,212,170,0.06)',
+              borderRadius: 8, fontSize:12, color:'var(--muted)',
+            }}>
+              🔒 سيتم حجز الغرفة لمدة {sessionDuration} ساعة حتى الساعة{' '}
+              <strong style={{ color:'var(--accent)' }}>
+                {new Date(Date.now() + sessionDuration * 3600000)
+                  .toLocaleTimeString('ar-EG', { hour:'2-digit', minute:'2-digit' })}
+              </strong>
+            </div>
+          )}
+        </section>
+      )}
       {/* ══════════════════════════════════════
           Guest Count
       ══════════════════════════════════════ */}

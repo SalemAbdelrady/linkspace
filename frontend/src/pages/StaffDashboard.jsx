@@ -88,6 +88,8 @@ function InvoiceModal({ invoice, onClose }) {
     try {
       await new Promise(r => setTimeout(r, 100)); // انتظر الـ rerender
 
+      // ✅ scale أقل (1.5 بدل 2.5) — يقلل حجم الـ canvas بشكل كبير
+      // كفاية جداً لإيصال صغير، الفرق في الجودة غير ملاحظ تقريباً
       const canvas = await window.html2canvas(element, {
         scale: 2.5,
         useCORS: true,
@@ -105,9 +107,13 @@ function InvoiceModal({ invoice, onClose }) {
         unit: 'mm',
         format: [imgWidth, imgHeight + 10], // +10 هامش سفلي
         orientation: 'portrait',
+        compress: true, // ✅ تفعيل ضغط jsPDF الداخلي
       });
 
-      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 5, imgWidth, imgHeight);
+      // ✅ JPEG بجودة 0.85 بدل PNG — الفرق في حجم الملف ضخم جداً
+      // (PNG غير مضغوط للصور بتدرجات، JPEG مضغوط بطبيعته)
+      const imgData = canvas.toDataURL('image/jpeg', 0.85);
+      pdf.addImage(imgData, 'JPEG', 0, 5, imgWidth, imgHeight);
       pdf.save(`فاتورة-${invoice.invoice_number}.pdf`);
 
     } finally {
@@ -121,7 +127,7 @@ function InvoiceModal({ invoice, onClose }) {
       });
     }
   }
-
+  
   return (
       <>
     <style>{`

@@ -111,9 +111,22 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
       const checkOutISO   = checkOut.toISOString();
       const checkIn       = new Date(session.check_in);
       const durationMin   = Math.ceil((checkOut - checkIn) / 60000);
-      const maxHours      = parseInt(session.max_hours) || 4;
+     // const maxHours      = parseInt(session.max_hours) || 4;
       const sessionGuests = parseInt(session.guest_count) || 1;
       const isSubSession  = session.is_subscription_session || false;
+            
+      // ✅ أعد جلب max_hours من DB عشان تاخد القيمة المحدّثة
+      const { rows: freshSession } = await client.query(
+        'SELECT max_hours FROM sessions WHERE id = $1',
+        [session.id]
+      );
+      const maxHours = parseInt(freshSession[0]?.max_hours) || parseInt(session.max_hours) || 4;
+
+      console.log('DEBUG checkout:', {
+        max_hours: session.max_hours,
+        typeof: typeof session.max_hours,
+        durationMin,
+      });
 
       const baseCost     = isSubSession ? 0 : calculateCost(durationMin, session.price_per_hr, maxHours);
       const cost         = parseFloat((baseCost * sessionGuests).toFixed(2));
@@ -171,6 +184,58 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
       const space        = await getSpaceSettings(space_key);
       const subscription = await getActiveSubscription(user.id);
 
+      // ✅ تحقق من الطاقة الاستيعابية قبل الدخول
+      const { rows: spaceSettingsRows } = await client.query(
+        'SELECT capacity FROM space_settings WHERE space_key = $1',
+        [space_key]
+      );
+      const capacity = spaceSettingsRows[0]?.capacity;
+      
+      if (capacity) {
+        const { rows: activeInSpace } = await client.query(
+          `SELECT COUNT(*) as cnt FROM sessions 
+          WHERE space_key = $1 AND status = 'active'`,
+          [space_key]
+        );
+        const occupied = parseInt(activeInSpace[0].cnt);
+        
+        if (occupied >= capacity) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ 
+            error: `${space.name} ممتلئة — لا توجد أماكن متاحة حالياً` 
+          });
+        }
+      }
+
+      // ✅ هل في حجز مؤكد لهذا العميل في هذا الوقت؟
+      const { rows: userBooking } = await client.query(`
+        SELECT b.* FROM bookings b
+        WHERE b.user_id  = $1
+          AND b.space_key = $2
+          AND b.date      = CURRENT_DATE
+          AND b.status    = 'confirmed'
+          AND b.start_time <= NOW()::time
+          AND b.end_time   >= NOW()::time
+        LIMIT 1
+      `, [user.id, space_key]);
+
+      // احسب max_hours من الحجز لو موجود
+      let effectiveMaxHours = space.max_hours;
+      if (userBooking[0]) {
+        const bookingStart = userBooking[0].start_time;
+        const bookingEnd   = userBooking[0].end_time;
+        const [sh, sm] = bookingStart.split(':').map(Number);
+        const [eh, em] = bookingEnd.split(':').map(Number);
+        const bookingHours = Math.ceil(((eh * 60 + em) - (sh * 60 + sm)) / 60);
+        effectiveMaxHours  = bookingHours;
+        
+        // حدّث حالة الحجز لـ checked_in
+        await client.query(
+          `UPDATE bookings SET status = 'completed' WHERE id = $1`,
+          [userBooking[0].id]
+        );
+      }
+
       const isSubSession   = !!(subscription && subscription.covers_cowork && space_key === 'cowork');
       const effectivePrice = isSubSession ? 0 : space.first_hour;
 
@@ -185,7 +250,7 @@ router.post('/scan', auth, requireRole('staff', 'admin'), async (req, res) => {
         effectivePrice,
         space_key,
         space.name,
-        space.max_hours,
+        effectiveMaxHours,  // ← بدل space.max_hours
         req.user.id,
         isSubSession,
         subscription?.id || null,
@@ -343,7 +408,8 @@ router.get('/active', auth, requireRole('staff', 'admin'), async (req, res) => {
              s.is_subscription_session, s.subscription_id,
              s.guest_count,
              u.id AS user_id, u.name, u.phone, u.email, u.balance,
-             EXTRACT(EPOCH FROM (NOW() - s.check_in)) / 60 AS elapsed_min
+             EXTRACT(EPOCH FROM (NOW() AT TIME ZONE 'UTC' - s.check_in AT TIME ZONE 'UTC')) / 60 AS elapsed_min,
+             s.check_in AT TIME ZONE 'UTC' AS check_in_utc
       FROM sessions s
       JOIN users u ON u.id = s.user_id
       WHERE s.status = 'active'
@@ -368,6 +434,28 @@ router.patch('/:id/guest-count', auth, requireRole('staff', 'admin'), async (req
     );
     if (!rows[0]) return res.status(404).json({ error: 'الجلسة غير موجودة أو منتهية' });
     res.json({ success: true, guest_count: rows[0].guest_count });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// PATCH /api/sessions/:id/max-hours — تحديث الحد الأقصى للجلسة
+router.patch('/:id/max-hours', auth, requireRole('staff', 'admin'), async (req, res) => {
+  const { max_hours } = req.body;
+  if (!max_hours || max_hours < 1 || max_hours > 24) {
+    return res.status(400).json({ error: 'مدة الجلسة غير صحيحة (1-24 ساعة)' });
+  }
+  try {
+    const { rows } = await db.query(
+      `UPDATE sessions 
+       SET max_hours = $1 
+       WHERE id = $2 AND status = 'active' 
+       RETURNING id, max_hours`,
+      [parseInt(max_hours), req.params.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'الجلسة غير موجودة أو منتهية' });
+    res.json({ success: true, max_hours: rows[0].max_hours });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'خطأ في الخادم' });

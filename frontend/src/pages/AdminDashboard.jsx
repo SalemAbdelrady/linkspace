@@ -25,23 +25,286 @@ import { useNavigate } from "react-router-dom";
 import LogoutConfirmModal from "../components/LogoutConfirmModal";
 import { bookingsAPI, sessionsAPI } from "../utils/api";
 
-{/*
-// ── Print & PDF Styles ─────────────────────────────────────────────
-const PRINT_STYLE = `
-  @media print {
-    body * { visibility: hidden !important; }
-    #invoice-print-area, #invoice-print-area * { visibility: visible !important; }
-    #invoice-print-area {
-      position: fixed !important; inset: 0 !important;
-      width: 80mm !important; margin: 0 auto !important;
-      padding: 8mm !important; background: white !important;
-      color: black !important; font-family: Arial, sans-serif !important;
-      font-size: 12px !important;
-    }
-    @page { size: 80mm auto; margin: 0; }
+// ── SpaceCard Component ───────────────────────────────────────────────
+const SPACE_ICON_OPTIONS = ['🖥️','🤝','📚','🏢','🎯','💡','🎨','🔬','📸','🎭'];
+
+function SpaceCard({ space, onSave, onDelete, canDelete, saving }) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm]       = useState({ ...space });
+
+  function resetAndClose() {
+    setForm({ ...space });
+    setEditing(false);
   }
-`;
-*/}
+
+  const lastEdit = space.updated_at
+    ? new Date(space.updated_at).toLocaleDateString('ar-EG', {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+      })
+    : null;
+
+  return (
+    <div style={{
+      background: 'var(--surface)',
+      border: `1px solid ${space.is_active ? 'var(--border)' : 'rgba(255,71,87,0.3)'}`,
+      borderRadius: 16,
+      padding: 20,
+      opacity: space.is_active ? 1 : 0.65,
+      transition: 'all 0.2s',
+      position: 'relative',
+    }}>
+      {/* ── بادج غير نشط ── */}
+      {!space.is_active && (
+        <div style={{
+          position: 'absolute', top: 12, left: 12,
+          padding: '2px 8px', borderRadius: 20, fontSize: 10, fontWeight: 700,
+          background: 'rgba(255,71,87,0.15)', color: '#ff4757',
+          border: '1px solid rgba(255,71,87,0.3)',
+        }}>مغلقة</div>
+      )}
+
+      {!editing ? (
+        /* ── وضع العرض ── */
+        <>
+          <div style={{ display:'flex', alignItems:'flex-start', gap:12, marginBottom:14 }}>
+            <div style={{
+              width:48, height:48, borderRadius:12,
+              background:'rgba(0,212,170,0.1)', border:'1px solid rgba(0,212,170,0.2)',
+              display:'flex', alignItems:'center', justifyContent:'center', fontSize:24, flexShrink:0,
+            }}>
+              {form.icon || SPACE_ICON_OPTIONS[0]}
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:800, fontSize:16 }}>{space.name}</div>
+              {space.description && (
+                <div style={{ fontSize:11, color:'var(--muted)', marginTop:3 }}>{space.description}</div>
+              )}
+              <div style={{ fontSize:11, color:'var(--muted)', marginTop:2, fontFamily:'var(--mono)' }}>
+                key: {space.space_key}
+              </div>
+            </div>
+          </div>
+
+          {/* إحصائيات */}
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8, marginBottom:14 }}>
+            {[
+              ['💰 أول ساعة',   `${space.first_hour} ج`,  'var(--accent)'],
+              ['➕ ساعة إضافية', `${space.extra_hour} ج`, 'var(--warning)'],
+              ['⏱️ الحد الأقصى', `${space.max_hours} س`,  '#3b82f6'],
+            ].map(([label, val, color]) => (
+              <div key={label} style={{
+                textAlign:'center', padding:'8px 4px',
+                background:'rgba(255,255,255,0.03)',
+                border:'1px solid var(--border)', borderRadius:10,
+              }}>
+                <div style={{ fontSize:9, color:'var(--muted)', marginBottom:3 }}>{label}</div>
+                <div style={{ fontSize:14, fontWeight:700, color }}>{val}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* عداد الأماكن */}
+          <div style={{
+            display:'flex', alignItems:'center', justifyContent:'space-between',
+            padding:'10px 14px', borderRadius:10,
+            background: space.available_spots === 0
+              ? 'rgba(255,71,87,0.06)' : 'rgba(0,212,170,0.06)',
+            border: `1px solid ${space.available_spots === 0
+              ? 'rgba(255,71,87,0.2)' : 'rgba(0,212,170,0.2)'}`,
+            marginBottom:14,
+          }}>
+            <div>
+              <div style={{ fontSize:11, color:'var(--muted)' }}>الطاقة الاستيعابية</div>
+              <div style={{ fontSize:13, fontWeight:700, marginTop:2 }}>
+                <span style={{ color:'var(--accent)', fontSize:18 }}>
+                  {space.available_spots ?? space.capacity}
+                </span>
+                <span style={{ color:'var(--muted)', fontSize:12 }}> / {space.capacity}</span>
+                <span style={{ fontSize:11, color:'var(--muted)', marginRight:6 }}>متاح</span>
+              </div>
+            </div>
+            {/* شريط التقدم */}
+            <div style={{ flex:1, marginRight:16 }}>
+              <div style={{
+                height:8, borderRadius:10,
+                background:'rgba(255,255,255,0.08)', overflow:'hidden',
+              }}>
+                <div style={{
+                  height:'100%', borderRadius:10,
+                  width: `${Math.min(((space.booked_today||0)/space.capacity)*100,100)}%`,
+                  background: space.available_spots === 0 ? '#ff4757' : 'var(--accent)',
+                  transition:'width 0.6s ease',
+                }}/>
+              </div>
+              <div style={{ fontSize:10, color:'var(--muted)', marginTop:4 }}>
+                {space.booked_today||0} محجوز اليوم
+              </div>
+            </div>
+          </div>
+
+          {/* آخر تعديل */}
+          {lastEdit && (
+            <div style={{
+              fontSize:10, color:'var(--muted)', marginBottom:12,
+              padding:'5px 10px', background:'rgba(255,255,255,0.02)',
+              borderRadius:8, borderRight:'2px solid var(--border)',
+            }}>
+              ✏️ آخر تعديل: <strong style={{ color:'var(--text)' }}>{lastEdit}</strong>
+              {space.updated_by && (
+                <span style={{ opacity:0.7 }}> · بواسطة {space.updated_by}</span>
+              )}
+            </div>
+          )}
+
+          {/* أزرار */}
+          <div style={{ display:'flex', gap:8 }}>
+            <button
+              onClick={() => setEditing(true)}
+              style={{
+                flex:1, padding:'9px', borderRadius:10,
+                border:'1px solid rgba(0,212,170,0.3)',
+                background:'rgba(0,212,170,0.06)',
+                color:'var(--accent)', fontSize:13, fontWeight:600, cursor:'pointer',
+              }}>
+              ✏️ تعديل
+            </button>
+            {canDelete && (
+              <button
+                onClick={() => onDelete(space.space_key)}
+                style={{
+                  padding:'9px 14px', borderRadius:10,
+                  border:'1px solid rgba(255,71,87,0.3)',
+                  background:'transparent', color:'#ff4757',
+                  fontSize:13, cursor:'pointer',
+                }}>
+                🗑️
+              </button>
+            )}
+          </div>
+        </>
+      ) : (
+        /* ── وضع التعديل ── */
+        <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+          <div style={{ fontWeight:700, fontSize:15, marginBottom:4 }}>✏️ تعديل {space.name}</div>
+
+          {/* اختيار الأيقونة */}
+          <div>
+            <div style={{ fontSize:11, color:'var(--muted)', marginBottom:6 }}>الأيقونة</div>
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+              {SPACE_ICON_OPTIONS.map(icon => (
+                <button key={icon} onClick={() => setForm(p=>({...p, icon}))}
+                  style={{
+                    width:36, height:36, borderRadius:8, fontSize:18,
+                    border:`1px solid ${form.icon===icon ? 'var(--accent)' : 'var(--border)'}`,
+                    background: form.icon===icon ? 'rgba(0,212,170,0.12)' : 'transparent',
+                    cursor:'pointer',
+                  }}>
+                  {icon}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize:11, color:'var(--muted)', marginBottom:4 }}>الاسم</div>
+            <input className="input-field" value={form.name}
+              onChange={e => setForm(p=>({...p, name:e.target.value}))} />
+          </div>
+
+          <div>
+            <div style={{ fontSize:11, color:'var(--muted)', marginBottom:4 }}>وصف مختصر (اختياري)</div>
+            <input className="input-field" placeholder="مثال: غرفة مجهزة لـ 6 أشخاص..."
+              value={form.description||''}
+              onChange={e => setForm(p=>({...p, description:e.target.value}))} />
+          </div>
+
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <div>
+              <div style={{ fontSize:11, color:'var(--muted)', marginBottom:4 }}>سعر أول ساعة (ج)</div>
+              <input className="input-field" type="number"
+                value={form.first_hour}
+                onChange={e => setForm(p=>({...p, first_hour:e.target.value}))} />
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:'var(--muted)', marginBottom:4 }}>ساعة إضافية (ج)</div>
+              <input className="input-field" type="number"
+                value={form.extra_hour}
+                onChange={e => setForm(p=>({...p, extra_hour:e.target.value}))} />
+            </div>
+          </div>
+
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <div>
+              <div style={{ fontSize:11, color:'var(--muted)', marginBottom:4 }}>الحد الأقصى (ساعات)</div>
+              <input className="input-field" type="number"
+                value={form.max_hours}
+                onChange={e => setForm(p=>({...p, max_hours:e.target.value}))} />
+            </div>
+            <div>
+              <div style={{ fontSize:11, color:'var(--muted)', marginBottom:4 }}>
+                عدد الأماكن المتاحة من هذا النوع
+                <span style={{ opacity:0.6, fontSize:10, display:'block' }}>
+                  (مثال: 2 = غرفتان اجتماعات — 30 = 30 مكان مشترك)
+                </span>
+              </div>
+              <input className="input-field" type="number" min="1"
+                value={form.capacity}
+                onChange={e => setForm(p=>({...p, capacity:e.target.value}))} />
+            </div>
+          </div>
+
+          {/* تفعيل/تعطيل */}
+          <label style={{
+            display:'flex', alignItems:'center', justifyContent:'space-between',
+            padding:'10px 12px', borderRadius:10,
+            background: form.is_active ? 'rgba(0,212,170,0.06)' : 'rgba(255,71,87,0.06)',
+            border:`1px solid ${form.is_active ? 'rgba(0,212,170,0.2)' : 'rgba(255,71,87,0.2)'}`,
+            cursor:'pointer',
+          }}>
+            <span style={{ fontSize:13 }}>
+              {form.is_active ? '✅ المساحة مفتوحة' : '🔒 المساحة مغلقة'}
+            </span>
+            <div
+              onClick={() => setForm(p=>({...p, is_active:!p.is_active}))}
+              style={{
+                width:40, height:22, borderRadius:11,
+                background: form.is_active ? 'var(--accent)' : 'var(--border)',
+                position:'relative', cursor:'pointer', transition:'background 0.2s',
+              }}>
+              <div style={{
+                width:16, height:16, borderRadius:'50%', background:'#fff',
+                position:'absolute', top:3,
+                left: form.is_active ? 21 : 3,
+                transition:'left 0.2s',
+              }}/>
+            </div>
+          </label>
+
+          <div style={{ display:'flex', gap:8, marginTop:4 }}>
+            <button
+              onClick={() => onSave(space.space_key, form)}
+              disabled={saving}
+              className="btn btn-primary"
+              style={{ flex:1, padding:'10px' }}>
+              {saving ? 'جارٍ الحفظ...' : '💾 حفظ التغييرات'}
+            </button>
+            <button onClick={resetAndClose}
+              style={{
+                padding:'10px 16px', borderRadius:10,
+                border:'1px solid var(--border)',
+                background:'transparent', color:'var(--muted)',
+                cursor:'pointer', fontSize:13,
+              }}>
+              إلغاء
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── NumberInput ───────────────────────────────────────────────────────
 function NumberInput({ value, onChange, min = 1, step = 1, suffix = "" }) {
   const num = parseFloat(value) || 0;
@@ -650,6 +913,8 @@ function InvoiceModal({ invoice, onClose }) {
     try {
       await new Promise(r => setTimeout(r, 100)); // انتظر الـ rerender
 
+      // ✅ scale أقل (1.5 بدل 2.5) — يقلل حجم الـ canvas بشكل كبير
+      // كفاية جداً لإيصال صغير، الفرق في الجودة غير ملاحظ تقريباً
       const canvas = await window.html2canvas(element, {
         scale: 2.5,
         useCORS: true,
@@ -667,9 +932,13 @@ function InvoiceModal({ invoice, onClose }) {
         unit: 'mm',
         format: [imgWidth, imgHeight + 10], // +10 هامش سفلي
         orientation: 'portrait',
+        compress: true, // ✅ تفعيل ضغط jsPDF الداخلي
       });
 
-      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 5, imgWidth, imgHeight);
+      // ✅ JPEG بجودة 0.85 بدل PNG — الفرق في حجم الملف ضخم جداً
+      // (PNG غير مضغوط للصور بتدرجات، JPEG مضغوط بطبيعته)
+      const imgData = canvas.toDataURL('image/jpeg', 0.85);
+      pdf.addImage(imgData, 'JPEG', 0, 5, imgWidth, imgHeight);
       pdf.save(`فاتورة-${invoice.invoice_number}.pdf`);
 
     } finally {
@@ -683,7 +952,7 @@ function InvoiceModal({ invoice, onClose }) {
       });
     }
   }
-
+  
   return (
     <>
     <style>{`
@@ -1857,6 +2126,100 @@ function ConfirmDialog({
   );
 }
 
+// ──  (جرس + قائمة منسدلة) ────────────────────────────────────────────────────
+function NotificationBell({ notifications, unreadCount, onMarkRead, onMarkAllRead, onNotificationClick }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen(p => !p)}
+        style={{
+          position: 'relative', background: 'transparent',
+          border: '1px solid var(--border)', color: 'var(--muted)',
+          padding: '6px 12px', borderRadius: 8, fontSize: 14, cursor: 'pointer',
+        }}
+      >
+        🔔
+        {unreadCount > 0 && (
+          <span style={{
+            position: 'absolute', top: -6, right: -6,
+            minWidth: 18, height: 18, borderRadius: 9,
+            background: '#ef4444', color: '#fff', fontSize: 10, fontWeight: 700,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '0 4px', border: '2px solid var(--bg)',
+          }}>
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 90 }} onClick={() => setOpen(false)} />
+          <div style={{
+            position: 'absolute', top: '110%', left: 0, zIndex: 100,
+            width: 340, maxHeight: 420, overflowY: 'auto',
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderRadius: 14, boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
+          }}>
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '12px 16px', borderBottom: '1px solid var(--border)',
+            }}>
+              <span style={{ fontWeight: 700, fontSize: 14 }}>🔔 الإشعارات</span>
+              {unreadCount > 0 && (
+                <button onClick={onMarkAllRead} style={{
+                  background: 'transparent', border: 'none', color: 'var(--accent)',
+                  fontSize: 11, cursor: 'pointer',
+                }}>
+                  تعليم الكل كمقروء
+                </button>
+              )}
+            </div>
+            {notifications.length === 0 ? (
+              <div style={{ padding: 30, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+                لا توجد إشعارات
+              </div>
+            ) : (
+              notifications.map(n => (
+                <div
+                  key={n.id}
+                  onClick={() => { onNotificationClick(n); if (!n.is_read) onMarkRead(n.id); }}
+                  style={{
+                    padding: '12px 16px', borderBottom: '1px solid var(--border)',
+                    cursor: 'pointer', background: n.is_read ? 'transparent' : 'rgba(0,212,170,0.04)',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,212,170,0.08)'}
+                  onMouseLeave={e => e.currentTarget.style.background = n.is_read ? 'transparent' : 'rgba(0,212,170,0.04)'}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    {!n.is_read && (
+                      <span style={{
+                        width: 7, height: 7, borderRadius: '50%',
+                        background: 'var(--accent)', marginTop: 5, flexShrink: 0,
+                      }} />
+                    )}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{n.title}</div>
+                      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{n.message}</div>
+                      <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, opacity: 0.7 }}>
+                        {new Date(n.created_at).toLocaleString('ar-EG', {
+                          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── AdminDashboard ────────────────────────────────────────────────────
 // لعرض العضوية مثل (عضو منذ سنة و٣ أشهر)
 function memberSince(dateStr) {
@@ -1877,6 +2240,34 @@ export default function AdminDashboard() {
   const [activeCount,  setActiveCount]  = useState(0);
   const [tab, setTab] = useState("overview");
   const [showQuickSale, setShowQuickSale] = useState(false);
+
+
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount,   setUnreadCount]   = useState(0);
+
+async function loadNotifications() {
+  try {
+    const { data } = await notificationsAPI.getAll();
+    setNotifications(data.notifications || []);
+    setUnreadCount(data.unread_count || 0);
+  } catch {}
+}
+
+async function markNotifRead(id) {
+  try {
+    await notificationsAPI.markRead(id);
+    setUnreadCount(p => Math.max(0, p - 1));
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+  } catch {}
+}
+
+async function markAllNotifsRead() {
+  try {
+    await notificationsAPI.markAllRead();
+    setUnreadCount(0);
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+  } catch {}
+}
 
   // state تحسين شكل نافذة تأكيد الحذف
   const [confirmDialog, setConfirmDialog] = useState({
@@ -1955,6 +2346,40 @@ export default function AdminDashboard() {
       max_hours: 12,
     },
   });
+
+  // ── states المساحات الجديدة ──
+const [spacesArray,      setSpacesArray]     = useState([]);
+const [showAddSpace,     setShowAddSpace]    = useState(false);
+const [newSpaceForm,     setNewSpaceForm]    = useState({
+  space_key:'', name:'', first_hour:30, extra_hour:30, max_hours:12, capacity:10
+});
+
+// ── تحميل المساحات مع التوفر ──
+async function loadSpacesWithAvailability() {
+  try {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    const { data } = await spacesAPI.getAllWithAvailability(today);
+    setSpacesArray(data.spaces || []);
+    // تحديث الـ spaces object القديم أيضاً للتوافق
+    const mapped = {};
+    data.spaces.forEach(s => { mapped[s.space_key] = s; });
+    setSpaces(prev => ({ ...prev, ...mapped }));
+  } catch {}
+}
+
+async function createSpace() {
+  if (!newSpaceForm.space_key || !newSpaceForm.name)
+    return toast.error('المفتاح والاسم مطلوبان');
+  try {
+    await spacesAPI.create(newSpaceForm);
+    toast.success('✅ تمت إضافة المساحة');
+    setShowAddSpace(false);
+    setNewSpaceForm({ space_key:'', name:'', first_hour:30, extra_hour:30, max_hours:12, capacity:10 });
+    loadSpacesWithAvailability();
+  } catch (err) {
+    toast.error(err.response?.data?.error || 'خطأ في الإضافة');
+  }
+}
   const [services, setServices] = useState([]);
   const [newService, setNewService] = useState({ name: "", price: "" });
   const [editingService, setEditingService] = useState(null);
@@ -2020,6 +2445,7 @@ export default function AdminDashboard() {
         setPendingCount(bookRes.data.bookings?.length || 0);
         setActiveCount(sessRes.data.sessions?.length || 0);
       } catch {}
+      loadNotifications(); // ✅ جديد
     }
     loadBadges();
     const iv = setInterval(loadBadges, 30000);
@@ -2028,7 +2454,7 @@ export default function AdminDashboard() {
 
     useEffect(() => {
     loadOverview();
-    loadSpaces();
+    loadSpacesWithAvailability(); // ← بدل loadSpaces()
     loadServices();
     loadStaff();
   }, []);
@@ -3279,6 +3705,19 @@ export default function AdminDashboard() {
           >
             📋 الاشتراكات
           </button>
+
+          <NotificationBell
+            notifications={notifications}
+            unreadCount={unreadCount}
+            onMarkRead={markNotifRead}
+            onMarkAllRead={markAllNotifsRead}
+            onNotificationClick={(n) => {
+              if (n.related_type === 'booking') {
+                navigate('/bookings');
+              }
+            }}
+          />
+
           <button
             onClick={() => setShowLogout(true)}
             style={{
@@ -4737,314 +5176,141 @@ export default function AdminDashboard() {
         {/* ══ PRICES ══ */}
         {tab === "prices" && (
           <div className="fade-up">
-            <div
-              style={{
-                display: "flex",
-                gap: 4,
-                marginBottom: 16,
-                overflowX: "auto",
-              }}
-            >
+            <div style={{ display:'flex', gap:4, marginBottom:16, overflowX:'auto' }}>
               {[
-                ["cowork", "🖥️ منطقة العمل"],
-                ["meeting", "🤝 الاجتماعات"],
-                ["lessons", "📚 الدروس"],
-                ["services", "☕ الخدمات"],
-              ].map(([k, label]) => (
-                <button
-                  key={k}
-                  onClick={() => setPriceTab(k)}
+                ['spaces',   '🏢 المساحات'],
+                ['services', '☕ الخدمات'],
+              ].map(([k,label]) => (
+                <button key={k} onClick={() => setPriceTab(k)}
                   style={{
-                    padding: "7px 14px",
-                    borderRadius: 20,
-                    border: "1px solid",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    whiteSpace: "nowrap",
-                    cursor: "pointer",
-                    borderColor:
-                      priceTab === k ? "var(--accent)" : "var(--border)",
-                    background:
-                      priceTab === k ? "var(--accent)" : "transparent",
-                    color: priceTab === k ? "#000" : "var(--muted)",
-                  }}
-                >
+                    padding:'7px 14px', borderRadius:20, border:'1px solid',
+                    fontSize:12, fontWeight:600, whiteSpace:'nowrap', cursor:'pointer',
+                    borderColor: priceTab===k ? 'var(--accent)' : 'var(--border)',
+                    background:  priceTab===k ? 'var(--accent)' : 'transparent',
+                    color:       priceTab===k ? '#000' : 'var(--muted)',
+                  }}>
                   {label}
                 </button>
               ))}
             </div>
-            {priceTab === "cowork" && (
-              <div className="card">
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: "var(--muted)",
-                    marginBottom: 6,
-                  }}
-                >
-                  اسم المساحة
-                </div>
-                <input
-                  className="input-field"
-                  style={{ marginBottom: 14 }}
-                  value={spaces.cowork.name}
-                  onChange={(e) =>
-                    setSpaces((prev) => ({
-                      ...prev,
-                      cowork: { ...prev.cowork, name: e.target.value },
-                    }))
-                  }
-                />
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: "var(--muted)",
-                    marginBottom: 8,
-                  }}
-                >
-                  سعر الساعة (ج)
-                </div>
-                <NumberInput
-                  value={spaces.cowork.first_hour}
-                  onChange={(val) =>
-                    setSpaces((prev) => ({
-                      ...prev,
-                      cowork: {
-                        ...prev.cowork,
-                        first_hour: parseFloat(val) || 1,
-                      },
-                    }))
-                  }
-                  min={1}
-                  step={1}
-                  suffix="ج/ساعة"
-                />
-                <div
-                  style={{
-                    padding: "8px 12px",
-                    background: "rgba(0,212,170,0.06)",
-                    borderRadius: 8,
-                    fontSize: 12,
-                    color: "var(--muted)",
-                    margin: "14px 0 12px",
-                  }}
-                >
-                  ساعة ={" "}
-                  <strong style={{ color: "var(--accent)" }}>
-                    {spaces.cowork.first_hour} ج
-                  </strong>{" "}
-                  &nbsp;|&nbsp; 90 دقيقة ={" "}
-                  <strong style={{ color: "var(--accent)" }}>
-                    {spaces.cowork.first_hour * 2} ج
-                  </strong>{" "}
-                  &nbsp;|&nbsp; الحد الأقصى ={" "}
-                  <strong style={{ color: "var(--accent)" }}>
-                    {spaces.cowork.first_hour * spaces.cowork.max_hours} ج
-                  </strong>
-                </div>
-                <button
-                  className="btn btn-primary"
-                  style={{ width: "100%" }}
-                  disabled={loadingSpaces}
-                  onClick={() => saveSpace("cowork")}
-                >
-                  {loadingSpaces ? "جارٍ الحفظ..." : "حفظ التغييرات"}
-                </button>
-              </div>
-            )}
-            {priceTab === "meeting" && (
-              <div className="card">
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: "var(--muted)",
-                    marginBottom: 6,
-                  }}
-                >
-                  اسم الغرفة
-                </div>
-                <input
-                  className="input-field"
-                  style={{ marginBottom: 14 }}
-                  value={spaces.meeting.name}
-                  onChange={(e) =>
-                    setSpaces((prev) => ({
-                      ...prev,
-                      meeting: { ...prev.meeting, name: e.target.value },
-                    }))
-                  }
-                />
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: 16,
-                    marginBottom: 14,
-                  }}
-                >
-                  {[
-                    ["first_hour", "سعر أول ساعة"],
-                    ["extra_hour", "كل ساعة إضافية"],
-                  ].map(([key, label]) => (
-                    <div key={key}>
-                      <div
-                        style={{
-                          fontSize: 13,
-                          color: "var(--muted)",
-                          marginBottom: 8,
-                        }}
-                      >
-                        {label} (ج)
-                      </div>
-                      <NumberInput
-                        value={spaces.meeting[key]}
-                        onChange={(val) =>
-                          setSpaces((prev) => ({
-                            ...prev,
-                            meeting: {
-                              ...prev.meeting,
-                              [key]: parseFloat(val) || 1,
-                            },
-                          }))
-                        }
-                        min={1}
-                        step={1}
-                        suffix="ج"
-                      />
-                    </div>
-                  ))}
-                </div>
-                <div
-                  style={{
-                    padding: "8px 12px",
-                    background: "rgba(0,212,170,0.06)",
-                    borderRadius: 8,
-                    fontSize: 12,
-                    color: "var(--muted)",
-                    marginBottom: 12,
-                  }}
-                >
-                  ساعة ={" "}
-                  <strong style={{ color: "var(--accent)" }}>
-                    {spaces.meeting.first_hour} ج
-                  </strong>{" "}
-                  &nbsp;|&nbsp; ساعتين ={" "}
-                  <strong style={{ color: "var(--accent)" }}>
-                    {spaces.meeting.first_hour + spaces.meeting.extra_hour} ج
-                  </strong>{" "}
-                  &nbsp;|&nbsp; 3 ساعات ={" "}
-                  <strong style={{ color: "var(--accent)" }}>
-                    {spaces.meeting.first_hour + spaces.meeting.extra_hour * 2}{" "}
-                    ج
-                  </strong>
-                </div>
-                <button
-                  className="btn btn-primary"
-                  style={{ width: "100%" }}
-                  disabled={loadingSpaces}
-                  onClick={() => saveSpace("meeting")}
-                >
-                  {loadingSpaces ? "جارٍ الحفظ..." : "حفظ التغييرات"}
-                </button>
-              </div>
-            )}
-            {priceTab === "lessons" && (
-              <div className="card">
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: "var(--muted)",
-                    marginBottom: 6,
-                  }}
-                >
-                  اسم الغرفة
-                </div>
-                <input
-                  className="input-field"
-                  style={{ marginBottom: 14 }}
-                  value={spaces.lessons.name}
-                  onChange={(e) =>
-                    setSpaces((prev) => ({
-                      ...prev,
-                      lessons: { ...prev.lessons, name: e.target.value },
-                    }))
-                  }
-                />
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: 16,
-                    marginBottom: 14,
-                  }}
-                >
-                  {[
-                    ["first_hour", "سعر أول ساعة"],
-                    ["extra_hour", "كل ساعة إضافية"],
-                  ].map(([key, label]) => (
-                    <div key={key}>
-                      <div
-                        style={{
-                          fontSize: 13,
-                          color: "var(--muted)",
-                          marginBottom: 8,
-                        }}
-                      >
-                        {label} (ج)
-                      </div>
-                      <NumberInput
-                        value={spaces.lessons[key]}
-                        onChange={(val) =>
-                          setSpaces((prev) => ({
-                            ...prev,
-                            lessons: {
-                              ...prev.lessons,
-                              [key]: parseFloat(val) || 1,
-                            },
-                          }))
-                        }
-                        min={1}
-                        step={1}
-                        suffix="ج"
-                      />
-                    </div>
-                  ))}
-                </div>
-                <div
-                  style={{
-                    padding: "8px 12px",
-                    background: "rgba(0,212,170,0.06)",
-                    borderRadius: 8,
-                    fontSize: 12,
-                    color: "var(--muted)",
-                    marginBottom: 12,
-                  }}
-                >
-                  ساعة ={" "}
-                  <strong style={{ color: "var(--accent)" }}>
-                    {spaces.lessons.first_hour} ج
-                  </strong>{" "}
-                  &nbsp;|&nbsp; ساعتين ={" "}
-                  <strong style={{ color: "var(--accent)" }}>
-                    {spaces.lessons.first_hour + spaces.lessons.extra_hour} ج
-                  </strong>{" "}
-                  &nbsp;|&nbsp; 3 ساعات ={" "}
-                  <strong style={{ color: "var(--accent)" }}>
-                    {spaces.lessons.first_hour + spaces.lessons.extra_hour * 2}{" "}
-                    ج
-                  </strong>
-                </div>
-                <button
-                  className="btn btn-primary"
-                  style={{ width: "100%" }}
-                  disabled={loadingSpaces}
-                  onClick={() => saveSpace("lessons")}
-                >
-                  {loadingSpaces ? "جارٍ الحفظ..." : "حفظ التغييرات"}
-                </button>
-              </div>
-            )}
 
+            {/* ══ تاب المساحات ══ */}
+            {priceTab === 'spaces' && (
+              <div>
+                {/* إضافة مساحة جديدة */}
+                <div className="section-title">➕ إضافة مساحة جديدة</div>
+                <div className="card" style={{ marginBottom:20 }}>
+                  {!showAddSpace ? (
+                    <button
+                      onClick={() => setShowAddSpace(true)}
+                      style={{
+                        width:'100%', padding:'12px',
+                        borderRadius:10, border:'1px dashed var(--accent)',
+                        background:'rgba(0,212,170,0.04)',
+                        color:'var(--accent)', fontSize:13, fontWeight:600, cursor:'pointer',
+                      }}>
+                      ➕ إضافة مساحة جديدة
+                    </button>
+                  ) : (
+                    <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                      <div style={{ fontWeight:700, fontSize:15 }}>🏢 بيانات المساحة الجديدة</div>
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                        <div>
+                          <div style={{ fontSize:11, color:'var(--muted)', marginBottom:4 }}>
+                            مفتاح المساحة (space_key) *
+                          </div>
+                          <input className="input-field" placeholder="مثال: meeting3"
+                            value={newSpaceForm.space_key}
+                            onChange={e => setNewSpaceForm(p=>({...p, space_key:e.target.value.toLowerCase().replace(/\s/g,'_')}))} />
+                          <div style={{ fontSize:10, color:'var(--muted)', marginTop:3 }}>
+                            أحرف صغيرة وأرقام وـ فقط
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize:11, color:'var(--muted)', marginBottom:4 }}>الاسم *</div>
+                          <input className="input-field" placeholder="مثال: غرفة الاجتماعات 2"
+                            value={newSpaceForm.name}
+                            onChange={e => setNewSpaceForm(p=>({...p, name:e.target.value}))} />
+                        </div>
+                      </div>
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10 }}>
+                        <div>
+                          <div style={{ fontSize:11, color:'var(--muted)', marginBottom:4 }}>سعر أول ساعة</div>
+                          <input className="input-field" type="number"
+                            value={newSpaceForm.first_hour}
+                            onChange={e => setNewSpaceForm(p=>({...p, first_hour:e.target.value}))} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize:11, color:'var(--muted)', marginBottom:4 }}>ساعة إضافية</div>
+                          <input className="input-field" type="number"
+                            value={newSpaceForm.extra_hour}
+                            onChange={e => setNewSpaceForm(p=>({...p, extra_hour:e.target.value}))} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize:11, color:'var(--muted)', marginBottom:4 }}>الطاقة (أشخاص)</div>
+                          <input className="input-field" type="number" min="1"
+                            value={newSpaceForm.capacity}
+                            onChange={e => setNewSpaceForm(p=>({...p, capacity:e.target.value}))} />
+                        </div>
+                      </div>
+                      <div style={{ display:'flex', gap:8 }}>
+                        <button className="btn btn-primary" style={{ flex:1, padding:'10px' }}
+                          onClick={createSpace}>
+                          ✅ إضافة المساحة
+                        </button>
+                        <button onClick={() => setShowAddSpace(false)}
+                          style={{
+                            padding:'10px 16px', borderRadius:10,
+                            border:'1px solid var(--border)',
+                            background:'transparent', color:'var(--muted)', cursor:'pointer',
+                          }}>
+                          إلغاء
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* قائمة المساحات */}
+                <div className="section-title">المساحات الحالية</div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr', gap:12 }}>
+                  {spacesArray.map(sp => (
+                    <SpaceCard
+                      key={sp.space_key}
+                      space={sp}
+                      saving={loadingSpaces}
+                      canDelete={!['cowork','meeting','lessons'].includes(sp.space_key)}
+                      onSave={async (key, data) => {
+                        setLoadingSpaces(true);
+                        try {
+                          await spacesAPI.update(key, data);
+                          toast.success('✅ تم حفظ التغييرات');
+                          loadSpacesWithAvailability();
+                        } catch {
+                          toast.error('خطأ في الحفظ');
+                        } finally {
+                          setLoadingSpaces(false);
+                        }
+                      }}
+                      onDelete={(key) => showConfirm({
+                        title: 'حذف المساحة',
+                        message: 'هل أنت متأكد؟ سيتم حذف المساحة نهائياً.',
+                        confirmLabel: '🗑️ حذف',
+                        onConfirm: async () => {
+                          try {
+                            await spacesAPI.delete(key);
+                            toast.success('تم الحذف');
+                            loadSpacesWithAvailability();
+                          } catch (err) {
+                            toast.error(err.response?.data?.error || 'خطأ');
+                          }
+                        },
+                      })}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
             {priceTab === "services" && (
               <div>
                 <div className="card" style={{ marginBottom: 12 }}>

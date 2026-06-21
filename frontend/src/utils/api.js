@@ -92,8 +92,13 @@ export const sessionsAPI = {
   history: (page = 1)                      => api.get(`/sessions/history?page=${page}`),
   active:  ()                              => api.get('/sessions/active'),
   pay:     (body)                          => api.post('/sessions/pay', body),
-  scan:  (qr_code, space_key, guest_count = 1) =>
-    api.post('/sessions/scan', { qr_code, space_key, guest_count }),
+  scan: (qrCode, spaceKey, guestCount, sessionDurationHours = null) => 
+    api.post('/sessions/scan', { 
+      qr_code: qrCode, 
+      space_key: spaceKey, 
+      guest_count: guestCount,
+      session_duration_hours: sessionDurationHours, // ✅ جديد
+    }),
   
   updateGuestCount: (sessionId, guestCount) =>
     api.patch(`/sessions/${sessionId}/guest-count`, { guest_count: guestCount }),
@@ -131,8 +136,17 @@ users: (search = '', page = 1, filters = {}) =>
 
 // Spaces
 export const spacesAPI = {
-  getAll: ()          => api.get('/spaces'),
+  getAll: () => api.get('/spaces'),
+  
+  // ✅ الجديد — مع عداد الأماكن المتاحة
+  getAllWithAvailability: (date) => 
+    api.get(`/spaces/with-availability${date ? `?date=${date}` : ''}`),
+  
   update: (key, data) => api.put(`/spaces/${key}`, data),
+  
+  // ✅ الجديد
+  create: (data) => api.post('/spaces', data),
+  delete: (key) => api.delete(`/spaces/${key}`),
 };
 
 // Services
@@ -220,4 +234,11 @@ export const settingsAPI = {
   changePassword : (data)              => api.patch('/auth/change-password', data),
   forgotPassword : (email)             => api.post('/auth/forgot-password', { email }),
   resetPassword  : (email, otp, pass)  => api.post('/auth/reset-password', { email, otp, new_password: pass }),
+};
+
+// Notifications
+export const notificationsAPI = {
+  getAll:      () => api.get('/notifications'),
+  markRead:    (id) => api.patch(`/notifications/${id}/read`),
+  markAllRead: () => api.patch('/notifications/read-all'),
 };

@@ -66,9 +66,50 @@ export default function BookingPage() {
   useEffect(() => { if (tab === 'manage') loadAllBookings();  }, [tab, filterStatus]);
   useEffect(() => { if (selectedDate && selectedSpace) loadAvailability(); }, [selectedDate, selectedSpace]);
 
-  async function loadSpaces() {
-    try { const { data } = await spacesAPI.getAll(); setSpaces(data.spaces || []); } catch {}
+  // ✅ تحسب الأماكن المتاحة بناءً على الوقت المختار
+  async function loadSpacesForTimeSlot(date, start, end) {
+    if (!date || !start || !end || end <= start) {
+      // لو مافيش وقت محدد — جيب الأرقام العامة
+      await loadSpaces();
+      return;
+    }
+    try {
+      const { data } = await spacesAPI.getAllWithAvailability(date);
+      const allSpaces = data.spaces.filter(s => s.space_key !== 'services' && s.is_active !== false);
+
+      // احسب التعارض للوقت المحدد من الـ booked_slots
+      const updated = await Promise.all(allSpaces.map(async (sp) => {
+        try {
+          const { data: avail } = await bookingsAPI.availability(date, sp.space_key);
+          const slots = avail.booked_slots || [];
+          // عدد الحجوزات المتعارضة مع الوقت المختار
+          const conflicting = slots.filter(s => 
+            s.start_time?.slice(0,5) < end && 
+            s.end_time?.slice(0,5)   > start
+          ).length;
+          return {
+            ...sp,
+            occupied:         conflicting,
+            available_spots:  Math.max(0, sp.capacity - conflicting),
+          };
+        } catch {
+          return sp;
+        }
+      }));
+      setSpaces(updated);
+    } catch {}
   }
+async function loadSpaces() {
+  try {
+    const { data } = await spacesAPI.getAllWithAvailability(selectedDate);
+    setSpaces(data.spaces.filter(s => s.space_key !== 'services' && s.is_active !== false));
+  } catch {}
+}
+
+// أضف useEffect يحدّث عند تغيير التاريخ
+useEffect(() => { 
+  loadSpacesForTimeSlot(selectedDate, startTime, endTime); 
+}, [selectedDate, startTime, endTime]);
 
   async function loadAvailability() {
     try {
@@ -133,6 +174,8 @@ export default function BookingPage() {
       });
       toast.success('✅ تم إرسال طلب الحجز — سيتم التأكيد قريباً');
       setNote(''); setSelectedClient(null); setClientSearch('');
+      // ✅ حدّث العداد فوراً بعد الحجز
+      loadSpacesForTimeSlot(selectedDate, startTime, endTime);
       setTab(isStaff ? 'manage' : 'my');
     } catch (err) { toast.error(err.response?.data?.error || 'خطأ في الحجز'); }
     finally { setSaving(false); }
@@ -223,7 +266,7 @@ export default function BookingPage() {
       </div>
 
       {/* Stats Bar — للموظف والأدمن فقط */}
-      {isStaff && tab === 'manage' && (
+      {isStaff && (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, padding:'12px 16px',
           background:'var(--surface)', borderBottom:'1px solid var(--border)' }}>
           {[
@@ -316,20 +359,35 @@ export default function BookingPage() {
             <div style={{ marginBottom:16 }}>
               <div style={{ fontSize:13, fontWeight:700, color:'var(--accent)', marginBottom:10 }}>🏢 اختر المساحة</div>
               <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
-                {(spaces.filter(s=>s.space_key!=='services').length > 0
-                  ? spaces.filter(s=>s.space_key!=='services')
-                  : [{space_key:'cowork',name:'منطقة العمل'},{space_key:'meeting',name:'الاجتماعات'},{space_key:'lessons',name:'الدروس'}]
-                ).map(sp => (
-                  <button key={sp.space_key} onClick={() => setSelectedSpace(sp.space_key)}
-                    style={{ padding:'12px 8px', borderRadius:12, border:'2px solid', textAlign:'center', cursor:'pointer',
-                      borderColor: selectedSpace===sp.space_key ? SPACE_COLORS[sp.space_key]||'var(--accent)' : 'var(--border)',
-                      background:  selectedSpace===sp.space_key ? (SPACE_COLORS[sp.space_key]||'var(--accent)')+'18' : 'transparent' }}>
-                    <div style={{ fontSize:24, marginBottom:4 }}>{SPACE_ICONS[sp.space_key]||'🏢'}</div>
-                    <div style={{ fontSize:12, fontWeight:600, color: selectedSpace===sp.space_key ? SPACE_COLORS[sp.space_key]||'var(--accent)' : 'var(--text)' }}>
-                      {sp.name}
-                    </div>
-                  </button>
-                ))}
+
+            {/* عرض المساحات المتاحة  */}
+            {spaces.map(sp => (
+              <button key={sp.space_key} onClick={() => setSelectedSpace(sp.space_key)}
+                style={{
+                  padding:'12px 8px', borderRadius:12, border:'2px solid', textAlign:'center',
+                  cursor: sp.available_spots === 0 ? 'not-allowed' : 'pointer',
+                  opacity: sp.available_spots === 0 ? 0.5 : 1,
+                  borderColor: selectedSpace===sp.space_key
+                    ? SPACE_COLORS[sp.space_key]||'var(--accent)' : 'var(--border)',
+                  background: selectedSpace===sp.space_key
+                    ? (SPACE_COLORS[sp.space_key]||'var(--accent)')+'18' : 'transparent',
+                }}
+                disabled={sp.available_spots === 0}>
+                <div style={{ fontSize:22, marginBottom:4 }}>{sp.icon || SPACE_ICONS[sp.space_key]||'🏢'}</div>
+                <div style={{ fontSize:12, fontWeight:600 }}>{sp.name}</div>
+                {/* ✅ عداد الأماكن */}
+                <div style={{
+                  marginTop:4, fontSize:10, fontWeight:700,
+                  color: sp.available_spots === 0 ? '#ff4757'
+                      : sp.available_spots <= 2  ? 'var(--warning)'
+                      : 'var(--success)',
+                }}>
+                  {sp.available_spots === 0
+                    ? '🔴 ممتلئة'
+                    : `🟢 ${sp.available_spots}/${sp.capacity} متاح`}
+                </div>
+              </button>
+            ))}
               </div>
             </div>
 
@@ -478,6 +536,21 @@ export default function BookingPage() {
                           📝 {b.note}
                         </div>
                       )}
+
+                      {b.status === 'cancelled' && b.cancel_reason && (
+                        <div style={{
+                          fontSize: 12, color: '#ef4444', padding: '6px 10px',
+                          background: 'rgba(239,68,68,0.06)', borderRadius: 8, marginBottom: 8,
+                          border: '1px solid rgba(239,68,68,0.15)',
+                        }}>
+                          💬 سبب الإلغاء: {b.cancel_reason}
+                        </div>
+                      )}
+                      {b.status === 'cancelled' && b.cancelled_by_name && (
+                        <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
+                          🚫 أُلغي بواسطة: <strong style={{ color: 'var(--text)' }}>{b.cancelled_by_name}</strong>
+                        </div>
+                      )}
                       {['pending','confirmed'].includes(b.status) && !isBefore(new Date(b.date), startOfDay(new Date())) && (
                         <button onClick={() => { setCancelId(b.id); setCancelReason(''); }}
                           style={{ width:'100%', padding:'8px', borderRadius:10,
@@ -488,6 +561,29 @@ export default function BookingPage() {
                       )}
                     </div>
                   );
+
+                  {b.status === 'cancelled' && b.cancel_reason && (
+                  <div style={{
+                    fontSize: 12, color: '#ef4444', padding: '6px 10px',
+                    background: 'rgba(239,68,68,0.06)', borderRadius: 8, marginBottom: 8,
+                    border: '1px solid rgba(239,68,68,0.15)',
+                  }}>
+                    💬 سبب الإلغاء: {b.cancel_reason}
+                  </div>
+                )}
+                {b.status === 'cancelled' && b.cancelled_by_name && (
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
+                    🚫 أُلغي بواسطة: <strong style={{ color: 'var(--text)' }}>{b.cancelled_by_name}</strong>
+                    {b.cancelled_at && (
+                      <span style={{ marginRight: 4 }}>
+                        · {new Date(b.cancelled_at).toLocaleString('ar-EG', { 
+                            month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' 
+                          })}
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 })}
               </div>
             )}
@@ -583,6 +679,33 @@ export default function BookingPage() {
                         </div>
                       )}
 
+                      {/* ✅ سبب الإلغاء + من ألغى */}
+                      {b.status === 'cancelled' && b.cancel_reason && (
+                        <div style={{ fontSize:12, color:'#ef4444', padding:'5px 10px',
+                          background:'rgba(239,68,68,0.06)', border:'1px solid rgba(239,68,68,0.15)',
+                          borderRadius:8, marginBottom:8 }}>
+                          💬 سبب الإلغاء: {b.cancel_reason}
+                        </div>
+                      )}
+                      {b.status === 'cancelled' && b.cancelled_by_name && (
+                        <div style={{ fontSize:11, color:'#ef4444', marginBottom:8,
+                          padding:'4px 10px', background:'rgba(239,68,68,0.06)',
+                          borderRadius:8, display:'inline-flex', alignItems:'center', gap:4 }}>
+                          🚫 أُلغي بواسطة: <strong>{b.cancelled_by_name}</strong>
+                          {b.cancelled_at && (
+                            <span style={{ color:'var(--muted)', marginRight:4 }}>
+                              · {new Date(b.cancelled_at).toLocaleTimeString('ar-EG', {
+                                  hour: '2-digit', minute: '2-digit',
+                                })}
+                              {' — '}
+                              {new Date(b.cancelled_at).toLocaleDateString('ar-EG', {
+                                month: 'short', day: 'numeric',
+                              })}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
                       {/* من أكّد الحجز */}
                       {b.confirmed_by_name && (
                         <div style={{ fontSize:11, color:'#10b981', marginBottom:8,
@@ -591,7 +714,13 @@ export default function BookingPage() {
                           ✅ أكّده: <strong>{b.confirmed_by_name}</strong>
                           {b.updated_at && (
                             <span style={{ color:'var(--muted)', marginRight:4 }}>
-                              · {new Date(b.updated_at).toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})}
+                              · {new Date(b.cancelled_at).toLocaleTimeString('ar-EG', {
+                                  hour: '2-digit', minute: '2-digit',
+                                })}
+                              {' — '}
+                              {new Date(b.cancelled_at).toLocaleDateString('ar-EG', {
+                                month: 'short', day: 'numeric',
+                              })}
                             </span>
                           )}
                         </div>
