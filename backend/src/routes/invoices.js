@@ -257,7 +257,9 @@ router.get('/my', auth, async (req, res) => {
 // GET /api/invoices — كل الفواتير [staff/admin]
 router.get('/', auth, requireRole('staff', 'admin'), async (req, res) => {
   const page      = parseInt(req.query.page) || 1;
-  const limit     = 20;
+  const ALLOWED_SIZES = [10, 20, 50, 100, 10000];
+  const requestedSize = parseInt(req.query.page_size);
+  const limit = ALLOWED_SIZES.includes(requestedSize) ? requestedSize : 20;
   const offset    = (page - 1) * limit;
   const search    = req.query.search    || '';
   const date_from = req.query.date_from || '';
