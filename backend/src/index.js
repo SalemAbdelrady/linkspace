@@ -72,7 +72,7 @@ app.use(helmet({
 // 1) حد عام — كل الـ API: 200 طلب / 15 دقيقة
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200,
+  max: process.env.NODE_ENV === 'production' ? 200 : 2000, // ✅ أعلى بكثير محلياً
   message: { error: 'طلبات كثيرة جداً، انتظر قليلاً' },
 });
 
@@ -100,7 +100,8 @@ const loginLimiter = rateLimit({
 // 5 محاولات / ساعة لكل IP
 const forgotPasswordLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 5,
+  //max: 5,
+  max: process.env.NODE_ENV === 'production' ? 5 : 100, // ✅
   message: { error: 'تجاوزت الحد المسموح لطلبات استعادة كلمة السر، حاول بعد ساعة' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -153,6 +154,8 @@ app.use('/api/invoices',      require('./routes/invoices'));
 app.use('/api/orders',        require('./routes/orders'));
 app.use('/api/staff',         require('./routes/staff'));
 app.use('/api/notifications', require('./routes/notifications'));
+
+app.use('/api/reports', require('./routes/reports'));
 
 // Health check
 app.get('/api/health', (_, res) =>

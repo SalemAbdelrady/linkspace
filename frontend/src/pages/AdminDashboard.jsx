@@ -25,6 +25,10 @@ import { useNavigate } from "react-router-dom";
 import LogoutConfirmModal from "../components/LogoutConfirmModal";
 import { bookingsAPI, sessionsAPI } from "../utils/api";
 
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+
 // ── SpaceCard Component ───────────────────────────────────────────────
 const SPACE_ICON_OPTIONS = ['🖥️','🤝','📚','🏢','🎯','💡','🎨','🔬','📸','🎭'];
 
@@ -1488,7 +1492,6 @@ function QuickSaleModal({ services: allServices, adminAPI, onClose, onDone }) {
     } finally {
       setSaving(false);
     }
-    window.print();
 
   }
 
@@ -2402,6 +2405,8 @@ async function createSpace() {
   const [invoices, setInvoices] = useState([]);
   const [invoiceTotal, setInvoiceTotal] = useState(0);
   const [invoicePage, setInvoicePage] = useState(1);
+  const [invoicePageSize, setInvoicePageSize] = useState(20); // ✅ جديد — افتراضي 20
+
   const [invoiceSearch, setInvoiceSearch] = useState("");
   const [invoiceDate, setInvoiceDate] = useState("");
   const [invoiceDateFrom, setInvoiceDateFrom] = useState("");
@@ -2486,6 +2491,7 @@ async function createSpace() {
   }, [
     tab,
     invoicePage,
+    invoicePageSize, // ✅ جديد
     invoiceSearch,
     invoiceDateFrom,
     invoiceDateTo,
@@ -2750,6 +2756,7 @@ async function createSpace() {
     try {
       const { data } = await invoicesAPI.getAll({
         page: invoicePage,
+        page_size: invoicePageSize, // ✅ جديد
         search: invoiceSearch,
         date_from: invoiceDateFrom || undefined,
         date_to: invoiceDateTo || undefined,
@@ -2770,6 +2777,199 @@ async function createSpace() {
     }
   }
 
+  // ── تصدير الفواتير كـ PDF ─────────────────────────────────────────
+  async function exportInvoicesPDF() {
+    try {
+      // جيب كل الفواتير المفلترة (بدون pagination)
+      const { data } = await invoicesAPI.getAll({
+        page: 1,
+        page_size: 10000, // جيب الكل
+        search: invoiceSearch,
+        date_from: invoiceDateFrom || undefined,
+        date_to: invoiceDateTo || undefined,
+        staff_id: invoiceStaffId || undefined,
+      });
+
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+      // ── Header ──
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.setTextColor(0, 212, 170);
+      doc.text('Link Space', doc.internal.pageSize.width / 2, 15, { align: 'center' });
+
+      doc.setFontSize(11);
+      doc.setTextColor(100, 100, 100);
+      doc.text('تقرير الفواتير', doc.internal.pageSize.width / 2, 22, { align: 'center' });
+
+      if (invoiceDateFrom || invoiceDateTo) {
+        doc.setFontSize(9);
+        doc.text(
+          `الفترة: ${invoiceDateFrom || '...'} → ${invoiceDateTo || '...'}`,
+          doc.internal.pageSize.width / 2, 28,
+          { align: 'center' }
+        );
+      }
+
+      // ── ملخص أعلى الصفحة ──
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+      const summaryY = invoiceDateFrom || invoiceDateTo ? 35 : 30;
+      doc.text(`إجمالي الفواتير: ${data.total}`, 15, summaryY);
+      doc.text(`إجمالي الإيرادات: ${parseFloat(data.total_amount || 0).toFixed(2)} ج`, 70, summaryY);
+      doc.text(`كاش: ${parseFloat(data.total_cash || 0).toFixed(2)} ج`, 145, summaryY);
+      doc.text(`محفظة: ${parseFloat(data.total_wallet || 0).toFixed(2)} ج`, 200, summaryY);
+
+      // ── الجدول ──
+      const tableData = data.invoices.map(inv => [
+        inv.invoice_number,
+        inv.client_name,
+        inv.client_phone || '—',
+        inv.space_name || '—',
+        new Date(inv.created_at).toLocaleDateString('ar-EG', {
+          year: 'numeric', month: 'short', day: 'numeric',
+          hour: '2-digit', minute: '2-digit',
+        }),
+        `${parseFloat(inv.total).toFixed(2)} ج`,
+        inv.payment_method === 'cash' ? 'كاش'
+          : inv.payment_method === 'wallet' ? 'محفظة'
+          : inv.payment_method === 'partial' ? 'جزئي'
+          : inv.payment_method === 'subscription' ? 'اشتراك'
+          : inv.payment_method,
+        inv.created_by_name || '—',
+      ]);
+
+      autoTable(doc, {
+        startY: summaryY + 6,
+        head: [[
+          'رقم الفاتورة', 'العميل', 'الموبايل', 'المساحة',
+          'التاريخ', 'المبلغ', 'طريقة الدفع', 'بواسطة',
+        ]],
+        body: tableData,
+        theme: 'grid',
+        styles: {
+          fontSize: 8,
+          cellPadding: 3,
+          halign: 'center',
+          font: 'helvetica',
+        },
+        headStyles: {
+          fillColor: [0, 212, 170],
+          textColor: [0, 0, 0],
+          fontStyle: 'bold',
+          fontSize: 9,
+        },
+        alternateRowStyles: {
+          fillColor: [245, 245, 245],
+        },
+        columnStyles: {
+          0: { cellWidth: 35 },
+          1: { cellWidth: 35 },
+          2: { cellWidth: 28 },
+          3: { cellWidth: 35 },
+          4: { cellWidth: 45 },
+          5: { cellWidth: 22 },
+          6: { cellWidth: 25 },
+          7: { cellWidth: 30 },
+        },
+        didDrawPage: (hookData) => {
+          // ── Footer في كل صفحة ──
+          const pageCount = doc.internal.getNumberOfPages();
+          doc.setFontSize(8);
+          doc.setTextColor(150, 150, 150);
+          doc.text(
+            `صفحة ${hookData.pageNumber} من ${pageCount} — تم الإنشاء بواسطة Link Space`,
+            doc.internal.pageSize.width / 2,
+            doc.internal.pageSize.height - 8,
+            { align: 'center' }
+          );
+        },
+      });
+
+      // ── حفظ الملف ──
+      const dateStr = new Date().toISOString().slice(0, 10);
+      doc.save(`فواتير-LinkSpace-${dateStr}.pdf`);
+      toast.success('✅ تم تصدير PDF بنجاح');
+
+    } catch (err) {
+      console.error(err);
+      toast.error('خطأ في تصدير PDF');
+    }
+  }
+
+  // ── تصدير الفواتير كـ Excel ────────────────────────────────────────
+  async function exportInvoicesExcel() {
+    try {
+      const { data } = await invoicesAPI.getAll({
+        page: 1,
+        page_size: 10000,
+        search: invoiceSearch,
+        date_from: invoiceDateFrom || undefined,
+        date_to: invoiceDateTo || undefined,
+        staff_id: invoiceStaffId || undefined,
+      });
+
+      // ── ورقة الفواتير ──
+      const invoicesSheet = data.invoices.map(inv => ({
+        'رقم الفاتورة':    inv.invoice_number,
+        'العميل':          inv.client_name,
+        'الموبايل':        inv.client_phone || '',
+        'المساحة':         inv.space_name || '',
+        'التاريخ':         new Date(inv.created_at).toLocaleString('ar-EG'),
+        'تكلفة الجلسة':   parseFloat(inv.session_cost || 0),
+        'تكلفة الخدمات':  parseFloat(inv.services_cost || 0),
+        'الخصم':           parseFloat(inv.discount_amount || 0),
+        'الإجمالي':        parseFloat(inv.total),
+        'كاش':             parseFloat(inv.cash_paid || 0),
+        'محفظة':           parseFloat(inv.wallet_paid || 0),
+        'طريقة الدفع':    inv.payment_method === 'cash' ? 'كاش'
+                            : inv.payment_method === 'wallet' ? 'محفظة'
+                            : inv.payment_method === 'partial' ? 'جزئي'
+                            : inv.payment_method === 'subscription' ? 'اشتراك'
+                            : inv.payment_method,
+        'بواسطة':          inv.created_by_name || '',
+        'ملاحظة':          inv.note || '',
+      }));
+
+      // ── ورقة الملخص ──
+      const summarySheet = [
+        { 'البيان': 'إجمالي عدد الفواتير',  'القيمة': data.total },
+        { 'البيان': 'إجمالي الإيرادات (ج)',  'القيمة': parseFloat(data.total_amount || 0).toFixed(2) },
+        { 'البيان': 'إجمالي الكاش (ج)',      'القيمة': parseFloat(data.total_cash || 0).toFixed(2) },
+        { 'البيان': 'إجمالي المحفظة (ج)',    'القيمة': parseFloat(data.total_wallet || 0).toFixed(2) },
+        { 'البيان': 'فواتير جلسات',          'القيمة': data.session_count || 0 },
+        { 'البيان': 'فواتير بيع سريع',       'القيمة': data.quick_sale_count || 0 },
+        { 'البيان': 'الفترة من',             'القيمة': invoiceDateFrom || 'الكل' },
+        { 'البيان': 'الفترة إلى',            'القيمة': invoiceDateTo || 'الكل' },
+        { 'البيان': 'تاريخ التصدير',         'القيمة': new Date().toLocaleString('ar-EG') },
+      ];
+
+      const wb = XLSX.utils.book_new();
+
+      const ws1 = XLSX.utils.json_to_sheet(invoicesSheet);
+      const ws2 = XLSX.utils.json_to_sheet(summarySheet);
+
+      // ✅ تحديد عرض الأعمدة تلقائياً
+      ws1['!cols'] = [
+        { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 20 },
+        { wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 10 },
+        { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 15 },
+        { wch: 18 }, { wch: 25 },
+      ];
+      ws2['!cols'] = [{ wch: 25 }, { wch: 20 }];
+
+      XLSX.utils.book_append_sheet(wb, ws1, 'الفواتير');
+      XLSX.utils.book_append_sheet(wb, ws2, 'الملخص');
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `فواتير-LinkSpace-${dateStr}.xlsx`);
+      toast.success('✅ تم تصدير Excel بنجاح');
+
+    } catch (err) {
+      console.error(err);
+      toast.error('خطأ في تصدير Excel');
+    }
+  }
   // التعديل 6 — دالة تصدير Excel (أضفها مع باقي الدوال)
 
   async function exportToExcel(data, date, staffId, staffList) {
@@ -3094,7 +3294,8 @@ async function createSpace() {
     return true;
   });
 
-  const totalInvoicePages = Math.ceil(invoiceTotal / 20);
+  const totalInvoicePages = Math.ceil(invoiceTotal / invoicePageSize);
+
 
   return (
     <div
@@ -3604,106 +3805,30 @@ async function createSpace() {
         />
       )}
 
-            {/* Top Bar */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "14px 16px",
-          borderBottom: "1px solid var(--border)",
-          position: "sticky",
-          top: 0,
-          background: "var(--bg)",
-          zIndex: 10,
-        }}
-      >
+      {/* ══ Top Bar ══ */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "12px 16px", borderBottom: "1px solid var(--border)",
+        position: "sticky", top: 0, background: "var(--bg)", zIndex: 10,
+      }}>
+        {/* Brand */}
         <div>
-          <div
-            style={{ fontSize: 18, fontWeight: 800, color: "var(--accent)" }}
-          >
-            Link Space
-          </div>
-          <div style={{ fontSize: 11, color: "var(--muted)" }}>
-            لوحة التحكم — {user?.name}
-          </div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "var(--accent)" }}>Link Space</div>
+          <div style={{ fontSize: 11, color: "var(--muted)" }}>لوحة التحكم — {user?.name}</div>
         </div>
 
-        <div style={{ display: "flex", gap: 8 }}>
+        {/* Actions — 3 عناصر فقط */}
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button
             onClick={() => setShowQuickSale(true)}
             style={{
-              background: "var(--accent)",
-              border: "none",
-              color: "#000",
-              padding: "6px 12px",
-              borderRadius: 8,
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: "pointer",
+              background: "var(--accent)", border: "none", color: "#000",
+              padding: "8px 16px", borderRadius: 8, fontSize: 13,
+              fontWeight: 800, cursor: "pointer",
+              display: "flex", alignItems: "center", gap: 6,
             }}
           >
             ⚡ بيع سريع
-          </button>
-          <button
-            onClick={() => navigate("/bookings")}
-            style={{
-              position: "relative",
-              background: "transparent",
-              border: "1px solid var(--accent)",
-              color: "var(--accent)",
-              padding: "6px 12px",
-              borderRadius: 8,
-              fontSize: 12,
-              cursor: "pointer",
-            }}
-          >
-            📅 الحجوزات
-            {pendingCount > 0 && (
-              <span style={{ position:"absolute", top:-6, right:-6, minWidth:18, height:18,
-                borderRadius:9, background:"#ef4444", color:"#fff", fontSize:10, fontWeight:700,
-                display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px",
-                border:"2px solid var(--bg)" }}>
-                {pendingCount > 9 ? "9+" : pendingCount}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => navigate("/scanner")}
-            style={{
-              position: "relative",
-              background: "transparent",
-              border: "1px solid var(--accent)",
-              color: "var(--accent)",
-              padding: "6px 12px",
-              borderRadius: 8,
-              fontSize: 12,
-              cursor: "pointer",
-            }}
-          >
-            📡 Scanner
-            {activeCount > 0 && (
-              <span style={{ position:"absolute", top:-6, right:-6, minWidth:18, height:18,
-                borderRadius:9, background:"#10b981", color:"#fff", fontSize:10, fontWeight:700,
-                display:"flex", alignItems:"center", justifyContent:"center", padding:"0 4px",
-                border:"2px solid var(--bg)" }}>
-                {activeCount > 99 ? "99+" : activeCount}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => navigate("/subscriptions")}
-            style={{
-              background: "transparent",
-              border: "1px solid var(--accent)",
-              color: "var(--accent)",
-              padding: "6px 12px",
-              borderRadius: 8,
-              fontSize: 12,
-              cursor: "pointer",
-            }}
-          >
-            📋 الاشتراكات
           </button>
 
           <NotificationBell
@@ -3712,22 +3837,16 @@ async function createSpace() {
             onMarkRead={markNotifRead}
             onMarkAllRead={markAllNotifsRead}
             onNotificationClick={(n) => {
-              if (n.related_type === 'booking') {
-                navigate('/bookings');
-              }
+              if (n.related_type === 'booking') navigate('/bookings');
             }}
           />
 
           <button
             onClick={() => setShowLogout(true)}
             style={{
-              background: "transparent",
-              border: "1px solid var(--border)",
-              color: "var(--muted)",
-              padding: "6px 12px",
-              borderRadius: 8,
-              fontSize: 12,
-              cursor: "pointer",
+              background: "transparent", border: "1px solid var(--border)",
+              color: "var(--muted)", padding: "7px 12px",
+              borderRadius: 8, fontSize: 12, cursor: "pointer",
             }}
           >
             خروج
@@ -3735,45 +3854,113 @@ async function createSpace() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div
-        style={{
-          display: "flex",
-          gap: 4,
-          padding: "12px 16px",
-          borderBottom: "1px solid var(--border)",
+      {/* ══ Navigation + Tabs ══ */}
+      <div style={{
+        position: "sticky", top: 57, background: "var(--bg)",
+        zIndex: 9, borderBottom: "1px solid var(--border)",
+      }}>
+        {/* ─ الصف الأول: التنقل السريع للصفحات ─ */}
+        <div style={{
+          display: "flex", gap: 6, padding: "10px 16px 0",
           overflowX: "auto",
-        }}
-      >
-        {[
-          ["overview", "نظرة عامة"],
-          ["users", "العملاء"],
-          ["staff", "👥 الموظفين"],
-          ["prices", "الأسعار"],
-          ["coupons", "🎫 الكوبونات"],
-          ["invoices", "🧾 الفواتير"],
-          ["referrals", "🎁 الدعوات"],
-        ].map(([k, label]) => (
-          <button
-            key={k}
-            onClick={() => setTab(k)}
-            style={{
-              padding: "7px 16px",
-              borderRadius: 20,
-              border: "1px solid",
-              fontSize: 13,
-              fontWeight: 600,
-              whiteSpace: "nowrap",
-              cursor: "pointer",
-              transition: "all 0.2s",
-              borderColor: tab === k ? "var(--accent)" : "var(--border)",
-              background: tab === k ? "var(--accent)" : "transparent",
-              color: tab === k ? "#000" : "var(--muted)",
-            }}
-          >
-            {label}
-          </button>
-        ))}
+        }}>
+          {[
+            {
+              label: "📡 Scanner",
+              onClick: () => navigate("/scanner"),
+              badge: activeCount > 0 ? activeCount : null,
+              badgeColor: "#10b981",
+            },
+            {
+              label: "📅 الحجوزات",
+              onClick: () => navigate("/bookings"),
+              badge: pendingCount > 0 ? pendingCount : null,
+              badgeColor: "#ef4444",
+            },
+            {
+              label: "📋 الاشتراكات",
+              onClick: () => navigate("/subscriptions"),
+              badge: null,
+            },
+            {
+              label: "📊 التقارير",
+              onClick: () => navigate("/reports"),
+              badge: null,
+            },
+          ].map((item) => (
+            <button
+              key={item.label}
+              onClick={item.onClick}
+              style={{
+                position: "relative",
+                background: "transparent",
+                border: "1px solid var(--border)",
+                color: "var(--muted)",
+                padding: "6px 14px",
+                borderRadius: "8px 8px 0 0",
+                fontSize: 12, fontWeight: 600,
+                cursor: "pointer", whiteSpace: "nowrap",
+                borderBottom: "none",
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.color = "var(--accent)";
+                e.currentTarget.style.borderColor = "var(--accent)";
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.color = "var(--muted)";
+                e.currentTarget.style.borderColor = "var(--border)";
+              }}
+            >
+              {item.label}
+              {item.badge && (
+                <span style={{
+                  position: "absolute", top: -6, right: -6,
+                  minWidth: 18, height: 18, borderRadius: 9,
+                  background: item.badgeColor, color: "#fff",
+                  fontSize: 10, fontWeight: 700,
+                  display: "flex", alignItems: "center",
+                  justifyContent: "center", padding: "0 4px",
+                  border: "2px solid var(--bg)",
+                }}>
+                  {item.badge > 99 ? "99+" : item.badge}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* ─ الصف الثاني: تابات الأقسام ─ */}
+        <div style={{
+          display: "flex", gap: 4, padding: "8px 16px",
+          overflowX: "auto",
+        }}>
+          {[
+            ["overview",  "🏠 نظرة عامة"],
+            ["users",     "👤 العملاء"],
+            ["staff",     "👥 الموظفين"],
+            ["prices",    "💰 الأسعار"],
+            ["coupons",   "🎫 الكوبونات"],
+            ["invoices",  "🧾 الفواتير"],
+            ["referrals", "🎁 الدعوات"],
+          ].map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => setTab(k)}
+              style={{
+                padding: "7px 16px", borderRadius: 20,
+                border: "1px solid", fontSize: 13,
+                fontWeight: 600, whiteSpace: "nowrap",
+                cursor: "pointer", transition: "all 0.2s",
+                borderColor: tab === k ? "var(--accent)" : "var(--border)",
+                background:  tab === k ? "var(--accent)" : "transparent",
+                color:       tab === k ? "#000" : "var(--muted)",
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div style={{ padding: 16 }}>
@@ -6607,55 +6794,128 @@ async function createSpace() {
               })}
             </div>
 
-            {totalInvoicePages > 1 && (
-              <div
-                style={{ display: "flex", justifyContent: "center", gap: 8 }}
-              >
-                <button
-                  onClick={() => setInvoicePage((p) => Math.max(1, p - 1))}
-                  disabled={invoicePage === 1}
-                  style={{
-                    padding: "6px 14px",
-                    borderRadius: 8,
-                    border: "1px solid var(--border)",
-                    background: "transparent",
-                    color: invoicePage === 1 ? "var(--muted)" : "var(--text)",
-                    cursor: invoicePage === 1 ? "default" : "pointer",
-                  }}
-                >
-                  السابق
-                </button>
-                <span
-                  style={{
-                    padding: "6px 12px",
-                    fontSize: 13,
-                    color: "var(--muted)",
-                  }}
-                >
-                  {invoicePage} / {totalInvoicePages}
+            {/* ── شريط التحكم في حجم الصفحة ── */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 10,
+                marginBottom: 14,
+                padding: "10px 14px",
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: 12,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>
+                  📄 عرض
                 </span>
-                <button
-                  onClick={() =>
-                    setInvoicePage((p) => Math.min(totalInvoicePages, p + 1))
-                  }
-                  disabled={invoicePage === totalInvoicePages}
+                <div style={{ display: "flex", gap: 4 }}>
+                  {[10, 20, 50, 100].map((size) => (
+                    <button
+                      key={size}
+                      onClick={() => {
+                        setInvoicePageSize(size);
+                        setInvoicePage(1); // ✅ رجوع للصفحة الأولى عند تغيير الحجم
+                      }}
+                      style={{
+                        padding: "5px 12px",
+                        borderRadius: 8,
+                        border: "1px solid",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        borderColor:
+                          invoicePageSize === size ? "var(--accent)" : "var(--border)",
+                        background:
+                          invoicePageSize === size ? "var(--accent)" : "transparent",
+                        color: invoicePageSize === size ? "#000" : "var(--muted)",
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      {size}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* عرض النطاق الحالي */}
+              {invoiceTotal > 0 && (
+                <div
                   style={{
-                    padding: "6px 14px",
-                    borderRadius: 8,
-                    border: "1px solid var(--border)",
-                    background: "transparent",
-                    color:
-                      invoicePage === totalInvoicePages
-                        ? "var(--muted)"
-                        : "var(--text)",
-                    cursor:
-                      invoicePage === totalInvoicePages ? "default" : "pointer",
+                    fontSize: 12,
+                    color: "var(--muted)",
+                    fontWeight: 600,
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  التالي
-                </button>
-              </div>
-            )}
+                  عرض{" "}
+                  <strong style={{ color: "var(--accent)" }}>
+                    {(invoicePage - 1) * invoicePageSize + 1}
+                  </strong>
+                  {" – "}
+                  <strong style={{ color: "var(--accent)" }}>
+                    {Math.min(invoicePage * invoicePageSize, invoiceTotal)}
+                  </strong>
+                  {" من "}
+                  <strong style={{ color: "var(--text)" }}>{invoiceTotal}</strong>
+                </div>
+              )}
+            </div>
+
+          {totalInvoicePages > 1 && (
+            <div
+              style={{ display: "flex", justifyContent: "center", gap: 8 }}
+            >
+              <button
+                onClick={() => setInvoicePage((p) => Math.max(1, p - 1))}
+                disabled={invoicePage === 1}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 8,
+                  border: "1px solid var(--border)",
+                  background: "transparent",
+                  color: invoicePage === 1 ? "var(--muted)" : "var(--text)",
+                  cursor: invoicePage === 1 ? "default" : "pointer",
+                }}
+              >
+                السابق
+              </button>
+              <span
+                style={{
+                  padding: "6px 12px",
+                  fontSize: 13,
+                  color: "var(--muted)",
+                }}
+              >
+                {invoicePage} / {totalInvoicePages}
+              </span>
+              <button
+                onClick={() =>
+                  setInvoicePage((p) => Math.min(totalInvoicePages, p + 1))
+                }
+                disabled={invoicePage === totalInvoicePages}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 8,
+                  border: "1px solid var(--border)",
+                  background: "transparent",
+                  color:
+                    invoicePage === totalInvoicePages
+                      ? "var(--muted)"
+                      : "var(--text)",
+                  cursor:
+                    invoicePage === totalInvoicePages ? "default" : "pointer",
+                }}
+              >
+                التالي
+              </button>
+            </div>
+          )}
+
           </div>
         )}
         {/* ══ REFERRALS ══ */}

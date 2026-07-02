@@ -1185,7 +1185,8 @@ function ClientNotificationBell({ notifications, unreadCount, onMarkRead, onMark
   const [open, setOpen] = useState(false);
 
   return (
-    <div style={{ position: 'relative' }}>
+    <>
+      {/* ── زرار الجرس ── */}
       <button
         onClick={() => setOpen(p => !p)}
         style={{
@@ -1208,69 +1209,154 @@ function ClientNotificationBell({ notifications, unreadCount, onMarkRead, onMark
         )}
       </button>
 
+      {/* ── Bottom Sheet على الموبايل ── */}
       {open && (
         <>
-          <div style={{ position: 'fixed', inset: 0, zIndex: 90 }} onClick={() => setOpen(false)} />
+          {/* Overlay */}
+          <div
+            style={{
+              position: 'fixed', inset: 0, zIndex: 150,
+              background: 'rgba(0,0,0,0.6)',
+              backdropFilter: 'blur(2px)',
+            }}
+            onClick={() => setOpen(false)}
+          />
+
+          {/* Sheet */}
           <div style={{
-            position: 'absolute', top: '110%', left: 0, zIndex: 100,
-            width: 320, maxHeight: 420, overflowY: 'auto',
-            background: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: 14, boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
+            position: 'fixed',
+            bottom: 0, left: 0, right: 0,
+            zIndex: 151,
+            background: 'var(--surface)',
+            borderRadius: '20px 20px 0 0',
+            maxHeight: '80vh',
+            overflowY: 'auto',
+            boxShadow: '0 -8px 40px rgba(0,0,0,0.5)',
+            animation: 'slideUp 0.3s ease',
           }}>
+
+            {/* Handle */}
+            <div style={{
+              width: 40, height: 4, borderRadius: 2,
+              background: 'rgba(255,255,255,0.2)',
+              margin: '12px auto 0',
+            }} />
+
+            {/* Header */}
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              padding: '12px 16px', borderBottom: '1px solid var(--border)',
+              padding: '14px 20px 12px',
+              borderBottom: '1px solid var(--border)',
+              position: 'sticky', top: 0, background: 'var(--surface)', zIndex: 1,
             }}>
-              <span style={{ fontWeight: 700, fontSize: 14 }}>🔔 إشعاراتي</span>
-              {unreadCount > 0 && (
-                <button onClick={onMarkAllRead} style={{
-                  background: 'transparent', border: 'none', color: 'var(--accent)',
-                  fontSize: 11, cursor: 'pointer',
+              <span style={{ fontWeight: 800, fontSize: 16 }}>🔔 إشعاراتي</span>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {unreadCount > 0 && (
+                  <button onClick={onMarkAllRead} style={{
+                    background: 'rgba(0,212,170,0.1)',
+                    border: '1px solid rgba(0,212,170,0.3)',
+                    color: 'var(--accent)',
+                    fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                    padding: '5px 10px', borderRadius: 8,
+                  }}>
+                    تعليم الكل كمقروء
+                  </button>
+                )}
+                <button onClick={() => setOpen(false)} style={{
+                  background: 'transparent', border: 'none',
+                  color: 'var(--muted)', fontSize: 22, cursor: 'pointer',
+                  lineHeight: 1, padding: 0,
                 }}>
-                  تعليم الكل كمقروء
+                  ✕
                 </button>
-              )}
+              </div>
             </div>
+
+            {/* Content */}
             {notifications.length === 0 ? (
-              <div style={{ padding: 30, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+              <div style={{
+                padding: '50px 20px', textAlign: 'center',
+                color: 'var(--muted)', fontSize: 14,
+              }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>🔔</div>
                 لا توجد إشعارات
               </div>
             ) : (
-              notifications.map(n => (
-                <div
-                  key={n.id}
-                  onClick={() => { if (!n.is_read) onMarkRead(n.id); }}
-                  style={{
-                    padding: '12px 16px', borderBottom: '1px solid var(--border)',
-                    cursor: 'pointer', background: n.is_read ? 'transparent' : 'rgba(0,212,170,0.04)',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,212,170,0.08)'}
-                  onMouseLeave={e => e.currentTarget.style.background = n.is_read ? 'transparent' : 'rgba(0,212,170,0.04)'}
-                >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+              <div>
+                {notifications.map(n => (
+                  <div
+                    key={n.id}
+                    onClick={() => { if (!n.is_read) onMarkRead(n.id); }}
+                    style={{
+                      padding: '16px 20px',
+                      borderBottom: '1px solid var(--border)',
+                      cursor: 'pointer',
+                      background: n.is_read ? 'transparent' : 'rgba(0,212,170,0.04)',
+                      display: 'flex', alignItems: 'flex-start', gap: 12,
+                    }}
+                  >
+                    {/* نقطة غير مقروء */}
                     {!n.is_read && (
                       <span style={{
-                        width: 7, height: 7, borderRadius: '50%',
+                        width: 8, height: 8, borderRadius: '50%',
                         background: 'var(--accent)', marginTop: 5, flexShrink: 0,
                       }} />
                     )}
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{n.title}</div>
-                      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{n.message}</div>
-                      <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4, opacity: 0.7 }}>
+
+                    {/* أيقونة حسب النوع */}
+                    <div style={{
+                      width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 18,
+                      background: n.type === 'booking_confirmed' ? 'rgba(16,185,129,0.15)'
+                        : n.type === 'booking_cancelled' ? 'rgba(239,68,68,0.15)'
+                        : 'rgba(0,212,170,0.1)',
+                    }}>
+                      {n.type === 'booking_confirmed' ? '✅'
+                        : n.type === 'booking_cancelled' ? '❌'
+                        : '📅'}
+                    </div>
+
+                    {/* النص */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontWeight: 700, fontSize: 14,
+                        color: n.is_read ? 'var(--muted)' : 'var(--text)',
+                        marginBottom: 3,
+                      }}>
+                        {n.title}
+                      </div>
+                      <div style={{
+                        fontSize: 13, color: 'var(--muted)',
+                        lineHeight: 1.5, marginBottom: 4,
+                      }}>
+                        {n.message}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>
                         {new Date(n.created_at).toLocaleString('ar-EG', {
-                          month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                          month: 'short', day: 'numeric',
+                          hour: '2-digit', minute: '2-digit',
                         })}
                       </div>
                     </div>
                   </div>
-                </div>
-              ))
+                ))}
+              </div>
             )}
+
+            {/* Bottom padding للـ iPhone */}
+            <div style={{ height: 24 }} />
           </div>
+
+          <style>{`
+            @keyframes slideUp {
+              from { transform: translateY(100%); opacity: 0; }
+              to   { transform: translateY(0);    opacity: 1; }
+            }
+          `}</style>
         </>
       )}
-    </div>
+    </>
   );
 }
 

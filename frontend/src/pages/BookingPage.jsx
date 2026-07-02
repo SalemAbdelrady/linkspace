@@ -48,7 +48,12 @@ export default function BookingPage() {
   // ── Manage (Staff) ──────────────────────────────────────────────
   const [allBookings,  setAllBookings]  = useState([]);
   const [filterStatus, setFilterStatus] = useState('pending'); // الافتراضي: قيد الانتظار
-  const [stats,        setStats]        = useState({ pending:0, confirmed:0, today:0, total:0 });
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo,   setFilterDateTo]   = useState('');
+  const [sortOrder,      setSortOrder]      = useState('desc');
+  const [quickDate,      setQuickDate]      = useState('');
+
+  const [stats,        setStats]        = useState({ pending:0, confirmed:0, today:0, total:0, cancelled: 0 });
   const [loading,      setLoading]      = useState(false);
 
   // ── Cancel Modal ─────────────────────────────────────────────────
@@ -125,27 +130,35 @@ useEffect(() => {
     finally { setLoading(false); }
   }
 
-  async function loadAllBookings() {
-    setLoading(true);
-    try {
-      // بدون فلتر تاريخ — نجيب كل الحجوزات حسب الـ status فقط
-      const params = {};
-      if (filterStatus) params.status = filterStatus;
-      const { data } = await bookingsAPI.all(params);
-      const bks = data.bookings || [];
-      setAllBookings(bks);
+async function loadAllBookings() {
+  setLoading(true);
+  try {
+    const [filteredRes, allRes] = await Promise.all([
+      bookingsAPI.all({
+        ...(filterStatus   && { status:    filterStatus   }),
+        ...(filterDateFrom && { date_from: filterDateFrom }),
+        ...(filterDateTo   && { date_to:   filterDateTo   }),
+        sort: sortOrder,
+      }),
+      bookingsAPI.all({}),
+    ]);
 
-      // إحصائيات مباشرة من النتائج
-      const today = format(new Date(), 'yyyy-MM-dd');
-      setStats({
-        pending   : bks.filter(b => b.status === 'pending').length,
-        confirmed : bks.filter(b => b.status === 'confirmed').length,
-        today     : bks.filter(b => b.date?.slice(0,10) === today && ['pending','confirmed'].includes(b.status)).length,
-        total     : bks.length,
-      });
-    } catch { toast.error('خطأ في تحميل الحجوزات'); }
-    finally { setLoading(false); }
-  }
+    const bks    = filteredRes.data.bookings || [];
+    const allBks = allRes.data.bookings      || [];
+
+    setAllBookings(bks);
+
+    const today = format(new Date(), 'yyyy-MM-dd');
+    setStats({
+      pending   : allBks.filter(b => b.status === 'pending').length,
+      confirmed : allBks.filter(b => b.status === 'confirmed').length,
+      cancelled : allBks.filter(b => b.status === 'cancelled').length,
+      today     : allBks.filter(b => b.date?.slice(0,10) === today && ['pending','confirmed'].includes(b.status)).length,
+      total     : allBks.length,
+    });
+  } catch { toast.error('خطأ في تحميل الحجوزات'); }
+  finally { setLoading(false); }
+}
 
   async function searchClients(q) {
     if (q.length < 2) { setClientResults([]); return; }
@@ -267,12 +280,13 @@ useEffect(() => {
 
       {/* Stats Bar — للموظف والأدمن فقط */}
       {isStaff && (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, padding:'12px 16px',
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:8, padding:'12px 16px',
           background:'var(--surface)', borderBottom:'1px solid var(--border)' }}>
           {[
             { label:'⏳ انتظار',  val: stats.pending,   color:'#f59e0b' },
             { label:'✅ مؤكدة',   val: stats.confirmed, color:'#10b981' },
             { label:'📅 اليوم',   val: stats.today,     color:'var(--accent)' },
+            { label:'❌ ملغية',   val: stats.cancelled, color:'#ef4444'       },
             { label:'📊 الكل',    val: stats.total,     color:'var(--muted)' },
           ].map(s => (
             <div key={s.label} style={{ textAlign:'center', padding:'8px 4px',
@@ -593,30 +607,157 @@ useEffect(() => {
         {/* ══ إدارة (Staff/Admin) ══ */}
         {tab === 'manage' && isStaff && (
           <div className="fade-up">
+            
+            {/* ══ شريط الفلاتر الاحترافي ══ */}
+            <div style={{
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: 14, padding: '14px 16px', marginBottom: 16,
+            }}>
 
-            {/* فلتر الحالة — بدون فلتر تاريخ عشان نشوف كل الحجوزات */}
-            <div style={{ display:'flex', gap:8, marginBottom:16, flexWrap:'wrap' }}>
-              {[
-                { val:'pending',   label:'⏳ انتظار',  color:'#f59e0b' },
-                { val:'confirmed', label:'✅ مؤكدة',   color:'#10b981' },
-                { val:'cancelled', label:'❌ ملغية',   color:'#ef4444' },
-                { val:'',          label:'📊 الكل',    color:'var(--muted)' },
-              ].map(f => (
-                <button key={f.val} onClick={() => setFilterStatus(f.val)}
-                  style={{ padding:'7px 14px', borderRadius:20, border:'1px solid', fontSize:12,
-                    fontWeight:600, cursor:'pointer', flexShrink:0,
-                    borderColor: filterStatus===f.val ? f.color : 'var(--border)',
-                    background:  filterStatus===f.val ? f.color+'18' : 'transparent',
-                    color:       filterStatus===f.val ? f.color : 'var(--muted)' }}>
-                  {f.label}
-                  {f.val==='pending' && stats.pending>0 && (
-                    <span style={{ marginRight:4, background:'#f59e0b', color:'#000',
-                      borderRadius:10, fontSize:10, fontWeight:700, padding:'1px 5px' }}>
-                      {stats.pending}
-                    </span>
+              {/* ── فلترة الحالة ── */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, marginBottom: 8 }}>
+                  حالة الحجز
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {[
+                    { val: 'pending',   label: '⏳ انتظار',  color: '#f59e0b' },
+                    { val: 'confirmed', label: '✅ مؤكدة',   color: '#10b981' },
+                    { val: 'cancelled', label: '❌ ملغية',   color: '#ef4444' },
+                    { val: '',          label: '📊 الكل',    color: 'var(--muted)' },
+                  ].map(f => (
+                    <button key={f.val} onClick={() => setFilterStatus(f.val)}
+                      style={{
+                        padding: '7px 14px', borderRadius: 20, border: '1px solid',
+                        fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                        borderColor: filterStatus === f.val ? f.color : 'var(--border)',
+                        background:  filterStatus === f.val ? f.color + '18' : 'transparent',
+                        color:       filterStatus === f.val ? f.color : 'var(--muted)',
+                      }}>
+                      {f.label}
+                      {f.val === 'pending' && stats.pending > 0 && (
+                        <span style={{
+                          marginRight: 4, background: '#f59e0b', color: '#000',
+                          borderRadius: 10, fontSize: 10, fontWeight: 700, padding: '1px 5px',
+                        }}>
+                          {stats.pending}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── فترات سريعة ── */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, marginBottom: 8 }}>
+                  فترة سريعة
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {[
+                    { label: 'اليوم',        from: format(new Date(), 'yyyy-MM-dd'),          to: format(new Date(), 'yyyy-MM-dd'),          key: 'today'   },
+                    { label: 'هذا الأسبوع', from: format(addDays(new Date(), -7), 'yyyy-MM-dd'), to: format(new Date(), 'yyyy-MM-dd'),       key: 'week'    },
+                    { label: 'هذا الشهر',   from: format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), 'yyyy-MM-dd'), to: format(new Date(), 'yyyy-MM-dd'), key: 'month'   },
+                    { label: 'القادمة',      from: format(new Date(), 'yyyy-MM-dd'),          to: format(addDays(new Date(), 30), 'yyyy-MM-dd'), key: 'upcoming' },
+                  ].map(item => (
+                    <button key={item.key}
+                      onClick={() => {
+                        setFilterDateFrom(item.from);
+                        setFilterDateTo(item.to);
+                        setQuickDate(item.key);
+                      }}
+                      style={{
+                        padding: '6px 12px', borderRadius: 8, border: '1px solid',
+                        fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                        borderColor: quickDate === item.key ? 'var(--accent)' : 'var(--border)',
+                        background:  quickDate === item.key ? 'var(--accent)' : 'transparent',
+                        color:       quickDate === item.key ? '#000' : 'var(--muted)',
+                      }}>
+                      {item.label}
+                    </button>
+                  ))}
+                  {(filterDateFrom || filterDateTo) && (
+                    <button onClick={() => {
+                      setFilterDateFrom('');
+                      setFilterDateTo('');
+                      setQuickDate('');
+                    }} style={{
+                      padding: '6px 12px', borderRadius: 8,
+                      border: '1px solid rgba(239,68,68,0.4)',
+                      background: 'rgba(239,68,68,0.08)',
+                      color: '#ef4444', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                    }}>
+                      ✕ مسح الفلتر
+                    </button>
                   )}
-                </button>
-              ))}
+                </div>
+              </div>
+
+              {/* ── نطاق تاريخ مخصص + الترتيب ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, marginBottom: 6 }}>من تاريخ</div>
+                  <input
+                    type="date" className="input-field"
+                    value={filterDateFrom}
+                    onChange={e => { setFilterDateFrom(e.target.value); setQuickDate(''); }}
+                    style={{ fontSize: 13 }}
+                  />
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, marginBottom: 6 }}>إلى تاريخ</div>
+                  <input
+                    type="date" className="input-field"
+                    value={filterDateTo}
+                    onChange={e => { setFilterDateTo(e.target.value); setQuickDate(''); }}
+                    style={{ fontSize: 13 }}
+                  />
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, marginBottom: 6 }}>الترتيب</div>
+                  <button
+                    onClick={() => setSortOrder(p => p === 'desc' ? 'asc' : 'desc')}
+                    style={{
+                      padding: '9px 14px', borderRadius: 8,
+                      border: '1px solid var(--border)',
+                      background: 'transparent', color: 'var(--muted)',
+                      fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {sortOrder === 'desc' ? '🔽 الأحدث أولاً' : '🔼 الأقدم أولاً'}
+                  </button>
+                </div>
+              </div>
+
+              {/* ── ملخص نتائج البحث ── */}
+              {(filterDateFrom || filterDateTo || filterStatus) && (
+                <div style={{
+                  marginTop: 12, padding: '8px 12px',
+                  background: 'rgba(0,212,170,0.06)',
+                  border: '1px solid rgba(0,212,170,0.2)',
+                  borderRadius: 8, fontSize: 12, color: 'var(--muted)',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                }}>
+                  <span>
+                    📊 النتائج: <strong style={{ color: 'var(--accent)' }}>{allBookings.length}</strong> حجز
+                    {filterDateFrom && ` · من ${filterDateFrom}`}
+                    {filterDateTo   && ` إلى ${filterDateTo}`}
+                  </span>
+                  <button onClick={() => {
+                    setFilterStatus('pending');
+                    setFilterDateFrom('');
+                    setFilterDateTo('');
+                    setQuickDate('');
+                    setSortOrder('desc');
+                  }} style={{
+                    background: 'transparent', border: 'none',
+                    color: 'var(--muted)', fontSize: 11, cursor: 'pointer',
+                  }}>
+                    إعادة ضبط الكل
+                  </button>
+                </div>
+              )}
             </div>
 
             {loading ? (

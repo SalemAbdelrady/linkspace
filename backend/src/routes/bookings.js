@@ -212,25 +212,39 @@ router.get('/my', ...isAuth, async (req, res) => {
 });
 
 // ── GET /api/bookings — كل الحجوزات (للموظفين والأدمن) ─────────────
+
 router.get('/', ...isStaffOrAdmin, async (req, res) => {
-  const { date, space_key, status } = req.query;
+  const { date, space_key, status, date_from, date_to, sort = 'desc' } = req.query;
 
   try {
     let whereClause = 'WHERE 1=1';
     const params = [];
 
-    if (date) {
-      params.push(date);
-      whereClause += ` AND b.date = $${params.length}`;
+    if (status) {
+      params.push(status);
+      whereClause += ` AND b.status = $${params.length}`;
     }
     if (space_key) {
       params.push(space_key);
       whereClause += ` AND b.space_key = $${params.length}`;
     }
-    if (status) {
-      params.push(status);
-      whereClause += ` AND b.status = $${params.length}`;
+    // ✅ فلترة بنطاق التاريخ
+    if (date_from) {
+      params.push(date_from);
+      whereClause += ` AND b.date >= $${params.length}::date`;
     }
+    if (date_to) {
+      params.push(date_to);
+      whereClause += ` AND b.date <= $${params.length}::date`;
+    }
+    // ✅ فلترة بتاريخ محدد (للتوافق مع الكود القديم)
+    if (date) {
+      params.push(date);
+      whereClause += ` AND b.date = $${params.length}::date`;
+    }
+
+    // ✅ الترتيب ديناميكي
+    const orderDir = sort === 'asc' ? 'ASC' : 'DESC';
 
     const { rows } = await db.query(
       `SELECT b.*,
@@ -241,16 +255,7 @@ router.get('/', ...isStaffOrAdmin, async (req, res) => {
        JOIN  users c ON c.id = b.user_id
        LEFT JOIN users u ON u.id = b.confirmed_by
        ${whereClause}
-       ORDER BY
-         CASE b.status
-           WHEN 'pending'   THEN 1
-           WHEN 'confirmed' THEN 2
-           WHEN 'cancelled' THEN 3
-           WHEN 'completed' THEN 4
-           ELSE 5
-         END,
-         b.date ASC,
-         b.start_time ASC`,
+       ORDER BY b.date ${orderDir}, b.start_time ${orderDir}`,
       params
     );
     res.json({ bookings: rows });

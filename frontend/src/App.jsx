@@ -15,6 +15,8 @@ import BookingPage from './pages/BookingPage';
 import './index.css';
 // settingsAPI نُقل إلى utils/api.js — استوردوه من هناك
 export { settingsAPI } from './utils/api';
+import ReportsPage from './pages/ReportsPage';
+
 
 function ProtectedRoute({ children, roles }) {
   const { user, loading } = useAuth();

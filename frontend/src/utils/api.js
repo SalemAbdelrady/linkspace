@@ -102,6 +102,11 @@ export const sessionsAPI = {
   
   updateGuestCount: (sessionId, guestCount) =>
     api.patch(`/sessions/${sessionId}/guest-count`, { guest_count: guestCount }),
+  
+  // ابحث عن sessionsAPI في api.js
+  updateGuestCount: (id, count) => 
+    api.patch(`/sessions/${id}/guest-count`, { guest_count: count }),
+  
 };
 
 // Coupons
@@ -241,4 +246,14 @@ export const notificationsAPI = {
   getAll:      () => api.get('/notifications'),
   markRead:    (id) => api.patch(`/notifications/${id}/read`),
   markAllRead: () => api.patch('/notifications/read-all'),
+};
+
+export const reportsAPI = {
+  summary:   (params) => api.get('/reports/summary',   { params }),
+  revenue:   (params) => api.get('/reports/revenue',   { params }),
+  clients:   (params) => api.get('/reports/clients',   { params }),
+  spaces:    (params) => api.get('/reports/spaces',    { params }),
+  staff:     (params) => api.get('/reports/staff',     { params }),
+  coupons:   (params) => api.get('/reports/coupons',   { params }),
+  referrals: (params) => api.get('/reports/referrals', { params }),
 };
