@@ -1,9 +1,13 @@
 {
   "dependencies": {
     "cloudinary": "^1.41.3",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "multer": "^2.1.1",
     "multer-storage-cloudinary": "^4.0.0",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "recharts": "^3.9.1",
+    "xlsx": "^0.18.5"
   }
 }

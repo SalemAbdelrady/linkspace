@@ -207,6 +207,12 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
 
+      <Route path="/reports" element={
+        <ProtectedRoute roles={['admin', 'staff']}>
+          <ReportsPage />
+        </ProtectedRoute>
+      } />
+
       {/* الحجوزات — للكل */}
       <Route path="/bookings" element={
         <ProtectedRoute>
@@ -225,6 +231,13 @@ function AppRoutes() {
       <Route path="/settings" element={
         <ProtectedRoute>
           <SettingsPage />
+        </ProtectedRoute>
+      } />
+      
+      {/* ← أضف هنا */}
+      <Route path="/reports" element={
+        <ProtectedRoute roles={['admin']}>
+          <ReportsPage />
         </ProtectedRoute>
       } />
 

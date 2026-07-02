@@ -3884,7 +3884,7 @@ async function createSpace() {
             },
             {
               label: "📊 التقارير",
-              onClick: () => navigate("/reports"),
+              onClick: () => window.location.href = '/reports',
               badge: null,
             },
           ].map((item) => (
@@ -3943,6 +3943,7 @@ async function createSpace() {
             ["coupons",   "🎫 الكوبونات"],
             ["invoices",  "🧾 الفواتير"],
             ["referrals", "🎁 الدعوات"],
+
           ].map(([k, label]) => (
             <button
               key={k}
