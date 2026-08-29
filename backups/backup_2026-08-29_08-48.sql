@@ -2,10 +2,10 @@
 -- PostgreSQL database dump
 --
 
-\restrict OGBZ6oMR1SQQcA0VZEMbFjrPjcAVigdEdpx6bGcAXwv8GgM6iihL5p9YUubH9LU
+\restrict UZlQe0yLuMD9nAQ8Yb9wMEbtdpAgmqVNPnMnauAXu9dC4uwv5YXRvlvT3IuIacu
 
--- Dumped from database version 17.10 (4f20678)
--- Dumped by pg_dump version 18.4 (Ubuntu 18.4-1.pgdg24.04+1)
+-- Dumped from database version 17.11 (32e7196)
+-- Dumped by pg_dump version 18.6 (Ubuntu 18.6-1.pgdg24.04+2)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -860,6 +860,7 @@ COPY public.bookings (id, user_id, space_key, space_name, date, start_time, end_
 20	73	meeting	غرفة الاجتماعات	2026-06-29	09:00:00	12:00:00	4	cancelled	\N	73	1	2026-06-28 21:44:03.038798+00	\N	2026-06-28 12:37:26.919359+00	2026-06-28 21:44:03.038798+00	73	سالم علي
 21	76	meeting	غرفة الاجتماعات	2026-07-07	09:00:00	11:00:00	3	confirmed	\N	76	1	\N	\N	2026-07-02 14:57:20.699582+00	2026-07-02 21:13:05.469223+00	\N	\N
 22	9011	meeting	غرفة الاجتماعات	2026-07-26	09:00:00	11:00:00	1	confirmed	\N	9011	1	\N	\N	2026-07-25 23:47:52.435334+00	2026-07-25 23:53:03.042508+00	\N	\N
+23	9124	meeting	غرفة الاجتماعات	2026-08-21	09:00:00	11:00:00	1	confirmed	\N	9124	1	\N	\N	2026-08-20 23:59:47.967501+00	2026-08-21 00:02:13.333449+00	\N	\N
 \.
 
 
@@ -1122,6 +1123,9 @@ COPY public.notifications (id, user_id, type, title, message, related_id, relate
 32	1	booking_created	📅 حجز جديد	قمر قمر طلب حجز غرفة الاجتماعات يوم 2026-07-26 (09:00–11:00) — بواسطة قمر قمر	22	booking	f	2026-07-25 23:47:52.674659
 33	9011	booking_created	📅 تم إرسال طلب حجزك	تم إنشاء حجز لـ غرفة الاجتماعات يوم 2026-07-26 (09:00–11:00) بنجاح — في انتظار التأكيد	22	booking	f	2026-07-25 23:47:52.758041
 34	9011	booking_confirmed	✅ تم تأكيد حجزك	تم تأكيد حجزك لـ غرفة الاجتماعات يوم 2026-07-26 (09:00–11:00)	22	booking	f	2026-07-25 23:53:03.203738
+35	1	booking_created	📅 حجز جديد	الكبير أوي طلب حجز غرفة الاجتماعات يوم 2026-08-21 (09:00–11:00) — بواسطة الكبير أوي	23	booking	f	2026-08-20 23:59:48.207358
+36	9124	booking_created	📅 تم إرسال طلب حجزك	تم إنشاء حجز لـ غرفة الاجتماعات يوم 2026-08-21 (09:00–11:00) بنجاح — في انتظار التأكيد	23	booking	t	2026-08-20 23:59:48.292189
+37	9124	booking_confirmed	✅ تم تأكيد حجزك	تم تأكيد حجزك لـ غرفة الاجتماعات يوم 2026-08-21 (09:00–11:00)	23	booking	t	2026-08-21 00:02:13.492317
 \.
 
 
@@ -5975,6 +5979,21 @@ COPY public.price_settings (id, period_name, start_hour, end_hour, price_per_hr,
 7168	morning	6	14	10.00	2026-07-26 10:37:49.234494+00
 7169	evening	14	22	15.00	2026-07-26 10:37:49.234494+00
 7170	night	22	6	12.00	2026-07-26 10:37:49.234494+00
+7219	morning	6	14	10.00	2026-08-20 22:51:08.574252+00
+7220	evening	14	22	15.00	2026-08-20 22:51:08.574252+00
+7221	night	22	6	12.00	2026-08-20 22:51:08.574252+00
+7231	morning	6	14	10.00	2026-08-20 22:52:03.096838+00
+7232	evening	14	22	15.00	2026-08-20 22:52:03.096838+00
+7233	night	22	6	12.00	2026-08-20 22:52:03.096838+00
+7255	morning	6	14	10.00	2026-08-20 23:55:44.06476+00
+7256	evening	14	22	15.00	2026-08-20 23:55:44.06476+00
+7257	night	22	6	12.00	2026-08-20 23:55:44.06476+00
+7282	morning	6	14	10.00	2026-08-21 08:41:18.2296+00
+7283	evening	14	22	15.00	2026-08-21 08:41:18.2296+00
+7284	night	22	6	12.00	2026-08-21 08:41:18.2296+00
+7291	morning	6	14	10.00	2026-08-21 08:41:18.396407+00
+7292	evening	14	22	15.00	2026-08-21 08:41:18.396407+00
+7293	night	22	6	12.00	2026-08-21 08:41:18.396407+00
 4802	morning	6	14	10.00	2026-05-22 01:02:51.244408+00
 4805	evening	14	22	15.00	2026-05-22 01:02:51.244408+00
 4806	night	22	6	12.00	2026-05-22 01:02:51.244408+00
@@ -7355,6 +7374,45 @@ COPY public.price_settings (id, period_name, start_hour, end_hour, price_per_hr,
 7189	morning	6	14	10.00	2026-07-30 19:09:51.788231+00
 7190	evening	14	22	15.00	2026-07-30 19:09:51.788231+00
 7191	night	22	6	12.00	2026-07-30 19:09:51.788231+00
+7192	morning	6	14	10.00	2026-08-10 19:52:10.571972+00
+7193	evening	14	22	15.00	2026-08-10 19:52:10.571972+00
+7194	night	22	6	12.00	2026-08-10 19:52:10.571972+00
+7198	morning	6	14	10.00	2026-08-11 23:49:12.234221+00
+7199	evening	14	22	15.00	2026-08-11 23:49:12.234221+00
+7200	night	22	6	12.00	2026-08-11 23:49:12.234221+00
+7204	morning	6	14	10.00	2026-08-18 23:21:53.051127+00
+7205	evening	14	22	15.00	2026-08-18 23:21:53.051127+00
+7206	night	22	6	12.00	2026-08-18 23:21:53.051127+00
+7210	morning	6	14	10.00	2026-08-20 22:50:55.256414+00
+7211	evening	14	22	15.00	2026-08-20 22:50:55.256414+00
+7212	night	22	6	12.00	2026-08-20 22:50:55.256414+00
+7222	morning	6	14	10.00	2026-08-20 22:51:08.611844+00
+7223	evening	14	22	15.00	2026-08-20 22:51:08.611844+00
+7224	night	22	6	12.00	2026-08-20 22:51:08.611844+00
+7235	morning	6	14	10.00	2026-08-20 23:11:21.746407+00
+7238	evening	14	22	15.00	2026-08-20 23:11:21.746407+00
+7239	night	22	6	12.00	2026-08-20 23:11:21.746407+00
+7240	morning	6	14	10.00	2026-08-20 23:37:47.439587+00
+7242	evening	14	22	15.00	2026-08-20 23:37:47.439587+00
+7243	night	22	6	12.00	2026-08-20 23:37:47.439587+00
+7246	morning	6	14	10.00	2026-08-20 23:53:50.189802+00
+7247	evening	14	22	15.00	2026-08-20 23:53:50.189802+00
+7248	night	22	6	12.00	2026-08-20 23:53:50.189802+00
+7258	morning	6	14	10.00	2026-08-20 23:56:18.357802+00
+7259	evening	14	22	15.00	2026-08-20 23:56:18.357802+00
+7260	night	22	6	12.00	2026-08-20 23:56:18.357802+00
+7267	morning	6	14	10.00	2026-08-21 00:16:45.012842+00
+7268	evening	14	22	15.00	2026-08-21 00:16:45.012842+00
+7269	night	22	6	12.00	2026-08-21 00:16:45.012842+00
+7273	morning	6	14	10.00	2026-08-21 08:40:33.376909+00
+7274	evening	14	22	15.00	2026-08-21 08:40:33.376909+00
+7275	night	22	6	12.00	2026-08-21 08:40:33.376909+00
+7285	morning	6	14	10.00	2026-08-21 08:41:18.232404+00
+7286	evening	14	22	15.00	2026-08-21 08:41:18.232404+00
+7287	night	22	6	12.00	2026-08-21 08:41:18.232404+00
+7294	morning	6	14	10.00	2026-08-21 08:41:18.422749+00
+7295	evening	14	22	15.00	2026-08-21 08:41:18.422749+00
+7296	night	22	6	12.00	2026-08-21 08:41:18.422749+00
 6125	morning	6	14	10.00	2026-06-21 02:06:19.919935+00
 6128	evening	14	22	15.00	2026-06-21 02:06:19.919935+00
 6129	night	22	6	12.00	2026-06-21 02:06:19.919935+00
@@ -7514,6 +7572,45 @@ COPY public.price_settings (id, period_name, start_hour, end_hour, price_per_hr,
 7183	morning	6	14	10.00	2026-07-28 05:20:25.041291+00
 7184	evening	14	22	15.00	2026-07-28 05:20:25.041291+00
 7185	night	22	6	12.00	2026-07-28 05:20:25.041291+00
+7195	morning	6	14	10.00	2026-08-10 19:52:19.705702+00
+7196	evening	14	22	15.00	2026-08-10 19:52:19.705702+00
+7197	night	22	6	12.00	2026-08-10 19:52:19.705702+00
+7201	morning	6	14	10.00	2026-08-11 23:49:21.374445+00
+7202	evening	14	22	15.00	2026-08-11 23:49:21.374445+00
+7203	night	22	6	12.00	2026-08-11 23:49:21.374445+00
+7207	morning	6	14	10.00	2026-08-18 23:22:01.577981+00
+7208	evening	14	22	15.00	2026-08-18 23:22:01.577981+00
+7209	night	22	6	12.00	2026-08-18 23:22:01.577981+00
+7213	morning	6	14	10.00	2026-08-20 22:51:08.086418+00
+7214	evening	14	22	15.00	2026-08-20 22:51:08.086418+00
+7215	night	22	6	12.00	2026-08-20 22:51:08.086418+00
+7225	morning	6	14	10.00	2026-08-20 22:51:08.733019+00
+7226	evening	14	22	15.00	2026-08-20 22:51:08.733019+00
+7227	night	22	6	12.00	2026-08-20 22:51:08.733019+00
+7234	morning	6	14	10.00	2026-08-20 23:11:21.735869+00
+7236	evening	14	22	15.00	2026-08-20 23:11:21.735869+00
+7237	night	22	6	12.00	2026-08-20 23:11:21.735869+00
+7241	morning	6	14	10.00	2026-08-20 23:37:47.440914+00
+7244	evening	14	22	15.00	2026-08-20 23:37:47.440914+00
+7245	night	22	6	12.00	2026-08-20 23:37:47.440914+00
+7249	morning	6	14	10.00	2026-08-20 23:55:43.937729+00
+7250	evening	14	22	15.00	2026-08-20 23:55:43.937729+00
+7251	night	22	6	12.00	2026-08-20 23:55:43.937729+00
+7261	morning	6	14	10.00	2026-08-20 23:56:19.635943+00
+7262	evening	14	22	15.00	2026-08-20 23:56:19.635943+00
+7263	night	22	6	12.00	2026-08-20 23:56:19.635943+00
+7270	morning	6	14	10.00	2026-08-21 00:16:52.492582+00
+7271	evening	14	22	15.00	2026-08-21 00:16:52.492582+00
+7272	night	22	6	12.00	2026-08-21 00:16:52.492582+00
+7276	morning	6	14	10.00	2026-08-21 08:40:41.583485+00
+7277	evening	14	22	15.00	2026-08-21 08:40:41.583485+00
+7278	night	22	6	12.00	2026-08-21 08:40:41.583485+00
+7288	morning	6	14	10.00	2026-08-21 08:41:18.315598+00
+7289	evening	14	22	15.00	2026-08-21 08:41:18.315598+00
+7290	night	22	6	12.00	2026-08-21 08:41:18.315598+00
+7297	morning	6	14	10.00	2026-08-21 16:25:41.220419+00
+7298	evening	14	22	15.00	2026-08-21 16:25:41.220419+00
+7299	night	22	6	12.00	2026-08-21 16:25:41.220419+00
 6247	morning	6	14	10.00	2026-06-23 05:32:57.859626+00
 6251	evening	14	22	15.00	2026-06-23 05:32:57.859626+00
 6252	night	22	6	12.00	2026-06-23 05:32:57.859626+00
@@ -8339,6 +8436,21 @@ COPY public.price_settings (id, period_name, start_hour, end_hour, price_per_hr,
 7186	morning	6	14	10.00	2026-07-28 05:20:25.118157+00
 7187	evening	14	22	15.00	2026-07-28 05:20:25.118157+00
 7188	night	22	6	12.00	2026-07-28 05:20:25.118157+00
+7216	morning	6	14	10.00	2026-08-20 22:51:08.214877+00
+7217	evening	14	22	15.00	2026-08-20 22:51:08.214877+00
+7218	night	22	6	12.00	2026-08-20 22:51:08.214877+00
+7228	morning	6	14	10.00	2026-08-20 22:51:39.502231+00
+7229	evening	14	22	15.00	2026-08-20 22:51:39.502231+00
+7230	night	22	6	12.00	2026-08-20 22:51:39.502231+00
+7252	morning	6	14	10.00	2026-08-20 23:55:43.980294+00
+7253	evening	14	22	15.00	2026-08-20 23:55:43.980294+00
+7254	night	22	6	12.00	2026-08-20 23:55:43.980294+00
+7264	morning	6	14	10.00	2026-08-21 00:00:53.9779+00
+7265	evening	14	22	15.00	2026-08-21 00:00:53.9779+00
+7266	night	22	6	12.00	2026-08-21 00:00:53.9779+00
+7279	morning	6	14	10.00	2026-08-21 08:41:04.522542+00
+7280	evening	14	22	15.00	2026-08-21 08:41:04.522542+00
+7281	night	22	6	12.00	2026-08-21 08:41:04.522542+00
 \.
 
 
@@ -8502,6 +8614,13 @@ COPY public.refresh_tokens (id, user_id, token, expires_at, created_at, revoked_
 143	4515	57b6f85f-c656-403b-a6be-4d1d36e03838	2026-08-25 00:15:41.525+00	2026-07-26 00:15:41.564318+00	\N	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36	102.187.219.143
 144	9124	9d588388-41e1-4306-800f-96f3727b0183	2026-08-25 00:15:55.022+00	2026-07-26 00:15:55.060807+00	\N	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36	102.187.219.143
 145	1	909a5b3a-9f01-4cd7-bda1-04d9b6d9a783	2026-08-25 00:18:56.636+00	2026-07-26 00:18:56.67491+00	\N	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36	102.187.219.143
+146	1	6a0844f0-255a-4664-ad19-773e260e3935	2026-09-19 22:51:02.077+00	2026-08-20 22:51:02.116516+00	\N	Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36	196.141.75.63
+147	9124	f30bac3a-7736-46c5-ae04-ca9d92c50dd7	2026-09-19 23:55:38.852+00	2026-08-20 23:55:38.890844+00	\N	Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36	196.141.55.156
+148	1	ea34a4c6-4131-408b-84ce-54f8ae08dfd9	2026-09-20 00:00:48.391+00	2026-08-21 00:00:48.429706+00	\N	Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36	196.141.55.156
+149	9011	9e898163-5346-48de-bb96-1594a77a04b3	2026-09-20 00:02:54.169+00	2026-08-21 00:02:54.208518+00	\N	Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36	196.141.55.156
+150	9124	3e054b3c-5a59-4dd3-a051-6fd1e4544cc8	2026-09-20 00:03:20.812+00	2026-08-21 00:03:20.851231+00	\N	Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36	196.141.55.156
+151	9124	a8db607a-11f3-4734-9afb-9143d3d1d4e2	2026-09-20 08:41:10.574+00	2026-08-21 08:41:10.613911+00	\N	Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36	196.221.95.4
+152	9124	1e9789d5-6852-493a-abd4-140662772116	2026-09-20 08:41:12.956+00	2026-08-21 08:41:12.995599+00	\N	Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36	196.221.95.4
 \.
 
 
@@ -8944,9 +9063,9 @@ COPY public.users (id, name, phone, password, role, balance, points, qr_code, is
 74	محمد عبد الراضي	01096267021	$2a$12$N.lf8rzBkxEPXk.aFzBJkOQ7PkGKoHU1Mi7tKX.GWOnKDcHWuQv.m	client	0.00	82	6866201	t	2026-03-21 22:16:22.96538+00	2026-04-29 23:07:47.351404+00	\N	mb161676@gmail.com	f	818462	2026-04-30 22:13:15.193+00	f	f	f	f	f	\N	-E7B4	\N	0	0
 4515	محمود فتحي	01029947836	$2a$12$zdhmTrp5T0mlsPbIjoHdXu/0Z01Dlwmk4VNInfZSynjs9XynZT2de	client	0.00	84	9294946	t	2026-05-12 00:01:31.642865+00	2026-05-16 12:19:18.516245+00	\N	mahmud.fathi.link@gmail.com	f	\N	\N	f	f	f	f	f	https://res.cloudinary.com/dldzk1eqj/image/upload/v1778933957/linkspace/avatars/dlah28qvgo1oia79lgcq.jpg	-3188	\N	0	0
 76	Salah mohamed	01000984633	$2a$12$i2/RhN4IpmB2nqNZ/rdvse1jbpHWfx6IL9qaYvJe/EJ58NaW1IVOy	client	0.00	348	5017682	t	2026-03-21 22:46:42.236387+00	2026-05-12 16:16:08.559738+00	\N	salahalsafah64@gmail.com	f	\N	\N	f	f	f	f	f	https://res.cloudinary.com/dldzk1eqj/image/upload/v1778602567/linkspace/avatars/hxjeoyz5fywjrzp5xrso.jpg	SALA-CF94	\N	0	0
-9124	الكبير أوي	01029947839	$2a$12$mRwgteHx08FRbuyztUVJ/.6IbYFuPDnyo2fn1eRWy5eTzRhIbt9u2	client	2.00	12	2158503	t	2026-05-17 23:22:06.431347+00	2026-05-17 23:22:06.431347+00	\N	alkabeer.link@gmail.com	f	\N	\N	f	f	f	f	f	\N	REF-CWZX	161	0	0
 2887	Abd Sh	01000000001	$2a$12$5hbHHuvKaUd1KgoKp3vAOOvxKnjfDsh7rNWmwg2QMKNPXktgNfSgW	client	0.00	69	5078242	t	2026-05-07 00:11:44.06677+00	2026-05-07 00:12:54.402205+00	\N	a.b000771@gmail.com	f	\N	\N	f	f	f	f	f	\N	ABDS-7907	\N	0	0
 4213	Yousef	01111750379	$2a$12$BJOGA68jqUT.rT1.P92HKu5IJN/wIBwVGJVfGs2.k2PSyoqrpjVZe	client	0.00	73	6830918	t	2026-05-11 16:43:50.72356+00	2026-05-11 16:43:50.72356+00	\N	\N	f	\N	\N	f	f	f	f	f	\N	YOUS-526A	\N	0	0
+9124	الكبير أوي	01029947839	$2a$12$mRwgteHx08FRbuyztUVJ/.6IbYFuPDnyo2fn1eRWy5eTzRhIbt9u2	client	2.00	12	2158503	t	2026-05-17 23:22:06.431347+00	2026-08-20 23:56:45.520764+00	\N	alkabeer.link@gmail.com	f	\N	\N	f	f	f	f	f	https://res.cloudinary.com/dldzk1eqj/image/upload/v1787270204/linkspace/avatars/jax1nm0gwenvgqnxkqwt.jpg	REF-CWZX	161	0	0
 161	سالم عبدالواحد	01029947834	$2a$12$aM5G3Aw7UyhsJG7cE0Y.2uZcThPSKrohkdSqwXljuldKZ7BD4zy9i	client	0.00	398	7536108	t	2026-03-22 17:43:51.399835+00	2026-05-10 18:48:13.761791+00	\N	salem.abdul-radi@hotmail.com	f	221761	2026-04-30 22:27:54.363+00	f	f	f	f	f	https://res.cloudinary.com/dldzk1eqj/image/upload/v1778438893/linkspace/avatars/h58ftnxot4wnijtiyo33.jpg	-CE5A	\N	1	150
 \.
 
@@ -9017,7 +9136,7 @@ COPY public.wallet_transactions (id, user_id, type, amount, description, created
 -- Name: bookings_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.bookings_id_seq', 22, true);
+SELECT pg_catalog.setval('public.bookings_id_seq', 23, true);
 
 
 --
@@ -9038,7 +9157,7 @@ SELECT pg_catalog.setval('public.invoices_id_seq', 190, true);
 -- Name: notifications_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.notifications_id_seq', 34, true);
+SELECT pg_catalog.setval('public.notifications_id_seq', 37, true);
 
 
 --
@@ -9052,7 +9171,7 @@ SELECT pg_catalog.setval('public.playing_with_neon_id_seq', 10, true);
 -- Name: price_settings_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.price_settings_id_seq', 7191, true);
+SELECT pg_catalog.setval('public.price_settings_id_seq', 7299, true);
 
 
 --
@@ -9066,14 +9185,14 @@ SELECT pg_catalog.setval('public.referral_logs_id_seq', 2, true);
 -- Name: refresh_tokens_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.refresh_tokens_id_seq', 145, true);
+SELECT pg_catalog.setval('public.refresh_tokens_id_seq', 152, true);
 
 
 --
 -- Name: services_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.services_id_seq', 14229, true);
+SELECT pg_catalog.setval('public.services_id_seq', 14445, true);
 
 
 --
@@ -9094,7 +9213,7 @@ SELECT pg_catalog.setval('public.sessions_id_seq', 210, true);
 -- Name: space_settings_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.space_settings_id_seq', 7109, true);
+SELECT pg_catalog.setval('public.space_settings_id_seq', 7217, true);
 
 
 --
@@ -9108,7 +9227,7 @@ SELECT pg_catalog.setval('public.staff_permissions_id_seq', 26, true);
 -- Name: subscription_plans_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.subscription_plans_id_seq', 7104, true);
+SELECT pg_catalog.setval('public.subscription_plans_id_seq', 7212, true);
 
 
 --
@@ -9122,7 +9241,7 @@ SELECT pg_catalog.setval('public.user_subscriptions_id_seq', 3, true);
 -- Name: users_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.users_id_seq', 16784, true);
+SELECT pg_catalog.setval('public.users_id_seq', 17036, true);
 
 
 --
@@ -9699,5 +9818,5 @@ ALTER TABLE ONLY public.wallet_transactions
 -- PostgreSQL database dump complete
 --
 
-\unrestrict OGBZ6oMR1SQQcA0VZEMbFjrPjcAVigdEdpx6bGcAXwv8GgM6iihL5p9YUubH9LU
+\unrestrict UZlQe0yLuMD9nAQ8Yb9wMEbtdpAgmqVNPnMnauAXu9dC4uwv5YXRvlvT3IuIacu
 
