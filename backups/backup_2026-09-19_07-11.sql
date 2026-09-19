@@ -2,9 +2,9 @@
 -- PostgreSQL database dump
 --
 
-\restrict gmtqNo7U4ZtYRTMrSgJULs25IXLA6a59NOJufyB8T5hrttB8e4jXo3pdkuzX72I
+\restrict gC2lPw37et6Eu7au7sc3w3sjd7Lx2Uxuc2Kx0BRVUT13qL9MG17HUEWzMFSpcyU
 
--- Dumped from database version 17.11 (df1f1a3)
+-- Dumped from database version 17.11 (8a81ecb)
 -- Dumped by pg_dump version 18.6 (Ubuntu 18.6-1.pgdg24.04+2)
 
 SET statement_timeout = 0;
@@ -5988,6 +5988,12 @@ COPY public.price_settings (id, period_name, start_hour, end_hour, price_per_hr,
 7255	morning	6	14	10.00	2026-08-20 23:55:44.06476+00
 7256	evening	14	22	15.00	2026-08-20 23:55:44.06476+00
 7257	night	22	6	12.00	2026-08-20 23:55:44.06476+00
+7282	morning	6	14	10.00	2026-08-21 08:41:18.2296+00
+7283	evening	14	22	15.00	2026-08-21 08:41:18.2296+00
+7284	night	22	6	12.00	2026-08-21 08:41:18.2296+00
+7291	morning	6	14	10.00	2026-08-21 08:41:18.396407+00
+7292	evening	14	22	15.00	2026-08-21 08:41:18.396407+00
+7293	night	22	6	12.00	2026-08-21 08:41:18.396407+00
 4802	morning	6	14	10.00	2026-05-22 01:02:51.244408+00
 4805	evening	14	22	15.00	2026-05-22 01:02:51.244408+00
 4806	night	22	6	12.00	2026-05-22 01:02:51.244408+00
@@ -7398,6 +7404,15 @@ COPY public.price_settings (id, period_name, start_hour, end_hour, price_per_hr,
 7267	morning	6	14	10.00	2026-08-21 00:16:45.012842+00
 7268	evening	14	22	15.00	2026-08-21 00:16:45.012842+00
 7269	night	22	6	12.00	2026-08-21 00:16:45.012842+00
+7273	morning	6	14	10.00	2026-08-21 08:40:33.376909+00
+7274	evening	14	22	15.00	2026-08-21 08:40:33.376909+00
+7275	night	22	6	12.00	2026-08-21 08:40:33.376909+00
+7285	morning	6	14	10.00	2026-08-21 08:41:18.232404+00
+7286	evening	14	22	15.00	2026-08-21 08:41:18.232404+00
+7287	night	22	6	12.00	2026-08-21 08:41:18.232404+00
+7294	morning	6	14	10.00	2026-08-21 08:41:18.422749+00
+7295	evening	14	22	15.00	2026-08-21 08:41:18.422749+00
+7296	night	22	6	12.00	2026-08-21 08:41:18.422749+00
 6125	morning	6	14	10.00	2026-06-21 02:06:19.919935+00
 6128	evening	14	22	15.00	2026-06-21 02:06:19.919935+00
 6129	night	22	6	12.00	2026-06-21 02:06:19.919935+00
@@ -7587,6 +7602,18 @@ COPY public.price_settings (id, period_name, start_hour, end_hour, price_per_hr,
 7270	morning	6	14	10.00	2026-08-21 00:16:52.492582+00
 7271	evening	14	22	15.00	2026-08-21 00:16:52.492582+00
 7272	night	22	6	12.00	2026-08-21 00:16:52.492582+00
+7276	morning	6	14	10.00	2026-08-21 08:40:41.583485+00
+7277	evening	14	22	15.00	2026-08-21 08:40:41.583485+00
+7278	night	22	6	12.00	2026-08-21 08:40:41.583485+00
+7288	morning	6	14	10.00	2026-08-21 08:41:18.315598+00
+7289	evening	14	22	15.00	2026-08-21 08:41:18.315598+00
+7290	night	22	6	12.00	2026-08-21 08:41:18.315598+00
+7297	morning	6	14	10.00	2026-08-21 16:25:41.220419+00
+7298	evening	14	22	15.00	2026-08-21 16:25:41.220419+00
+7299	night	22	6	12.00	2026-08-21 16:25:41.220419+00
+7300	morning	6	14	10.00	2026-09-11 15:41:56.161417+00
+7301	evening	14	22	15.00	2026-09-11 15:41:56.161417+00
+7302	night	22	6	12.00	2026-09-11 15:41:56.161417+00
 6247	morning	6	14	10.00	2026-06-23 05:32:57.859626+00
 6251	evening	14	22	15.00	2026-06-23 05:32:57.859626+00
 6252	night	22	6	12.00	2026-06-23 05:32:57.859626+00
@@ -8424,6 +8451,9 @@ COPY public.price_settings (id, period_name, start_hour, end_hour, price_per_hr,
 7264	morning	6	14	10.00	2026-08-21 00:00:53.9779+00
 7265	evening	14	22	15.00	2026-08-21 00:00:53.9779+00
 7266	night	22	6	12.00	2026-08-21 00:00:53.9779+00
+7279	morning	6	14	10.00	2026-08-21 08:41:04.522542+00
+7280	evening	14	22	15.00	2026-08-21 08:41:04.522542+00
+7281	night	22	6	12.00	2026-08-21 08:41:04.522542+00
 \.
 
 
@@ -8592,6 +8622,8 @@ COPY public.refresh_tokens (id, user_id, token, expires_at, created_at, revoked_
 148	1	ea34a4c6-4131-408b-84ce-54f8ae08dfd9	2026-09-20 00:00:48.391+00	2026-08-21 00:00:48.429706+00	\N	Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36	196.141.55.156
 149	9011	9e898163-5346-48de-bb96-1594a77a04b3	2026-09-20 00:02:54.169+00	2026-08-21 00:02:54.208518+00	\N	Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36	196.141.55.156
 150	9124	3e054b3c-5a59-4dd3-a051-6fd1e4544cc8	2026-09-20 00:03:20.812+00	2026-08-21 00:03:20.851231+00	\N	Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36	196.141.55.156
+151	9124	a8db607a-11f3-4734-9afb-9143d3d1d4e2	2026-09-20 08:41:10.574+00	2026-08-21 08:41:10.613911+00	\N	Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36	196.221.95.4
+152	9124	1e9789d5-6852-493a-abd4-140662772116	2026-09-20 08:41:12.956+00	2026-08-21 08:41:12.995599+00	\N	Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Mobile Safari/537.36	196.221.95.4
 \.
 
 
@@ -9142,7 +9174,7 @@ SELECT pg_catalog.setval('public.playing_with_neon_id_seq', 10, true);
 -- Name: price_settings_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.price_settings_id_seq', 7272, true);
+SELECT pg_catalog.setval('public.price_settings_id_seq', 7302, true);
 
 
 --
@@ -9156,14 +9188,14 @@ SELECT pg_catalog.setval('public.referral_logs_id_seq', 2, true);
 -- Name: refresh_tokens_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.refresh_tokens_id_seq', 150, true);
+SELECT pg_catalog.setval('public.refresh_tokens_id_seq', 152, true);
 
 
 --
 -- Name: services_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.services_id_seq', 14391, true);
+SELECT pg_catalog.setval('public.services_id_seq', 14451, true);
 
 
 --
@@ -9184,7 +9216,7 @@ SELECT pg_catalog.setval('public.sessions_id_seq', 210, true);
 -- Name: space_settings_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.space_settings_id_seq', 7190, true);
+SELECT pg_catalog.setval('public.space_settings_id_seq', 7220, true);
 
 
 --
@@ -9198,7 +9230,7 @@ SELECT pg_catalog.setval('public.staff_permissions_id_seq', 26, true);
 -- Name: subscription_plans_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.subscription_plans_id_seq', 7185, true);
+SELECT pg_catalog.setval('public.subscription_plans_id_seq', 7215, true);
 
 
 --
@@ -9212,7 +9244,7 @@ SELECT pg_catalog.setval('public.user_subscriptions_id_seq', 3, true);
 -- Name: users_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.users_id_seq', 16973, true);
+SELECT pg_catalog.setval('public.users_id_seq', 17043, true);
 
 
 --
@@ -9789,5 +9821,5 @@ ALTER TABLE ONLY public.wallet_transactions
 -- PostgreSQL database dump complete
 --
 
-\unrestrict gmtqNo7U4ZtYRTMrSgJULs25IXLA6a59NOJufyB8T5hrttB8e4jXo3pdkuzX72I
+\unrestrict gC2lPw37et6Eu7au7sc3w3sjd7Lx2Uxuc2Kx0BRVUT13qL9MG17HUEWzMFSpcyU
 
