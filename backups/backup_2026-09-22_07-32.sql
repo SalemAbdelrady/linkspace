@@ -2,9 +2,9 @@
 -- PostgreSQL database dump
 --
 
-\restrict 0eoC47kVEHEdHXcLlagifYlqZXiiW8TtQcfN8mCdQYvOwfQGbbTFhsdcnAWAKT4
+\restrict lASWMnwt7nqubJi6LtKjuvd3qYTyYSRuXQcPVToAOgIbXInTLi2cJ1QgmrkSTuF
 
--- Dumped from database version 17.11 (df1f1a3)
+-- Dumped from database version 17.11 (8a81ecb)
 -- Dumped by pg_dump version 18.6 (Ubuntu 18.6-1.pgdg24.04+2)
 
 SET statement_timeout = 0;
@@ -7611,6 +7611,9 @@ COPY public.price_settings (id, period_name, start_hour, end_hour, price_per_hr,
 7297	morning	6	14	10.00	2026-08-21 16:25:41.220419+00
 7298	evening	14	22	15.00	2026-08-21 16:25:41.220419+00
 7299	night	22	6	12.00	2026-08-21 16:25:41.220419+00
+7300	morning	6	14	10.00	2026-09-11 15:41:56.161417+00
+7301	evening	14	22	15.00	2026-09-11 15:41:56.161417+00
+7302	night	22	6	12.00	2026-09-11 15:41:56.161417+00
 6247	morning	6	14	10.00	2026-06-23 05:32:57.859626+00
 6251	evening	14	22	15.00	2026-06-23 05:32:57.859626+00
 6252	night	22	6	12.00	2026-06-23 05:32:57.859626+00
@@ -9171,7 +9174,7 @@ SELECT pg_catalog.setval('public.playing_with_neon_id_seq', 10, true);
 -- Name: price_settings_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.price_settings_id_seq', 7299, true);
+SELECT pg_catalog.setval('public.price_settings_id_seq', 7302, true);
 
 
 --
@@ -9192,7 +9195,7 @@ SELECT pg_catalog.setval('public.refresh_tokens_id_seq', 152, true);
 -- Name: services_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.services_id_seq', 14445, true);
+SELECT pg_catalog.setval('public.services_id_seq', 14451, true);
 
 
 --
@@ -9213,7 +9216,7 @@ SELECT pg_catalog.setval('public.sessions_id_seq', 210, true);
 -- Name: space_settings_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.space_settings_id_seq', 7217, true);
+SELECT pg_catalog.setval('public.space_settings_id_seq', 7220, true);
 
 
 --
@@ -9227,7 +9230,7 @@ SELECT pg_catalog.setval('public.staff_permissions_id_seq', 26, true);
 -- Name: subscription_plans_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.subscription_plans_id_seq', 7212, true);
+SELECT pg_catalog.setval('public.subscription_plans_id_seq', 7215, true);
 
 
 --
@@ -9241,7 +9244,7 @@ SELECT pg_catalog.setval('public.user_subscriptions_id_seq', 3, true);
 -- Name: users_id_seq; Type: SEQUENCE SET; Schema: public; Owner: -
 --
 
-SELECT pg_catalog.setval('public.users_id_seq', 17036, true);
+SELECT pg_catalog.setval('public.users_id_seq', 17043, true);
 
 
 --
@@ -9818,5 +9821,5 @@ ALTER TABLE ONLY public.wallet_transactions
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 0eoC47kVEHEdHXcLlagifYlqZXiiW8TtQcfN8mCdQYvOwfQGbbTFhsdcnAWAKT4
+\unrestrict lASWMnwt7nqubJi6LtKjuvd3qYTyYSRuXQcPVToAOgIbXInTLi2cJ1QgmrkSTuF
 
